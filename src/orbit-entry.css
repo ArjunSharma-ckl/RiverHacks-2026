@@ -1,0 +1,122 @@
+.orbit-mast {
+  position: fixed;
+  z-index: 5;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  height: 60px;
+  padding: 0 4vw;
+  background: #101613ed;
+  border-bottom: 1px solid #ffffff26;
+  color: #ddd;
+  font: 13px system-ui;
+}
+.orbit-mast a {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #f5f4e9;
+  text-decoration: none;
+  font-weight: 700;
+}
+.orbit-mast img {
+  width: 30px;
+}
+.orbit-mast .atlas-link {
+  margin-left: auto;
+  color: #ffac87;
+}
+.intro-open #hud {
+  visibility: hidden;
+}
+#hud {
+  top: 72px !important;
+  max-height: calc(100vh - 92px) !important;
+}
+.intro-open #cesiumContainer {
+  transform: translateX(12%);
+}
+body.intro-open {
+  background: #030609;
+}
+#orbit-intro {
+  position: absolute;
+  left: 5vw;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 440px;
+  color: #f4f5ed;
+  font: 16px/1.55 system-ui;
+  text-shadow: 0 2px 16px #030605;
+}
+.frame-label {
+  font: 11px monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #d2dacb;
+}
+.frame-label i {
+  display: inline-block;
+  width: 23px;
+  height: 2px;
+  background: #ff8655;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+#orbit-intro h2 {
+  font-size: clamp(46px, 5.5vw, 88px);
+  line-height: 0.98;
+  letter-spacing: -0.067em;
+  margin: 20px 0;
+  font-weight: 580;
+}
+#orbit-intro em {
+  font-style: normal;
+  color: #b8c8b3;
+}
+#orbit-intro p {
+  max-width: 350px;
+  color: #d3d9ce;
+}
+.enter-atlas,
+#explore-orbit {
+  display: inline-block;
+  padding: 14px 18px;
+  border: 0;
+  text-shadow: none;
+  border-radius: 3px;
+  font: 600 12px system-ui;
+}
+.enter-atlas {
+  background: #ff8755;
+  color: #1d1c18;
+  text-decoration: none;
+}
+#explore-orbit {
+  background: #111914c9;
+  color: #e8ebe2;
+  margin-left: 6px;
+}
+@media (max-width: 700px) {
+  .orbit-mast span {
+    display: none;
+  }
+  .intro-open #cesiumContainer {
+    transform: translateY(-14%);
+  }
+  #orbit-intro {
+    background: linear-gradient(transparent, #060b0cec 24%);
+    inset: auto 0 0;
+    transform: none;
+    padding: 55px 5vw 38px;
+    max-width: none;
+  }
+  #orbit-intro h2 {
+    font-size: 44px;
+    margin: 9px 0;
+  }
+  #orbit-intro p {
+    font-size: 13px;
+  }
+}

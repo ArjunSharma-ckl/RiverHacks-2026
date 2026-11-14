@@ -117,3 +117,4 @@ Starlink spacecraft model by Malacodart, distributed under CC BY 4.0. The local 
 The root URL opens Orbital Explorer. Choose FIND A FIELD SITE to enter the existing site workflow. Launch plays an eight-second skippable transfer animation with optional synthesized sound. The sequence is an illustrative expedition transition.
 GroundTruth supports trusted-source search in site inspection and mission control. The mission query includes site, incidents and simulated health scenario. It presents source excerpts and the selected crew context. SERPAPI_KEY remains server-side. Unavailable search leaves mission controls operational.
 Mission control offers Performance, Balanced and High rendering settings.
+The 3D transfer loads on launch and supports skipping, reduced motion and optional sound. Site inspection offers study, operations, logistics and news searches. ASTRA incidents link directly to contextual investigation.

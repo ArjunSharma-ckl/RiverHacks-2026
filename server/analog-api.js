@@ -22,7 +22,14 @@ export async function research(params, key) {
   const data = await response.json();
   if (data.error) throw Error("Research unavailable");
   return {
-    results: (data.organic_results ?? data.news_results ?? [])
+    results: (
+      data.organic_results ??
+      data.news_results?.flatMap((story) => [
+        story,
+        ...(story.stories ?? []),
+      ]) ??
+      []
+    )
       .filter((r) =>
         /^https:\/\/([\w-]+\.)*(nasa\.gov|usgs\.gov|esa\.int|nih\.gov|cdc\.gov|noaa\.gov)\//i.test(
           r.link,
@@ -34,6 +41,7 @@ export async function research(params, key) {
         link,
         snippet,
         date,
+        category: params.get("category") ?? "research",
         source: new URL(link).hostname,
       })),
   };
