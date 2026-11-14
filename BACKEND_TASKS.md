@@ -20,6 +20,7 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Serve the saved lunar mineral snapshot and provide an explicit refresh operation.
 - [x] Resolve named lunar features through the USGS/IAU Gazetteer-backed service and return colocated Diviner temperature and M3-derived mineral samples when available.
 - [x] Match lunar mineral abundance vectors against georeferenced Earth rock-mode samples and save the top ten per lunar site as GeoJSON with match percentages.
+- [x] Request and download a PetDB export with modal olivine, plagioclase, pyroxene, iron-bearing phases, and whole-rock iron-oxide chemistry fields.
 - [x] Match annual lunar surface temperatures against global Earth land-surface-temperature grid cells and save the top ten per lunar site as GeoJSON with match percentages.
 
 ## Implementation decisions
@@ -66,6 +67,8 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 
 ## Earth mineral matches memory
 
+- `backend/petdb_export.py` submits an asynchronous CSV/JSON export to the EarthChem PetDB REST API and polls until a download is available. It requests `OL[MODE]`, `PLAG[MODE]`, `PX[MODE]`, `OPX[MODE]`, `CPX[MODE]`, `FE-OX[MODE]`, `FE-ORE[MODE]`, `FeO`, and `FeOT`; the final two are whole-rock iron chemistry, not mineral modes.
+- Run `python -m backend.petdb_export --output backend/data/petdb_rock_modes.csv`. The default output is `backend/data/petdb_rock_modes.csv`; use `--format json` for JSON. Set `PETDB_API_TOKEN` if the export API requires a bearer token. The exporter itself was not submitted during implementation because export submission creates a remote task.
 - `backend/earth_mineral_matches.py` uses EarthChem PetDB sample-level rock-mode data, which includes specimen coordinates and modal mineral abundances. The PetDB Explore page and [API documentation](https://earthchem.github.io/ec-doc/documentation/petdb_api.html) are the source/discovery resources.
 - Export `ROCK MODE` / `Whole Rock` data with `OL[MODE]`, `PLAG[MODE]`, `OPX[MODE]`, and `CPX[MODE]` columns from PetDB, then run `python -m backend.earth_mineral_matches --earth-data <export.csv>`. JSON and GeoJSON exports are also accepted. The script reads the existing lunar mineral snapshot and atomically writes `backend/data/earth_mineral_matches.geojson`; `--top` changes the default 10 matches per lunar site.
 - A GeoJSON feature represents one georeferenced Earth sample matched to one lunar candidate. `match_percentage` is a normalized L1-composition similarity: `100 × (1 − L1 distance / 2)`, where 100 means identical relative proportions and 0 means maximally different. Every input vector is normalized over the four shared mineral groups before scoring.

@@ -82,6 +82,16 @@ python -m backend.lunar_minerals
 
 The first run downloads about 63 MB and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to change the cache location. The JSON snapshot `backend/data/lunar_minerals.json` uses the same top-level and site identity/reference-point shape as `lunar_temperatures.json`, with `mineral_composition` in place of `temperature`. It preserves raw source values without interpreting them as percent or fraction. Each value samples one nearest map pixel, not the average composition of the full candidate region. The product covers lunar polar terrain only and does not provide Mars mineral data.
 
+### Export Earth mineral data from PetDB
+
+The PetDB exporter requests georeferenced data with modal olivine (`OL[MODE]`), plagioclase (`PLAG[MODE]`), pyroxene (`PX[MODE]`, `OPX[MODE]`, `CPX[MODE]`), and iron-bearing modes (`FE-OX[MODE]`, `FE-ORE[MODE]`). It also requests whole-rock `FeO` and `FeOT` chemistry; these bulk iron measurements are separate from the iron-bearing mineral modes. The official [PetDB API](https://earthchem.github.io/ec-doc/documentation/petdb_api.html) supports asynchronous CSV/JSON export tasks.
+
+```powershell
+python -m backend.petdb_export --output backend/data/petdb_rock_modes.csv
+```
+
+Use `--format json` for a JSON export. If PetDB requires authentication, set `PETDB_API_TOKEN` in the environment. The exporter submits a remote PetDB task, polls until the file is ready, then saves it locally. The resulting CSV can be passed to the lunar mineral matcher below.
+
 ### Compare lunar minerals with Earth locations
 
 [EarthChem PetDB Explore](https://explore.earthchem.org/) provides georeferenced rock samples with modal mineral data. The [PetDB API documentation](https://earthchem.github.io/ec-doc/documentation/petdb_api.html) describes sample location and export services. Download/export `ROCK MODE` / `Whole Rock` records with `OL[MODE]`, `PLAG[MODE]`, `OPX[MODE]`, and `CPX[MODE]` columns. Keep modal percentage data; the matcher skips rows explicitly labeled weight- or mole-percent and skips incomplete compositions.
