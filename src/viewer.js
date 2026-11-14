@@ -1,5 +1,5 @@
 import * as C from 'cesium';
-import { gibsWmts } from './gibs.js';
+import { gibsWms } from './gibs.js';
 import { setLayer } from './layers.js';
 
 const ION_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
@@ -24,6 +24,7 @@ export function createViewer(container) {
 
   // Globe: true solar lighting, a scattering-based atmosphere and a black base
   // so nothing blue bleeds through gaps in the imagery.
+  scene.globe.showWaterEffect = false;
   scene.globe.enableLighting = true;
   scene.globe.dynamicAtmosphereLighting = true;
   scene.globe.dynamicAtmosphereLightingFromSun = false;
@@ -60,9 +61,9 @@ export function createViewer(container) {
   try {
     lensFlare = C.PostProcessStageLibrary.createLensFlareStage();
     scene.postProcessStages.add(lensFlare);
-    lensFlare.uniforms.intensity = 1.35;
-    lensFlare.uniforms.distortion = 8;
-    lensFlare.uniforms.dirtAmount = 0.22;
+    lensFlare.uniforms.intensity = 0.35;
+    lensFlare.uniforms.distortion = 1.0;
+    lensFlare.uniforms.dirtAmount = 0.01;
   } catch {
     lensFlare = undefined;
   }
@@ -74,7 +75,7 @@ export function createViewer(container) {
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.
   scene.screenSpaceCameraController.maximumZoomDistance = 7.5e7;
-  scene.screenSpaceCameraController.minimumZoomDistance = 2;
+  scene.screenSpaceCameraController.minimumZoomDistance = 160;
 
   clock.currentTime = C.JulianDate.now();
   clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
@@ -87,7 +88,7 @@ export function createViewer(container) {
   });
 
   {
-    const options = { requestWaterMask: true, requestVertexNormals: true };
+    const options = { requestWaterMask: false, requestVertexNormals: true };
     const terrainReady = ION_TOKEN ? C.createWorldTerrainAsync(options)
       : C.IonResource.fromAssetId(1, { server: '/api/ion/', accessToken: '' })
         .then(resource => C.CesiumTerrainProvider.fromUrl(resource, options));
@@ -103,11 +104,11 @@ export function createViewer(container) {
 // over once you are close enough for it to matter.
 export function addBaseImagery() {
   setLayer('bluemarble', new C.ImageryLayer(
-    gibsWmts({
+    gibsWms({
       layer: 'BlueMarble_ShadedRelief_Bathymetry',
       time: '2004-01-01',
-      matrixSet: 'GoogleMapsCompatible_Level8',
-      extension: 'jpeg',
+      format: 'image/jpeg',
+      transparent: false,
       maximumLevel: 8
     }),
     { brightness: 0.92, saturation: 0.88, contrast: 1.07, gamma: 1.04 }
@@ -122,4 +123,5 @@ export function addBaseImagery() {
     { minimumTerrainLevel: 6, brightness: 0.86, saturation: 0.78, contrast: 1.06 }
   ));
 }
+
 

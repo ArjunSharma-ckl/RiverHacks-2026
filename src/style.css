@@ -142,3 +142,11 @@ button { font: inherit; cursor: pointer; }
 #hud h1 { font-size:14px; letter-spacing:.08em; }
 #hud select { width:100%; padding:8px; color:var(--ink); background:#172923; border:1px solid var(--line); border-radius:4px; }
 .control-hint { margin:8px 0 0; color:var(--dim); font:var(--mono); }
+:focus-visible { outline:2px solid #a4dabf; outline-offset:3px }
+#details .source-card { padding:12px 0; border-top:1px solid var(--line) }
+.source-card small, .source-card a { display:block }
+.source-card small { font:var(--mono);color:var(--dim);margin-bottom:4px }
+.source-card p { margin:6px 0 0 }
+#details .grid span { display:block;font-size:11px;line-height:1.4;padding:5px 0 }
+#hud input[type=search] { box-sizing:border-box;width:100%;margin:5px 0;padding:8px;background:#101d18;border:1px solid var(--line);border-radius:4px;color:var(--ink) }
+#hud select + select {margin-top:6px} #hud small {display:block;margin-top:5px;color:var(--dim)}
