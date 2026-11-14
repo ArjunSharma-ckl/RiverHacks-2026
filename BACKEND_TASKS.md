@@ -19,6 +19,7 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Sample published M3-derived lunar south-polar mineral abundance maps at the nine Artemis candidate points and save matched JSON records.
 - [x] Serve the saved lunar mineral snapshot and provide an explicit refresh operation.
 - [x] Resolve named lunar features through the USGS/IAU Gazetteer-backed service and return colocated Diviner temperature and M3-derived mineral samples when available.
+- [x] Match lunar mineral abundance vectors against georeferenced Earth rock-mode samples and save the top ten per lunar site as GeoJSON with match percentages.
 
 ## Implementation decisions
 
@@ -61,3 +62,10 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 - The first collection downloads the 63 MB file, verifies its published size and MD5 checksum, and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to choose another cache directory. Refresh requires `h5py` (`python -m pip install -r requirements.txt`).
 - Run `python -m backend.lunar_minerals` or send `POST /api/lunar-minerals/refresh` to save `backend/data/lunar_minerals.json`; read it with `GET /api/lunar-minerals`. These are single-pixel representative samples, not means over candidate-region boundaries. The product is lunar-only and supplies no Mars mineral data.
 - `GET /api/lunar-location?name=Tycho` resolves a lunar crater/mountain name using GeoCode (whose feature list is sourced from the USGS/IAU Gazetteer), and samples both source products at the gazetteer feature center when their local caches are present. It returns per-product `available`/`unavailable` statuses; exact Artemis candidate names can instead return their saved representative-point samples with a note that the coordinate can differ from the gazetteer feature center. Ambiguous matches return HTTP 409, unknown names HTTP 404. Refresh the temperature/mineral collectors once to cache full products for arbitrary feature sampling.
+
+## Earth mineral matches memory
+
+- `backend/earth_mineral_matches.py` uses EarthChem PetDB sample-level rock-mode data, which includes specimen coordinates and modal mineral abundances. The PetDB Explore page and [API documentation](https://earthchem.github.io/ec-doc/documentation/petdb_api.html) are the source/discovery resources.
+- Export `ROCK MODE` / `Whole Rock` data with `OL[MODE]`, `PLAG[MODE]`, `OPX[MODE]`, and `CPX[MODE]` columns from PetDB, then run `python -m backend.earth_mineral_matches --earth-data <export.csv>`. JSON and GeoJSON exports are also accepted. The script reads the existing lunar mineral snapshot and atomically writes `backend/data/earth_mineral_matches.geojson`; `--top` changes the default 10 matches per lunar site.
+- A GeoJSON feature represents one georeferenced Earth sample matched to one lunar candidate. `match_percentage` is a normalized L1-composition similarity: `100 × (1 − L1 distance / 2)`, where 100 means identical relative proportions and 0 means maximally different. Every input vector is normalized over the four shared mineral groups before scoring.
+- The mapper pairs lunar low-/high-calcium pyroxene with Earth OPX/CPX as broad family analogues, excludes the lunar-only SmFe channel, requires all four measured Earth modes and valid coordinates, and skips rows explicitly marked wt% or mol%. EarthChem coverage is sample-based, not a continuous map; the score is similarity, not probability. No EarthChem export is vendored, so the GeoJSON is generated when the user supplies a PetDB export.

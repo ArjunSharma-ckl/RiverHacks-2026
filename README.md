@@ -68,6 +68,20 @@ python -m backend.lunar_minerals
 
 The first run downloads about 63 MB and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to change the cache location. The JSON snapshot `backend/data/lunar_minerals.json` uses the same top-level and site identity/reference-point shape as `lunar_temperatures.json`, with `mineral_composition` in place of `temperature`. It preserves raw source values without interpreting them as percent or fraction. Each value samples one nearest map pixel, not the average composition of the full candidate region. The product covers lunar polar terrain only and does not provide Mars mineral data.
 
+### Compare lunar minerals with Earth locations
+
+[EarthChem PetDB Explore](https://explore.earthchem.org/) provides georeferenced rock samples with modal mineral data. The [PetDB API documentation](https://earthchem.github.io/ec-doc/documentation/petdb_api.html) describes sample location and export services. Download/export `ROCK MODE` / `Whole Rock` records with `OL[MODE]`, `PLAG[MODE]`, `OPX[MODE]`, and `CPX[MODE]` columns. Keep modal percentage data; the matcher skips rows explicitly labeled weight- or mole-percent and skips incomplete compositions.
+
+Run the matcher with a PetDB export:
+
+```powershell
+python -m backend.earth_mineral_matches --earth-data path\to\petdb-rock-modes.csv
+```
+
+The script reads `backend/data/lunar_minerals.json` and writes `backend/data/earth_mineral_matches.geojson`. It returns up to ten Earth samples for each lunar candidate with a complete shared composition. GeoJSON coordinates use `[longitude, latitude]`; feature properties include `match_percentage`, rank, sample identity, source mineral modes, and normalized compositions. The score is `100 × (1 − normalized L1 distance / 2)`: 100 is an exact relative-composition match and 0 is maximally different. Lunar values are normalized because the M3 source map describes them as raw abundance-array values without a documented percent scale. The score compares relative abundance only; it is not a confidence probability. Lunar low-/high-calcium pyroxene are compared to the broad Earth OPX/CPX families, and SmFe is omitted because there is no directly comparable Earth modal channel.
+
+PetDB locations are sample locations, not continuous global mineral maps. This repository does not include a PetDB export; the GeoJSON is produced when an export is supplied. `--top 10`, `--lunar-data`, and `--output` can be used to adjust the ranking count or file paths.
+
 ### Look up a lunar crater or mountain
 
 Use the combined lookup endpoint with a feature name, for example:
