@@ -16,6 +16,8 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Provide a read API for saved landing targets and body-specific candidate regions.
 - [x] Query NASA PDS Diviner south-polar annual-average temperatures for the nine Artemis candidate regions and save the sampled values as JSON.
 - [x] Serve the saved lunar temperature snapshot and provide an explicit refresh operation.
+- [x] Sample published M3-derived lunar south-polar mineral abundance maps at the nine Artemis candidate points and save matched JSON records.
+- [x] Serve the saved lunar mineral snapshot and provide an explicit refresh operation.
 
 ## Implementation decisions
 
@@ -50,3 +52,10 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 - The PDS table is about 605 MB. The downloader caches it in the system temporary directory; `MISSION_PDS_CACHE_DIR` can point to another cache location. The source archive and fixed-width column layout are linked in code and in the generated JSON.
 - Run `python -m backend.lunar_temperature` or send `POST /api/lunar-temperatures/refresh` to query and save `backend/data/lunar_temperatures.json`. Read the saved snapshot with `GET /api/lunar-temperatures`.
 - The schema stores kelvin and Celsius alongside the point, source, and averaging metadata so Earth comparison data can later be added without confusing units or averaging windows. It does not fabricate Earth values.
+
+## Lunar mineral composition memory
+
+- `backend/lunar_minerals.py` samples the raw south-polar mineral abundance cube derived from NASA's Moon Mineralogy Mapper (M3) data and calibrated using LOLA reflectance. The raw v4 product is distributed at [Zenodo DOI 10.5281/zenodo.20725024](https://zenodo.org/records/20725024); it is a 2201 x 2201 x 5 MATLAB v7.3/HDF5 cube at approximately 193 m/pixel. The peer-reviewed study ([DOI 10.1029/2024JE008842](https://doi.org/10.1029/2024JE008842)) describes its 83°S–90°S coverage.
+- Each mineral record is keyed to the matching temperature snapshot's `landing_site_id`, mission, status, name, representative point, and sampled cell. It stores source array values for olivine, plagioclase, low- and high-calcium pyroxene, and SmFe; no scale conversion is applied because the record does not specify a percent/fraction scale.
+- The first collection downloads the 63 MB file, verifies its published size and MD5 checksum, and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to choose another cache directory. Refresh requires `h5py` (`python -m pip install -r requirements.txt`).
+- Run `python -m backend.lunar_minerals` or send `POST /api/lunar-minerals/refresh` to save `backend/data/lunar_minerals.json`; read it with `GET /api/lunar-minerals`. These are single-pixel representative samples, not means over candidate-region boundaries. The product is lunar-only and supplies no Mars mineral data.
