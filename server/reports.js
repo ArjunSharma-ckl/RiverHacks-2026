@@ -18,6 +18,21 @@ const domains = ['nasa.gov','esa.int','noaa.gov','usgs.gov','stsci.edu','eso.org
 const siteFilter = '(' + domains.map(domain => 'site:' + domain).join(' OR ') + ')';
 const catalog = readFile(new URL('../public/data/active.tle', import.meta.url),'utf8')
   .then(text => new Set(text.trim().split(/\r?\n/).filter((_,i) => i%3 === 0).map(name => name.trim())));
+
+// One report per constellation. Thousands of Starlinks or Flocks asking
+// individually would be thousands of identical paid searches.
+const families = [
+  [/^STARLINK[- ]/i,'Starlink'], [/^ONEWEB/i,'OneWeb'], [/^IRIDIUM/i,'Iridium'],
+  [/^GLOBALSTAR/i,'Globalstar'], [/^FLOCK/i,'Planet Flock'], [/^SKYSAT/i,'SkySat'],
+  [/^LEMUR/i,'Lemur'], [/^SPACEBEE/i,'SpaceBEE'], [/^ORBCOMM/i,'Orbcomm'],
+  [/^(NAVSTAR|GPS )/i,'GPS'], [/^GALILEO/i,'Galileo'], [/^BEIDOU/i,'BeiDou'],
+  [/^COSMOS/i,'Cosmos'], [/^SENTINEL/i,'Sentinel'], [/^NOAA /i,'NOAA'],
+  [/^GOES /i,'GOES'], [/^METEOR-M/i,'Meteor-M'], [/^METOP/i,'MetOp'],
+  [/^INTELSAT/i,'Intelsat'], [/^EUTELSAT/i,'Eutelsat'], [/^TDRS/i,'TDRS'],
+  [/^YAOGAN/i,'Yaogan'], [/^QIANFAN|^SPACESAIL/i,'Qianfan']
+];
+function family(name) { return families.find(([pattern]) => pattern.test(name))?.[1]; }
+
 function trusted(link) {
   try {
     const url = new URL(link);
@@ -25,7 +40,7 @@ function trusted(link) {
   } catch { return false; }
 }
 async function generate(name, key, craft) {
-  const subject = missions[name]?.[0] || (/^STARLINK-/i.test(name) ? 'Starlink' : name);
+  const subject = missions[name]?.[0] || family(name) || name;
   const matches = text => String(text).toLowerCase().includes(subject.toLowerCase());
   async function search(engine, terms) {
     const params = new URLSearchParams({engine, api_key:key, q:subject+' '+terms+' '+(subject === 'Starlink' ? 'site:starlink.com' : siteFilter)});
@@ -76,7 +91,7 @@ export async function report(name,key) {
   const craft = SATELLITE_NAMES.includes(name) || (await catalog).has(name);
   if (!craft && !SUBJECTS.has(name)) throw new Error('Unknown object');
   if (pending.has(name)) return pending.get(name);
-  const file = join(directory,createHash('sha256').update('v5:'+(/^STARLINK-/i.test(name)?'Starlink constellation':name)).digest('hex')+'.json');
+  const file = join(directory,createHash('sha256').update('v6:'+(family(name) ? family(name)+' constellation' : name)).digest('hex')+'.json');
   const task = (async () => {
     let saved;
     try { saved = JSON.parse(await readFile(file,'utf8')); } catch {}

@@ -9,7 +9,7 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 6000,
     rolldownOptions: {
-      input: { map: 'index.html', planner: 'planner.html' },
+      input: { missionforge: 'index.html', orbit: 'orbit.html', planner: 'planner.html' },
     },
   },
   plugins: [
