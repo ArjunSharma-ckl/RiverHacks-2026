@@ -202,6 +202,9 @@ export function createScene(onPick) {
     base.entities.removeAll();
     model("Habitat", "habitat", 0, 0);
     model("Science module", "habitat2", -8, 6);
+    model("Kestrel descent vehicle", "kestrel", 12, -18);
+    box("North pressure passage", 0, 8.3, 1, [1.6, 12.6, 1.95], "#a0a6a3");
+    box("West pressure passage", -4.2, 5.8, 1, [7.5, 1.55, 1.95], "#a0a6a3");
     model("Emergency shelter", "medical", 0, 17);
     model("Crew quarters", "habitat", -10, -18);
     for (const station of Object.values(stations))
@@ -261,9 +264,10 @@ export function createScene(onPick) {
   overview();
   return {
     quality(mode) {
+      scene.msaaSamples = mode === "Performance" ? 1 : mode === "High" ? 4 : 2;
       viewer.resolutionScale =
         mode === "High"
-          ? Math.min(devicePixelRatio, 2)
+          ? Math.min(devicePixelRatio, 2, Math.sqrt(4000000 / (innerWidth * innerHeight)))
           : mode === "Performance"
             ? 0.75
             : 1;
