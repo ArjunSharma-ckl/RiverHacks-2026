@@ -8,6 +8,9 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 6000,
+    rolldownOptions: {
+      input: { map: 'index.html', planner: 'planner.html' },
+    },
   },
   plugins: [
     nasaApiPlugin(loadEnv),

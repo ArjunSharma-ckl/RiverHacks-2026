@@ -17,7 +17,30 @@
       <footer><button id="hud-toggle" type="button">Hide controls</button></footer>
     </div>
 
+    <section id="mission" aria-label="Analog mission planning">
+      <details>
+        <summary>Analog mission</summary>
+        <div class="mission-body">
+          <a href="/planner.html">Open simulation planner</a>
+          <strong id="mission-site">Askja Caldera, Iceland</strong>
+          <p id="mission-match" hidden></p>
+          <button id="match-reopen" type="button" aria-haspopup="dialog" hidden>Match details</button>
+          <button type="button">Fly to Askja</button>
+          <label>Test phase <select></select></label>
+          <p aria-live="polite"></p>
+          <small>Right-drag to tilt · Scroll to zoom</small>
+        </div>
+      </details>
+    </section>
     <aside id="details" hidden></aside>
+    <dialog id="analog-evidence" aria-labelledby="analog-title">
+      <form method="dialog"><button autofocus>Close</button></form>
+      <h2 id="analog-title"></h2>
+      <p id="analog-score"></p>
+      <div id="earth-relief" class="terrain-view"></div>
+      <p id="analog-reason"></p>
+      <a id="earth-data-source" target="_blank" rel="noopener">Elevation data source</a>
+    </dialog>
 
     <p id="credits">
       Imagery: NASA EOSDIS GIBS &middot; Events: NASA EONET &middot; Surface data: NASA POWER

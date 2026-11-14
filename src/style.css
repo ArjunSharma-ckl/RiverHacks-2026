@@ -162,3 +162,35 @@ button { font: inherit; cursor: pointer; }
 .pad-up { grid-area:1/2 } .pad-left { grid-area:2/1 } .pad-home { grid-area:2/2 }
 .pad-right { grid-area:2/3 } .pad-down { grid-area:3/2 }
 .pad-out { grid-area:3/1 } .pad-in { grid-area:3/3 }
+
+#mission {
+  position: absolute;
+  right: 16px;
+  bottom: 48px;
+  width: min(275px, calc(100% - 32px));
+  color: #dbe9e5;
+  font: 13px system-ui, sans-serif;
+}
+#mission details { margin-left: auto; width: fit-content; background: #111c1bf5; border: 1px solid #47655d; border-radius: 9px; }
+#mission details[open] { width: 100%; }
+#mission summary { cursor: pointer; padding: 10px 14px; }
+#mission .mission-body { display: grid; gap: 10px; padding: 0 14px 14px; }
+#mission p { margin: 0; line-height: 1.45; }
+#mission label { display: grid; gap: 4px; }
+#mission button, #mission select {
+  background: #192d28; border: 1px solid #47655d; border-radius: 5px;
+  color: inherit; font: inherit; padding: 6px 8px;
+}
+#mission small { color: #b3cbc2; }
+@media (max-width: 620px) {
+  #mission details[open] { position: absolute; right: 0; bottom: 0; z-index: 5; }
+}
+
+#analog-evidence { width: min(760px, calc(100% - 40px)); max-height: 85dvh; box-sizing: border-box; padding: 20px; border: 1px solid #47655d; border-radius: 12px; background: #0b1417; color: #e3efec; font: 14px/1.5 system-ui, sans-serif; }
+#analog-evidence::backdrop { background: #020807aa; }
+#analog-evidence form { display: flex; justify-content: end; }
+#analog-evidence button { padding: 6px 12px; border: 1px solid #47655d; border-radius: 6px; background: #192d28; color: inherit; }
+#analog-evidence a, #analog-score, .region-match { color: #99e6cc; }
+
+.terrain-view canvas { display: block; width: min(100%, 520px); height: auto; cursor: grab; touch-action: none; }
+.terrain-view button { margin: 5px 5px 0 0; }
