@@ -29,6 +29,18 @@ export function createHud(root, context) {
     return node;
   }
 
+  const fleet = section('Satellite tracking');
+  const selector = element('select');
+  selector.setAttribute('aria-label', 'Track a satellite');
+  selector.add(new Option('Earth overview', ''));
+  for (const entity of satellites.entities) selector.add(new Option(entity.name, entity.id));
+  selector.onchange = () => {
+    const target = viewer.entities.getById(selector.value);
+    if (target) target.show = true;
+    satellites.track(target);
+  };
+  viewer.trackedEntityChanged.addEventListener(entity => { selector.value = entity?.id || ''; });
+  fleet.append(selector, element('p', 'control-hint', 'W A S D orbit · + / − zoom · Esc return'));
   // Weather
   const weatherSection = section('Weather');
   const status = element('p', 'status');
@@ -90,12 +102,10 @@ export function createHud(root, context) {
   // Scene
   const sceneSection = section('Scene');
   const sceneToggles = [
-    ['City lights at night', true, (on) => context.setNightLights(on)],
     ['Planets', true, (on) => sky.setPlanets(on)],
     ['Stars', true, (on) => sky.setStars(on)],
     ['Star names', true, (on) => sky.setStarLabels(on)],
     ['Satellites', true, (on) => satellites.setFleet(on)],
-    ['Orbit trails', true, (on) => satellites.setTrails(on)],
     ['Satellite labels', true, (on) => satellites.setLabels(on)],
     ['Atmosphere', true, (on) => {
       scene.skyAtmosphere.show = on;
@@ -144,7 +154,6 @@ export function createHud(root, context) {
 
   window.addEventListener('keydown', (event) => {
     if (event.target instanceof HTMLInputElement) return;
-    if (event.key === 'w') master.input.click();
     if (event.key === 'h') hideButton.click();
   });
 

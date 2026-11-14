@@ -136,3 +136,9 @@ button { font: inherit; cursor: pointer; }
   #details { bottom: 12px; left: 16px; right: 16px; width: auto; max-height: 42vh; }
   #credits { display: none; }
 }
+:root { --accent:#9be3bd; --line:#34453f; --glass:#101918ed; --dim:#a4b8af; }
+#hud { width:min(280px,calc(100vw - 32px)); border-radius:8px; }
+#hud header { border-top:2px solid var(--accent); border-radius:8px 8px 0 0; }
+#hud h1 { font-size:14px; letter-spacing:.08em; }
+#hud select { width:100%; padding:8px; color:var(--ink); background:#172923; border:1px solid var(--line); border-radius:4px; }
+.control-hint { margin:8px 0 0; color:var(--dim); font:var(--mono); }

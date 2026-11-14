@@ -1,3 +1,4 @@
+import { imageryTile } from './arcgis.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
 // talks to /api/*.
@@ -228,6 +229,7 @@ export function createApi(env = {}) {
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname.startsWith('/arcgis/imagery/')) return imageryTile(req, res, env, url.pathname);
     const route = routes[url.pathname];
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -255,3 +257,4 @@ export function nasaApiPlugin(loadEnv) {
   };
   return { name: 'nasa-api', configureServer: configure, configurePreviewServer: configure };
 }
+

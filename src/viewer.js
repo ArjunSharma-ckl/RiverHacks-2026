@@ -1,6 +1,6 @@
 import * as C from 'cesium';
-import { gibsWms, gibsWmts } from './gibs.js';
-import { setLayer, dropLayer, getLayer } from './layers.js';
+import { gibsWmts } from './gibs.js';
+import { setLayer } from './layers.js';
 
 const ION_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
 
@@ -31,7 +31,7 @@ export function createViewer(container) {
   scene.globe.atmosphereLightIntensity = 14;
   scene.globe.baseColor = C.Color.fromCssColorString('#04070d');
   scene.globe.depthTestAgainstTerrain = true;
-  scene.globe.maximumScreenSpaceError = 1.8;
+  scene.globe.maximumScreenSpaceError = 1.25;
 
   scene.skyAtmosphere.perFragmentAtmosphere = true;
   scene.skyAtmosphere.atmosphereLightIntensity = 55;
@@ -74,7 +74,7 @@ export function createViewer(container) {
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.
   scene.screenSpaceCameraController.maximumZoomDistance = 7.5e7;
-  scene.screenSpaceCameraController.minimumZoomDistance = 150;
+  scene.screenSpaceCameraController.minimumZoomDistance = 2;
 
   clock.currentTime = C.JulianDate.now();
   clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
@@ -111,7 +111,7 @@ export function addBaseImagery() {
 
   setLayer('esri', new C.ImageryLayer(
     new C.UrlTemplateImageryProvider({
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      url: '/api/arcgis/imagery/{z}/{y}/{x}',
       credit: 'Esri World Imagery and imagery contributors',
       maximumLevel: 19
     }),
@@ -119,12 +119,3 @@ export function addBaseImagery() {
   ));
 }
 
-// City lights, blended in only on the night side of the terminator.
-export function setNightLights(enabled) {
-  if (!enabled) return dropLayer('nightlights');
-  if (getLayer('nightlights')) return;
-  setLayer('nightlights', new C.ImageryLayer(
-    gibsWms({ layer: 'VIIRS_CityLights_2012', format: 'image/jpeg', transparent: false, maximumLevel: 7 }),
-    { dayAlpha: 0, nightAlpha: 1, brightness: 1.45, contrast: 1.2, gamma: 0.85 }
-  ));
-}
