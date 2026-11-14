@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <script>if (!location.hash) location.replace("/orbit.html")</script>
+    <script>if (!location.hash || location.hash === '#home') location.replace('/orbit.html')</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#131714" />
@@ -14,13 +14,10 @@
   </head>
   <body>
     <header class="mast">
-      <a class="brand" href="#home"
+      <a class="brand" href="/orbit.html"
         ><img src="/forge.svg" width="33" height="33" alt="" />MISSIONFORGE</a
       >
-      <nav aria-label="Primary">
-        <a href="#home">Overview</a><a href="#discover">Site atlas</a
-        ><a href="#mission">Mission control</a>
-      </nav>
+      <nav aria-label="Primary"><a href="#discover">Find site</a><a href="#travel">Travel</a><a href="#design">Mission planning</a><a href="#control">Mission sim</a></nav>
       <a class="orbitLink" href="/orbit.html">Orbital explorer ↗</a>
     </header>
     <main id="app"></main>

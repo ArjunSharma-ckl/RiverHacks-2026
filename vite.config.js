@@ -7,8 +7,10 @@ export default defineConfig({
     CESIUM_BASE_URL: JSON.stringify('/cesium'),
   },
   build: {
-    rollupOptions: { input: { missionforge: "index.html", orbit: "orbit.html" } },
     chunkSizeWarningLimit: 6000,
+    rolldownOptions: {
+      input: { missionforge: 'index.html', orbit: 'orbit.html', planner: 'planner.html' },
+    },
   },
   plugins: [
     nasaApiPlugin(loadEnv),
