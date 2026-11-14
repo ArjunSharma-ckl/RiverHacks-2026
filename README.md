@@ -112,4 +112,3 @@ server/index.js    production static + API server
 zoom.
 
 Starlink spacecraft model by Malacodart, distributed under CC BY 4.0. The local copy has a blue material tint. https://sketchfab.com/3d-models/starlink-spacex-satellite-0a60f6720c5141c9a1c6d71aac108b31
-
