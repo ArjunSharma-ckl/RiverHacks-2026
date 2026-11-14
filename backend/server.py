@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from backend.catalog import EQUIPMENT_BY_ID, PHASES, PHASE_BY_ID, RESOURCES
+from backend.landing_sites import load_snapshot
 from backend.storage import append_observation, list_observations
 
 
@@ -144,6 +145,24 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/resources":
                 self._send_json(200, {"resources": RESOURCES})
+                return
+            if parsed.path == "/api/landing-sites":
+                body = query.get("body", [None])[0]
+                if body is not None:
+                    body = {"moon": "Moon", "mars": "Mars"}.get(body.casefold())
+                    if body is None:
+                        raise RequestError("body must be Moon or Mars.")
+                try:
+                    snapshot = load_snapshot()
+                except (OSError, json.JSONDecodeError):
+                    self._send_json(500, {"error": "Could not read the landing-site snapshot."})
+                    return
+                if body is not None:
+                    snapshot["targets"] = [item for item in snapshot["targets"] if item["body"] == body]
+                    snapshot["candidate_sites"] = [
+                        item for item in snapshot["candidate_sites"] if item["body"] == body
+                    ]
+                self._send_json(200, snapshot)
                 return
             if parsed.path == "/api/observations":
                 phase_id = query.get("phase_id", [None])[0]
