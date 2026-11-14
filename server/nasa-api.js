@@ -230,7 +230,9 @@ export function createApi(env = {}) {
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname.startsWith('/arcgis/imagery/')) return imageryTile(req, res, env, url.pathname);
-    const route = routes[url.pathname];
+    const category=url.pathname.match(/^\/research\/(site|incident|logistics|news|medical-support)$/)?.[1];
+    if(category)url.searchParams.set("category",category);
+    const route = category ? p=>cached("gt:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' || !route) {

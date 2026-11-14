@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RiverHacks | Orbit</title>
+    <title>MissionForge | Orbital Explorer</title>
     <meta name="description" content="A live view of Earth built on NASA GIBS imagery, EONET events and POWER surface weather." />
   </head>
   <body>
@@ -17,7 +17,9 @@
       <footer><button id="hud-toggle" type="button">Hide controls</button></footer>
     </div>
 
-    <a href="/" style="position:fixed;right:18px;top:12px;z-index:10;background:#111;color:white;padding:8px">Return to MissionForge</a><aside id="details" hidden></aside>
+<section id="orbit-intro"><small>MISSIONFORGE / ORBITAL EXPLORER</small><h2>Earth is our<br>proving ground.</h2><p>Discover Earth analog sites, establish field habitats and prepare your crew for Mars.</p><a href="/#discover">FIND A FIELD SITE →</a><button onclick="document.getElementById('orbit-intro').remove()">EXPLORE ORBITAL EXPLORER</button></section>
+<style>#orbit-intro{position:fixed;right:5vw;top:22vh;z-index:4;max-width:410px;color:#f4f4e9;padding:28px;background:#101911d9;border-left:2px solid #ff8655;font:15px/1.5 system-ui}#orbit-intro small{letter-spacing:.13em;font-size:11px}#orbit-intro h2{font-size:44px;line-height:1.06;letter-spacing:-.04em;margin:18px 0}#orbit-intro a{display:block;color:#191a14;background:#ff8655;padding:12px 17px;text-decoration:none;font-weight:700;margin-top:22px}#orbit-intro button{background:transparent;color:#e3e9de;border:0;margin-top:14px;font-size:11px}@media(max-width:700px){#orbit-intro{top:auto;bottom:45px;left:16px;right:16px;padding:18px}#orbit-intro h2{font-size:30px}#hud{max-height:32vh!important}}</style>
+<aside id="details" hidden></aside>
 
     <p id="credits">
       Imagery: NASA EOSDIS GIBS &middot; Events: NASA EONET &middot; Surface data: NASA POWER
