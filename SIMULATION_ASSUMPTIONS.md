@@ -14,3 +14,4 @@ MF-001 is a deterministic training scenario. Identical configuration, elapsed ti
 Crew duty cycles include 0.20 hours of outbound travel, 0.55 hours of work and 0.20 hours for the return. Each completed work period records one sample, audit or suit check, or recovers 0.35 L of water up to tank capacity. Storms halt field work. Medical incidents and recovery suspend the affected astronaut’s duties. The helmet and chase cameras track the same duty progress used to calculate production. The ASTRA pulse trace is a synthetic rhythm paced by the selected astronaut’s simulated heart rate.
 
 The pre-launch transfer animation is illustrative. Countdown, ascent and separation do not model launch dynamics or transport to the selected field site.
+The 3D sequence combines a historical launch vehicle with a fictional field lander. Habitat integrity tracks illustrative exposure, falling 0.35 percentage points per simulated hour during a leak and 0.18 during dust.

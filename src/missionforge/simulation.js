@@ -173,6 +173,11 @@ export function advance(s, hours) {
     r.food = Math.max(0, r.food - ((n * 0.64) / 24) * dt);
     if (moving) s.km += drivingHours * 0.22;
     advanceDuties(s, dt);
+    s.integrity = Math.max(
+      0,
+      (s.integrity ?? 100) -
+        dt * ((s.active.oxygen ? 0.35 : 0) + (s.active.storm ? 0.18 : 0)),
+    );
     s.h += dt;
     left -= dt;
     if (Object.values(r).some((v) => v <= 0)) {

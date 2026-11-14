@@ -15,3 +15,5 @@ The habitat shells use opaque materials with their original texture maps for Ces
 The field suit, water reclamation plant, medical bay, geology laboratory and logistics depot are original MissionForge glTF models. Rebuild them with `node scripts/build-station-models.mjs`. The articulated suit provides the moving mission crew. The original NASA astronaut remains in the asset library.
 
 The launch transition uses original CSS rocket graphics and Web Audio oscillator cues. It introduces no external audio or movie assets.
+
+The 3D ascent uses the NASA Saturn V GLB from [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Saturn%20V). The launch tower, exhaust, stage separation, lander and hinged ramp are original illustrative geometry. The landing scene reuses the field suit and medical module.

@@ -1,4 +1,5 @@
-if (!location.hash) location.replace("/orbit.html");
+import { cue, toggleSound } from "./audio.js";
+
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
 import "./design.css";
@@ -53,6 +54,10 @@ const photo = (s) =>
     : "";
 const cache = {},
   obs = new Map();
+let sortBy = "Suitability",
+  researchType = "Studies",
+  searchTimer,
+  groundQuestion = "";
 let gtAnswer = "",
   quality = "Balanced";
 let crewIndex = 0;
@@ -129,8 +134,13 @@ await Promise.all(
 );
 const ranking = (s) => rank(s, cache[s.id], profile, query, priority);
 const ranked = () =>
-  [...sites].sort(
-    (a, b) => (ranking(b).score ?? -1) - (ranking(a).score ?? -1),
+  [...sites].sort((a, b) =>
+    sortBy === "Site name"
+      ? a.name.localeCompare(b.name)
+      : sortBy === "Solar resource"
+        ? (annual(b, "ALLSKY_SFC_SW_DWN") ?? -1) -
+          (annual(a, "ALLSKY_SFC_SW_DWN") ?? -1)
+        : (ranking(b).score ?? -1) - (ranking(a).score ?? -1),
   );
 const annual = (s, k) => {
   const n = cache[s.id]?.properties?.parameter?.[k]?.ANN;
@@ -206,7 +216,7 @@ function rows() {
     .join("");
 }
 function discover() {
-  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Scores use the selected mission weights. Each row shows its largest contribution and largest deduction.</p><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Scores use the selected mission weights. Each row shows its largest contribution and largest deduction.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
 function breakdown(s) {
   const r = ranking(s);
@@ -232,7 +242,7 @@ function inspect() {
     power = o.power,
     fire = o.fires,
     other = sites.find((s) => s.id === compare) || sites[1];
-  return `${btn("discover", "← Candidate sites", "back")}${label(site.country + " / Site inspection")}<h1>${site.name}</h1><small>${coords(site)}</small><p>${site.surface}. ${site.hazard}.</p><div class="actions">${btn("design", "Establish research habitat　→", "primary")}</div><h2>Site suitability</h2>${line(profiles[profile], (ranking(site).score ?? "—") + " / 100")}<details><summary>Scoring factors and comparison</summary><small> · relative suitability model</small>${breakdown(site)}${select(
+  return `${btn("discover", "← Candidate sites", "back")}${label(site.country + " / Site inspection")}<h1>${site.name}</h1><small>${coords(site)}</small><p>${site.surface}. ${site.hazard}.</p><div class="actions">${btn("design", "Establish research habitat　→", "primary")}</div><h2>Site suitability</h2>${line(profiles[profile], (ranking(site).score ?? "—") + " / 100")}<details><summary>Scoring factors and comparison</summary><small>${coverage(site)} · relative suitability model</small>${breakdown(site)}${select(
     "compare",
     "Compare with",
     sites.filter((s) => s.id !== site.id).map((s) => s.name),
@@ -249,7 +259,7 @@ function inspect() {
     )
     .join(
       "",
-    )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a><label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search publications")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}</p>`).join("")}</details>`;
+    )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a>${select("research-type", "Evidence collection", ["Studies", "Operations", "News", "Logistics"], researchType)}<label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search evidence")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}<br><small>${esc(r.source)} · ${esc(r.category || researchType)} · ${esc(r.date || "Date unavailable")}</small></p>`).join("")}</details>`;
 }
 function design() {
   return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 6)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
@@ -333,13 +343,15 @@ function astra(m) {
     .slice(0, m.cfg.crew)
     .map((_, i) => {
       const v = vitals(m, i);
-      return `<details ${i === 0 ? "open" : ""}><summary>${v.name} · ${v.status}</summary><p>${v.role}</p>${line("Heart rate / SpO₂", `${v.pulse} bpm / ${v.spo2}%`)}${line("Temperature / hydration", `${v.temp} °C / ${v.hydration}%`)}${line("Fatigue / sleep", `${v.fatigue}% / ${v.sleep} h`)}${i === 0 ? spark(m.history.map((x) => x.hr)) : ""}</details>`;
+      return `<details ${i === 0 ? "open" : ""}><summary>${v.name} · ${v.status}</summary><p>${v.role}</p>${line("Heart rate / SpO₂", `${v.pulse} bpm / ${v.spo2}%`)}${line("Temperature / hydration", `${v.temp} °C / ${v.hydration}%`)}${line("Activity", dutyPose(m, i).status)}${line("Stress estimate", v.status === "Nominal" ? "Baseline" : "Elevated")}${line("Fatigue / sleep", `${v.fatigue}% / ${v.sleep} h`)}${i === 0 ? spark(m.history.map((x) => x.hr)) : ""}</details>`;
     })
     .join("")}`;
 }
 function groundTruth() {
   return (
-    '<details><summary>GroundTruth AI · Mission evidence</summary><p class="note">Search context includes the site, active incidents and selected crew telemetry. Evidence supports training decisions.</p><label class="field">Question<input id="gt-question" maxlength="180" placeholder="How does dust affect solar output?"></label>' +
+    '<details><summary>GroundTruth AI · Mission evidence</summary><p class="note">Search context includes the site, active incidents and selected crew telemetry. Evidence supports training decisions.</p><label class="field">Question<input id="gt-question" value="' +
+    esc(groundQuestion) +
+    '" maxlength="180" placeholder="How does dust affect solar output?"></label>' +
     btn("groundtruth", "Investigate with GroundTruth AI") +
     '<div id="gt-results" role="status">' +
     gtAnswer +
@@ -349,12 +361,12 @@ function groundTruth() {
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}</div>${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
       (id) =>
-        `<div class="alert"><strong>${failures[id][0]}</strong><p>${id === "medical" ? esc(m.health) + " · K. Rivera" : "System affected"}</p><div class="pills">${failures[
+        `<div class="alert"><strong>${failures[id][0]}</strong>${btn("investigate:" + id, "Investigate with GroundTruth AI")}<p>${id === "medical" ? esc(m.health) + " · K. Rivera" : "System affected"}</p><div class="pills">${failures[
           id
         ]
           .slice(1)
@@ -363,7 +375,7 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Habitat integrity", fmt(m.integrity ?? 100, 1) + "%")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
@@ -425,7 +437,7 @@ function render() {
   else if (page === "report") app.innerHTML = report();
   else {
     const content = { discover, inspect, design, control }[page];
-    app.innerHTML = `<section class="layout"><div class="panel">${content()}</div>${viewport()}</section>`;
+    app.innerHTML = `<section class="layout ${page === "inspect" ? "site-inspection" : ""}"><div class="panel">${content()}</div>${viewport()}</section>`;
   }
   const dest = app.querySelector(".viewport");
   if (dest) dest.prepend(atlas);
@@ -589,6 +601,8 @@ async function launch() {
   if (document.querySelector(".launch-screen")) return;
   const { launchSequence } = await import("./launch.js");
   await launchSequence(site.name);
+  gtAnswer = "";
+  groundQuestion = "";
   incident = "solar";
   crewIndex = 0;
   cameraPreset = "Overview";
@@ -618,6 +632,7 @@ app.addEventListener("submit", (e) => {
   }
 });
 app.addEventListener("input", (e) => {
+  if (e.target.id === "gt-question") groundQuestion = e.target.value;
   if (e.target.id === "query") {
     query = e.target.value;
     const count = query.match(
@@ -631,7 +646,11 @@ app.addEventListener("input", (e) => {
         ) + 1;
     profile = interpret(query, profile);
     document.querySelector("#profile").value = profiles[profile];
-    document.querySelector("#rankings").innerHTML = rows();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const list = document.querySelector("#rankings");
+      if (list) list.innerHTML = rows();
+    }, 100);
   }
 });
 app.addEventListener("change", (e) => {
@@ -647,6 +666,17 @@ app.addEventListener("change", (e) => {
       update();
       displayScene();
     }
+    return;
+  }
+  if (id === "research-type") {
+    researchType = value;
+    researchResults = [];
+    update();
+    return;
+  }
+  if (id === "sort") {
+    sortBy = value;
+    update();
     return;
   }
   if (id === "query") return;
@@ -772,7 +802,14 @@ app.addEventListener("click", async (e) => {
     button.disabled = true;
     try {
       const r = await json(
-        "/api/research/site?q=" +
+        "/api/research/" +
+          {
+            Studies: "site",
+            Operations: "incident",
+            News: "news",
+            Logistics: "logistics",
+          }[researchType] +
+          "?q=" +
           encodeURIComponent(
             (site.name + " " + (research || "Mars analog research")).slice(
               0,
@@ -794,11 +831,28 @@ app.addEventListener("click", async (e) => {
     }
     return;
   }
+  if (act === "investigate") {
+    const box = document.querySelector("#gt-results").closest("details");
+    box.open = true;
+    document.querySelector("#gt-question").value = groundQuestion =
+      "What evidence explains " +
+      failures[id][0] +
+      " in this training scenario?";
+    if (id === "medical") crewIndex = 0;
+    box.scrollIntoView({ block: "center" });
+    box.querySelector("button").click();
+    return;
+  }
   if (act === "groundtruth") {
     const output = document.querySelector("#gt-results"),
       question = document.querySelector("#gt-question").value;
     const v = vitals(mission, crewIndex),
       incidents = Object.keys(mission.active).join(" ");
+    const context = [
+      mission.cfg.mode,
+      mission.health ? "SpO2 " + v.spo2 + "% HR " + v.pulse : "",
+      mission.logs.at(-1)?.msg ?? "",
+    ].join(" ");
     const category = mission.health
       ? "medical-support"
       : incidents
@@ -819,7 +873,9 @@ app.addEventListener("click", async (e) => {
               " " +
               incidents +
               " " +
-              (mission.health ?? "")
+              (mission.health ?? "") +
+              " " +
+              context
             ).slice(0, 200),
           ),
       );
@@ -832,7 +888,17 @@ app.addEventListener("click", async (e) => {
         v.spo2 +
         "% / " +
         esc(mission.cfg.mode) +
-        "</p>" +
+        "</p><h3>Training interpretation</h3><p>" +
+        esc(mission.health || incidents || "Routine operations") +
+        " · " +
+        esc(mission.logs.at(-1)?.msg || "Mission commissioned") +
+        "</p><p>" +
+        esc(
+          Object.keys(mission.active)
+            .map((k) => failures[k].slice(1).join(" / "))
+            .join(" · "),
+        ) +
+        "</p><small>Simulator options. The publications below provide background for this exercise.</small>" +
         r.results
           .map(
             (x) =>
@@ -841,7 +907,7 @@ app.addEventListener("click", async (e) => {
               '">' +
               esc(x.title) +
               "</a><p>" +
-              esc(x.snippet) +
+              esc(x.snippet || "Open the source for the full article.") +
               "</p><small>" +
               esc(x.source) +
               " · " +
@@ -875,9 +941,16 @@ app.addEventListener("click", async (e) => {
     mission.traverse = !mission.traverse;
     log(mission, mission.traverse ? "Rover traverse started" : "Rover parked");
   }
+  if (act === "sound") {
+    toggleSound();
+    update();
+    return;
+  }
   if (act === "inject") {
+    gtAnswer = "";
     if (!inject(mission, incident, medical))
       return toast("Incident unavailable or already active");
+    cue(incident === "medical" ? 740 : 320, 0.35);
     if (incident === "medical") tab = "ASTRA";
   }
   if (act === "response") {
