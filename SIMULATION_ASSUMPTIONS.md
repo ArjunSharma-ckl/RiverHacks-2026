@@ -12,3 +12,5 @@ MF-001 is a deterministic training scenario. Identical configuration, elapsed ti
 - The report snapshots actual reserves and the recorded decision log. Habitat endurance requires reaching the scheduled end. A rover or geological objective also requires positive traverse distance.
 
 Crew duty cycles include 0.20 hours of outbound travel, 0.55 hours of work and 0.20 hours for the return. Each completed work period records one sample, audit or suit check, or recovers 0.35 L of water up to tank capacity. Storms halt field work. Medical incidents and recovery suspend the affected astronaut’s duties. The helmet and chase cameras track the same duty progress used to calculate production. The ASTRA pulse trace is a synthetic rhythm paced by the selected astronaut’s simulated heart rate.
+
+The pre-launch transfer animation is illustrative. Countdown, ascent and separation do not model launch dynamics or transport to the selected field site.

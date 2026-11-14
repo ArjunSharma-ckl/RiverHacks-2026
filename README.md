@@ -112,3 +112,8 @@ server/index.js    production static + API server
 zoom.
 
 Starlink spacecraft model by Malacodart, distributed under CC BY 4.0. The local copy has a blue material tint. https://sketchfab.com/3d-models/starlink-spacex-satellite-0a60f6720c5141c9a1c6d71aac108b31
+
+## Orbital opening and GroundTruth
+The root URL opens Orbital Explorer. Choose FIND A FIELD SITE to enter the existing site workflow. Launch plays an eight-second skippable transfer animation with optional synthesized sound. The sequence is an illustrative expedition transition.
+GroundTruth supports trusted-source search in site inspection and mission control. The mission query includes site, incidents and simulated health scenario. It presents source excerpts and the selected crew context. SERPAPI_KEY remains server-side. Unavailable search leaves mission controls operational.
+Mission control offers Performance, Balanced and High rendering settings.

@@ -16,7 +16,7 @@ export function createViewer(container) {
     timeline: false, animation: false, fullscreenButton: false, homeButton: false,
     geocoder: false, sceneModePicker: false, navigationHelpButton: false,
     baseLayerPicker: false, infoBox: false, selectionIndicator: false,
-    shouldAnimate: true, shadows: true,
+    shouldAnimate: true, shadows: false,
     contextOptions: { webgl: { powerPreference: 'high-performance' } }
   });
 
@@ -49,7 +49,7 @@ export function createViewer(container) {
   scene.msaaSamples = 2;
   scene.postProcessStages.fxaa.enabled = true;
   const bloom = scene.postProcessStages.bloom;
-  bloom.enabled = true;
+  bloom.enabled = false;
   bloom.uniforms.glowOnly = false;
   bloom.uniforms.contrast = 94;
   bloom.uniforms.brightness = -0.26;
@@ -61,6 +61,7 @@ export function createViewer(container) {
   try {
     lensFlare = C.PostProcessStageLibrary.createLensFlareStage();
     scene.postProcessStages.add(lensFlare);
+    lensFlare.enabled = false;
     lensFlare.uniforms.intensity = 0.9;
     lensFlare.uniforms.distortion = 4.0;
     lensFlare.uniforms.dirtAmount = 0.05;

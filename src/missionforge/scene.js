@@ -260,6 +260,17 @@ export function createScene(onPick) {
   }
   overview();
   return {
+    quality(mode) {
+      viewer.resolutionScale =
+        mode === "High"
+          ? Math.min(devicePixelRatio, 2)
+          : mode === "Performance"
+            ? 0.75
+            : 1;
+      viewer.targetFrameRate = mode === "High" ? 60 : 30;
+      scene.globe.maximumScreenSpaceError =
+        mode === "High" ? 1.5 : mode === "Performance" ? 4 : 2;
+    },
     skip: () => camera.completeFlight(),
     detach: actors.reset,
     overview,

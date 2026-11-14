@@ -14,3 +14,5 @@
 To reproduce a catalog record, use the site's coordinates in the [POWER climatology point endpoint](https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS&community=RE&longitude=-69.86&latitude=-24.09&format=JSON). Retain metadata when updating the data period.
 
 Suitability is a MissionForge weighted mean on a 0–100 scale. Climate combines precipitation and distance from a mission-dependent temperature target. Solar saturates at 7.5 kWh/m²/day. Profiles and query terms change component weights. Missing fields are excluded from the mean. Operational hazard information is presented alongside the ranking. Scores do not establish site safety or constitute NASA validation.
+
+GroundTruth routes /api/research/site, incident, logistics, news and medical-support use cached SerpApi responses. Site queries use Scholar, news uses Google News, and other categories use Google Search. Returned links are filtered to NASA, USGS, ESA, NIH, CDC and NOAA. Excerpts are displayed as evidence. Automated clinical conclusions and automatic changes to simulation state are outside this feature.

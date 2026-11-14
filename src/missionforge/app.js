@@ -1,3 +1,4 @@
+if (!location.hash) location.replace("/orbit.html");
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
 import "./design.css";
@@ -52,6 +53,8 @@ const photo = (s) =>
     : "";
 const cache = {},
   obs = new Map();
+let gtAnswer = "",
+  quality = "Balanced";
 let crewIndex = 0;
 let cameraPreset = "Overview";
 let site = sites[0],
@@ -246,7 +249,7 @@ function inspect() {
     )
     .join(
       "",
-    )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>Research evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a><label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search publications")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}</p>`).join("")}</details>`;
+    )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a><label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search publications")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}</p>`).join("")}</details>`;
 }
 function design() {
   return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 6)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
@@ -334,6 +337,15 @@ function astra(m) {
     })
     .join("")}`;
 }
+function groundTruth() {
+  return (
+    '<details><summary>GroundTruth AI · Mission evidence</summary><p class="note">Search context includes the site, active incidents and selected crew telemetry. Evidence supports training decisions.</p><label class="field">Question<input id="gt-question" maxlength="180" placeholder="How does dust affect solar output?"></label>' +
+    btn("groundtruth", "Investigate with GroundTruth AI") +
+    '<div id="gt-results" role="status">' +
+    gtAnswer +
+    "</div></details>"
+  );
+}
 function control() {
   const m = mission;
   prepareDuties(m);
@@ -351,14 +363,14 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
       .filter(([k]) => k !== "rover" || cfg.rover)
       .map(([, v]) => v[0]),
     failures[incident][0],
-  )}${incident === "medical" ? select("medical", "Training scenario", medicalCases, medical) : ""}</div>${btn("inject", "Trigger incident")}${select("camera", "Camera preset", ["Overview", "Habitat", ...(cfg.rover ? ["Rover"] : []), "Helmet", "Follow crew", "Tactical"], cameraPreset)}<small>Simulated systems · ${m.outcome}</small>`;
+  )}${incident === "medical" ? select("medical", "Training scenario", medicalCases, medical) : ""}</div>${btn("inject", "Trigger incident")}${select("camera", "Camera preset", ["Overview", "Habitat", ...(cfg.rover ? ["Rover"] : []), "Helmet", "Follow crew", "Tactical"], cameraPreset)}${select("quality", "Render quality", ["Performance", "Balanced", "High"], quality)}<small>Simulated systems · ${m.outcome}</small>`;
 }
 function timeline(m) {
   return `<h2>Incident timeline</h2>${m.logs
@@ -573,7 +585,10 @@ async function loadObs() {
   if (page === "inspect" && site.id === key && version === observationVersion)
     scene?.fire(o.fires?.detections ?? []);
 }
-function launch() {
+async function launch() {
+  if (document.querySelector(".launch-screen")) return;
+  const { launchSequence } = await import("./launch.js");
+  await launchSequence(site.name);
   incident = "solar";
   crewIndex = 0;
   cameraPreset = "Overview";
@@ -664,6 +679,11 @@ app.addEventListener("change", (e) => {
     update();
     return;
   }
+  if (id === "quality") {
+    quality = value;
+    scene?.quality(value);
+    return;
+  }
   if (id === "camera") {
     cameraPreset = value;
     scene?.view(value, crewIndex);
@@ -752,7 +772,7 @@ app.addEventListener("click", async (e) => {
     button.disabled = true;
     try {
       const r = await json(
-        "/api/analog/research?q=" +
+        "/api/research/site?q=" +
           encodeURIComponent(
             (site.name + " " + (research || "Mars analog research")).slice(
               0,
@@ -770,6 +790,71 @@ app.addEventListener("click", async (e) => {
         "Online search unavailable. Use the linked field research reference.",
       );
     } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+  if (act === "groundtruth") {
+    const output = document.querySelector("#gt-results"),
+      question = document.querySelector("#gt-question").value;
+    const v = vitals(mission, crewIndex),
+      incidents = Object.keys(mission.active).join(" ");
+    const category = mission.health
+      ? "medical-support"
+      : incidents
+        ? "incident"
+        : "site";
+    output.textContent = "Searching trusted sources…";
+    button.disabled = true;
+    try {
+      const r = await json(
+        "/api/research/" +
+          category +
+          "?q=" +
+          encodeURIComponent(
+            (
+              site.name +
+              " " +
+              question +
+              " " +
+              incidents +
+              " " +
+              (mission.health ?? "")
+            ).slice(0, 200),
+          ),
+      );
+      output.innerHTML =
+        '<p class="note">Context · ' +
+        esc(v.name) +
+        " / " +
+        v.pulse +
+        " BPM / SpO₂ " +
+        v.spo2 +
+        "% / " +
+        esc(mission.cfg.mode) +
+        "</p>" +
+        r.results
+          .map(
+            (x) =>
+              '<article><a target="_blank" rel="noopener" href="' +
+              esc(x.link) +
+              '">' +
+              esc(x.title) +
+              "</a><p>" +
+              esc(x.snippet) +
+              "</p><small>" +
+              esc(x.source) +
+              " · " +
+              esc(x.date ?? "Date unavailable") +
+              "</small></article>",
+          )
+          .join("") +
+        (r.results.length ? "" : "No matching evidence returned.");
+    } catch {
+      output.textContent =
+        "GroundTruth search unavailable. Internal mission responses remain available.";
+    } finally {
+      gtAnswer = output.innerHTML;
       button.disabled = false;
     }
     return;
