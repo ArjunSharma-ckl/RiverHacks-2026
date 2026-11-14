@@ -75,6 +75,7 @@ export function createViewer(container) {
   // the camera before it flies past them.
   scene.screenSpaceCameraController.maximumZoomDistance = 7.5e7;
   scene.screenSpaceCameraController.minimumZoomDistance = 2;
+  scene.screenSpaceCameraController.zoomFactor = 7.5;
 
   clock.currentTime = C.JulianDate.now();
   clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
@@ -83,7 +84,7 @@ export function createViewer(container) {
 
   camera.setView({
     destination: C.Cartesian3.fromDegrees(-62, 18, 24000000),
-    orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO + 0.22, roll: 0 }
+    orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 }
   });
 
   {
