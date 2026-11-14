@@ -152,3 +152,23 @@ test("crew duty work credits, reassignments and medical holds share the mission 
   advance(m, 1);
   assert.deepEqual(m.production, before);
 });
+
+test("mining feeds fabrication and construction without free resources", async () => {
+  const { prepareDuties, assignDuty } =
+    await import("../src/missionforge/duties.js");
+  const m = start({ ...cfg, crew: 1 });
+  prepareDuties(m);
+  assignDuty(m, 0, "build");
+  advance(m, 1);
+  assert.equal(m.construction, 0);
+  assignDuty(m, 0, "mine");
+  advance(m, 8);
+  assert.ok(m.inventory.regolith >= 32);
+  assignDuty(m, 0, "forge");
+  advance(m, 4);
+  assert.ok(m.inventory.components >= 4);
+  assignDuty(m, 0, "build");
+  advance(m, 5);
+  assert.equal(m.construction, 4);
+  assert.ok(m.inventory.components >= 0);
+});

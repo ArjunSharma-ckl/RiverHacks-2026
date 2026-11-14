@@ -84,7 +84,7 @@ function asset(name, build) {
           idx.push(begin, begin + 1, begin + 2, begin, begin + 2, begin + 3);
         }
     } else {
-      const cols = 48,
+      const cols = 72,
         sphere = kind === "round",
         rings = sphere ? 25 : 4;
       for (let j = 0; j < rings; j++)
@@ -237,6 +237,29 @@ asset("field-suit", (p) => {
   p("Life support pack", [0, 1.2, -0.2], [0.4, 0.53, 0.24], 0);
   p("Chest console", [0, 1.24, 0.17], [0.35, 0.25, 0.08], 1);
   p("Telemetry display", [-0.035, 1.26, 0.218], [0.17, 0.09, 0.018], 3);
+  for (const side of [-1, 1]) {
+    for (let j = 0; j < 5; j++)
+      p(
+        "Suit seam",
+        [side * 0.2, 1.02 + j * 0.075, 0.165],
+        [0.018, 0.012, 0.035],
+        4,
+      );
+    p(
+      "Helmet lamp",
+      [side * 0.24, 1.78, 0.12],
+      [0.075, 0.075, 0.1],
+      0,
+      "round",
+    );
+    p(
+      "Lamp lens",
+      [side * 0.24, 1.78, 0.175],
+      [0.055, 0.055, 0.015],
+      3,
+      "round",
+    );
+  }
   p("Waist seal", [0, 0.94, 0], [0.47, 0.13, 0.32], 1, "tube");
   p("Collar", [0, 1.49, 0], [0.43, 0.09, 0.4], 4, "tube");
   p("Helmet", [0, 1.68, 0], [0.49, 0.48, 0.47], 0, "round");
