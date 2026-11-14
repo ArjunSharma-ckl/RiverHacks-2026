@@ -1,4 +1,4 @@
-import { mission } from './catalog-search.js';
+import { mission, MISSION_COLORS } from './catalog-search.js';
 import * as C from 'cesium';
 import { propagate, gstime, eciToEcf, twoline2satrec } from 'satellite.js';
 
@@ -9,6 +9,11 @@ export function addCatalog(viewer, fleet) {
   const nearby = new Map();
   let points = [], ready = false, last = -Infinity;
   const color = C.Color.fromCssColorString('#b5ced9').withAlpha(0.68);
+  // Colouring the catalogue by what each object does turns ten thousand
+  // identical grey dots into readable structure: navigation shells, the
+  // communications swarms, the sun-synchronous observation belt.
+  const missionColors = new Map(Object.entries(MISSION_COLORS)
+    .map(([job, css]) => [job, C.Color.fromCssColorString(css).withAlpha(0.72)]));
   const lines = fetch('/data/active.tle').then(r => r.text()).then(text => text.trim().split(/\r?\n/));
   async function position(index) {
     const tle = await lines;
@@ -33,7 +38,7 @@ export function addCatalog(viewer, fleet) {
           });
           return null;
         }
-        return cloud.add({ id:fleet.contacts[index], color,pixelSize:2,show:false });
+        return cloud.add({ id:fleet.contacts[index], color: missionColors.get(fleet.contacts[index].job) ?? color, pixelSize:2, show:false });
       });
     } else {
       const p = new C.Cartesian3();
@@ -79,7 +84,10 @@ export function addCatalog(viewer, fleet) {
     target = viewer.entities.add({name:contact.name,position:p,viewFrom:new C.Cartesian3(-120,-160,90),
       orientation:new C.VelocityOrientationProperty(p),
       model:/^STARLINK/i.test(contact.name) ? { uri:'/models/starlink.glb',minimumPixelSize:54,distanceDisplayCondition:new C.DistanceDisplayCondition(0,3000) } : undefined,
-      point:{pixelSize:5,color,distanceDisplayCondition:new C.DistanceDisplayCondition(/^STARLINK/i.test(contact.name)?3000:0,Infinity)},label:{text:contact.name,font:'12px sans-serif',pixelOffset:new C.Cartesian2(0,-18)}});
+      point:{pixelSize:5,color:missionColors.get(contact.job) ?? color,distanceDisplayCondition:new C.DistanceDisplayCondition(/^STARLINK/i.test(contact.name)?3000:0,Infinity)},
+      path:{leadTime:2800,trailTime:2800,width:2,resolution:30,
+        material:new C.PolylineGlowMaterialProperty({glowPower:0.22,taperPower:0.5,color:(missionColors.get(contact.job) ?? color).withAlpha(0.85)})},
+      label:{text:contact.name,font:'12px sans-serif',pixelOffset:new C.Cartesian2(0,-18)}});
     fleet.track(target);
   };
 }

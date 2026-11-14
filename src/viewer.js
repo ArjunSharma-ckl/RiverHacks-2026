@@ -16,7 +16,7 @@ export function createViewer(container) {
     timeline: false, animation: false, fullscreenButton: false, homeButton: false,
     geocoder: false, sceneModePicker: false, navigationHelpButton: false,
     baseLayerPicker: false, infoBox: false, selectionIndicator: false,
-    shouldAnimate: true, shadows: true,
+    shouldAnimate: true, shadows: false,
     contextOptions: { webgl: { powerPreference: 'high-performance' } }
   });
 
@@ -32,45 +32,46 @@ export function createViewer(container) {
   scene.globe.atmosphereLightIntensity = 14;
   scene.globe.baseColor = C.Color.fromCssColorString('#04070d');
   scene.globe.depthTestAgainstTerrain = true;
-  scene.globe.maximumScreenSpaceError = 1.25;
+  scene.globe.maximumScreenSpaceError = 2;
 
   scene.skyAtmosphere.perFragmentAtmosphere = true;
-  scene.skyAtmosphere.atmosphereLightIntensity = 55;
+  scene.skyAtmosphere.atmosphereLightIntensity = 62;
   scene.skyAtmosphere.saturationShift = 0.08;
   scene.skyAtmosphere.brightnessShift = 0.04;
 
-  scene.sun.glowFactor = 1.6;
+  scene.sun.glowFactor = 2.6;
   scene.moon = new C.Moon({ textureUrl: '/textures/moon.jpg', onlySunLighting: true });
   scene.fog.enabled = true;
 
   // Tone mapping plus bloom is what makes the sun read as a light source
   // rather than a white circle.
   scene.highDynamicRange = true;
-  scene.msaaSamples = 4;
+  scene.msaaSamples = 2;
   scene.postProcessStages.fxaa.enabled = true;
   const bloom = scene.postProcessStages.bloom;
-  bloom.enabled = true;
+  bloom.enabled = false;
   bloom.uniforms.glowOnly = false;
-  bloom.uniforms.contrast = 118;
-  bloom.uniforms.brightness = -0.35;
+  bloom.uniforms.contrast = 94;
+  bloom.uniforms.brightness = -0.26;
   bloom.uniforms.delta = 1.2;
-  bloom.uniforms.sigma = 2.4;
+  bloom.uniforms.sigma = 3.1;
   bloom.uniforms.stepSize = 1;
 
   let lensFlare;
   try {
     lensFlare = C.PostProcessStageLibrary.createLensFlareStage();
     scene.postProcessStages.add(lensFlare);
-    lensFlare.uniforms.intensity = 0.35;
-    lensFlare.uniforms.distortion = 1.0;
-    lensFlare.uniforms.dirtAmount = 0.01;
+    lensFlare.enabled = false;
+    lensFlare.uniforms.intensity = 0.9;
+    lensFlare.uniforms.distortion = 4.0;
+    lensFlare.uniforms.dirtAmount = 0.05;
   } catch {
     lensFlare = undefined;
   }
 
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
-  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
+  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.

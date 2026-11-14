@@ -163,6 +163,7 @@ button { font: inherit; cursor: pointer; }
 .pad-right { grid-area:2/3 } .pad-down { grid-area:3/2 }
 .pad-out { grid-area:3/1 } .pad-in { grid-area:3/3 }
 
+
 #mission {
   position: absolute;
   right: 16px;
@@ -194,3 +195,100 @@ button { font: inherit; cursor: pointer; }
 
 .terrain-view canvas { display: block; width: min(100%, 520px); height: auto; cursor: grab; touch-action: none; }
 .terrain-view button { margin: 5px 5px 0 0; }
+
+/* ---------------------------------------------------------------------------
+   Orbital console. The palette comes from the view itself: the violet of the
+   graded Milky Way, and sodium amber for anything live - the colour of city
+   lights on the night side of the terminator.
+   --------------------------------------------------------------------------- */
+:root {
+  --ink: #ededeb;
+  --dim: #aaa9a5;
+  --line: #323230;
+  --glass: #111111;
+  --accent: #ffb257;
+  --live: #b9b9b4;
+}
+
+/* A rail that belongs to the page rather than floating over it. */
+#hud {
+  top: 0; left: 0; bottom: 0;
+  width: min(330px, 86vw);
+  max-height: none;
+  height: 100vh;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: #101010;
+  box-shadow: none;
+  backdrop-filter: blur(18px);
+}
+#hud header {
+  padding: 18px 20px 14px;
+  border-top: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+#hud h1 {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+  text-transform: none; color: var(--ink);
+}
+#clock { color: var(--live); letter-spacing: 0; }
+#hud h3 {
+  font-size: 12px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--ink); opacity: 0.62; margin-bottom: 10px;
+}
+.hud-body { padding: 4px 20px 14px; scrollbar-width: thin; }
+#hud section { padding: 14px 0 12px; }
+#hud footer { padding: 12px 20px 14px; }
+
+/* Inputs read as one family. */
+#hud input[type="search"], #hud select {
+  width: 100%; margin-bottom: 7px; padding: 9px 10px;
+  color: var(--ink); background: #1b1b1a;
+  border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; font-size: 13px;
+}
+#hud input[type="search"]::placeholder { color: var(--dim); }
+#hud input[type="search"]:focus-visible, #hud select:focus-visible,
+#hud button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+#hud .find { font-size: 14px; padding: 11px 12px; }
+
+.result-count { margin: 6px 0 8px; color: var(--dim); font-size: 12px; }
+.results { list-style: none; margin: 0; padding: 0; max-height: 274px; overflow: auto; }
+.results li { margin-bottom: 4px; }
+.result {
+  display: block; width: 100%; padding: 8px 10px 8px 12px; text-align: left;
+  color: var(--ink); background: transparent; border: 1px solid transparent;
+  border-left: 2px solid var(--mission, var(--line)); border-radius: 5px;
+}
+.result:hover { background: #232322; border-color: var(--line); border-left-color: var(--mission, var(--accent)); }
+.result-name { display: block; font-size: 13px; }
+.result-meta { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.result.more { border-left-color: var(--line); color: var(--dim); text-align: center; padding: 9px 0; }
+
+.pad button { background: #1b1b1a; }
+.toggle.master { font-weight: 600; }
+.layer.on .toggle span { color: var(--accent); }
+.status .bad { color: #ff8f7a; }
+#credits { left: min(346px, 88vw); }
+
+@media (max-width: 760px) {
+  #hud { width: 100vw; height: auto; max-height: 52vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  #credits { left: 16px; }
+}
+
+#hud .tool-group { border-bottom:1px solid var(--line); }
+#hud .tool-group[open] { padding-bottom:14px; }
+.tool-group summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; cursor:pointer; font-weight:600; list-style:none; }
+.tool-group summary::after { content:'+'; color:var(--dim); font-weight:400; }
+.tool-group[open] summary::after { content:'−'; }
+.tool-group summary::-webkit-details-marker { display:none; }
+#hud .result { border-radius:0; border-bottom:1px solid #272726; }
+#hud .results li { margin:0; }
+#hud.collapsed { bottom:auto; height:auto; }
+#hud .pad button { background:#202020; }
+
+

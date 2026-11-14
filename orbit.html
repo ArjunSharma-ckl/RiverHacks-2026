@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MissionForge | Orbital Explorer</title>
+    <meta name="description" content="A live view of Earth built on NASA GIBS imagery, EONET events and POWER surface weather." />
+  </head>
+  <body>
+    <div id="cesiumContainer"></div>
+
+    <div id="hud">
+      <header>
+        <h1>Orbit control</h1>
+        <p id="clock">&mdash;</p>
+      </header>
+      <footer><button id="hud-toggle" type="button">Hide controls</button></footer>
+    </div>
+
+<header class="orbit-mast"><a href="/orbit.html"><img src="/forge.svg" alt="">MISSIONFORGE</a><span>Orbital Explorer</span><a class="atlas-link" href="/#discover">Find a field site ↗</a></header>
+<section id="orbit-intro"><div class="frame-label"><i></i>Earth observation</div><h2>Earth is our<br><em>proving ground.</em></h2><p>Discover Earth analog sites, establish field habitats and prepare your crew for Mars.</p><a class="enter-atlas" href="/#discover">FIND A FIELD SITE　→</a><button id="explore-orbit">Explore Orbital Explorer　↗</button></section>
+<script>document.body.classList.add('intro-open');document.getElementById('explore-orbit').onclick=()=>{document.body.classList.remove('intro-open');document.getElementById('orbit-intro').remove();document.getElementById('hud-toggle').focus()};</script>
+<link rel="stylesheet" href="/src/orbit-entry.css">
+<aside id="details" hidden></aside>
+
+    <p id="credits">
+      Imagery: NASA EOSDIS GIBS &middot; Events: NASA EONET &middot; Surface data: NASA POWER
+      &middot; Space weather: NASA DONKI &middot; Terrain &amp; detail imagery: Cesium ion, Esri
+    </p>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
