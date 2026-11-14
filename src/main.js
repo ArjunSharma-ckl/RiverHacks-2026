@@ -11,6 +11,7 @@ import { createWeather, WEATHER_LAYERS } from './weather.js';
 import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
 import { createControls } from './controls.js';
+import { mountMissionControls } from './mission.js';
 import { SUBJECTS } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
@@ -23,6 +24,7 @@ initLayers(viewer, [
 addBaseImagery();
 
 
+
 const sky = createSky(viewer);
 const satellites = createSatellites(viewer);
 const trackContact = addCatalog(viewer, satellites);
@@ -33,6 +35,8 @@ const controls = createControls(viewer, {
     else controls.home();
   }
 });
+
+mountMissionControls(viewer);
 
 let statusHandler = () => {};
 const weather = createWeather(viewer, { onStatus: (entries) => statusHandler(entries) });

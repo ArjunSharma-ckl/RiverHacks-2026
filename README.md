@@ -16,6 +16,23 @@ Nothing needs an API key to work. Keys only add extras — copy `.env.example` t
 
 ## What is in the view
 
+**Analog simulation planner.** Open `/planner.html`. Use a measured lunar
+or Martian example, upload a square JSON elevation grid in metres, or
+upload an overhead terrain image. Image mode downloads a quantized Depth
+Anything V2 Small checkpoint (~27 MB) and estimates relative depth locally.
+The image center square is used, and relative depth only produces an
+exploratory shortlist. Metric search compares relief, slope, and shape at
+two resolutions. The resulting terrain distance is a ranking metric;
+smaller values indicate closer measured form. Acceptance thresholds are
+prototype rules and have not been calibrated for planetary site suitability.
+
+The catalog contains 24 Copernicus GLO-30 Earth windows sampled on 65×65
+grids over 8 km × 8 km. The Moon examples are cropped from the NASA LRO LOLA
+south polar 20 m product, sampled every sixth pixel. The Mars example is
+cropped from NASA MOLA MEGDR (17 samples across, interpolated to the
+display grid). Source and attribution records accompany each patch.
+These previews omit fine hazards, material properties and field access.
+
 **Earth.** NASA GIBS Blue Marble shaded-relief as the global basemap, Esri World
 Imagery from zoom 6 inwards, and VIIRS city lights blended in only on the night
 side of the terminator. Lighting is true solar lighting, so the day/night line is
