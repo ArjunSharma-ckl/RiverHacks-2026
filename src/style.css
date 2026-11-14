@@ -169,12 +169,12 @@ button { font: inherit; cursor: pointer; }
    lights on the night side of the terminator.
    --------------------------------------------------------------------------- */
 :root {
-  --ink: #eceaf6;
-  --dim: #948cae;
-  --line: #262038;
-  --glass: #0d0a17f2;
+  --ink: #ededeb;
+  --dim: #aaa9a5;
+  --line: #323230;
+  --glass: #111111;
   --accent: #ffb257;
-  --live: #7ae0ff;
+  --live: #b9b9b4;
 }
 
 /* A rail that belongs to the page rather than floating over it. */
@@ -186,8 +186,8 @@ button { font: inherit; cursor: pointer; }
   border: 0;
   border-right: 1px solid var(--line);
   border-radius: 0;
-  background: linear-gradient(180deg, #120d20f7 0%, #0a0714f7 100%);
-  box-shadow: 24px 0 60px #00000066;
+  background: #101010;
+  box-shadow: none;
   backdrop-filter: blur(18px);
 }
 #hud header {
@@ -212,7 +212,7 @@ button { font: inherit; cursor: pointer; }
 /* Inputs read as one family. */
 #hud input[type="search"], #hud select {
   width: 100%; margin-bottom: 7px; padding: 9px 10px;
-  color: var(--ink); background: #18132a;
+  color: var(--ink); background: #1b1b1a;
   border: 1px solid var(--line); border-radius: 6px;
   font: inherit; font-size: 13px;
 }
@@ -228,15 +228,15 @@ button { font: inherit; cursor: pointer; }
 .results li { margin-bottom: 4px; }
 .result {
   display: block; width: 100%; padding: 8px 10px 8px 12px; text-align: left;
-  color: var(--ink); background: #150f26; border: 1px solid transparent;
+  color: var(--ink); background: transparent; border: 1px solid transparent;
   border-left: 2px solid var(--mission, var(--line)); border-radius: 5px;
 }
-.result:hover { background: #1d1533; border-color: var(--line); border-left-color: var(--mission, var(--accent)); }
+.result:hover { background: #232322; border-color: var(--line); border-left-color: var(--mission, var(--accent)); }
 .result-name { display: block; font-size: 13px; }
 .result-meta { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 .result.more { border-left-color: var(--line); color: var(--dim); text-align: center; padding: 9px 0; }
 
-.pad button { background: #18132a; }
+.pad button { background: #1b1b1a; }
 .toggle.master { font-weight: 600; }
 .layer.on .toggle span { color: var(--accent); }
 .status .bad { color: #ff8f7a; }
@@ -246,3 +246,14 @@ button { font: inherit; cursor: pointer; }
   #hud { width: 100vw; height: auto; max-height: 52vh; border-right: 0; border-bottom: 1px solid var(--line); }
   #credits { left: 16px; }
 }
+
+#hud .tool-group { border-bottom:1px solid var(--line); }
+#hud .tool-group[open] { padding-bottom:14px; }
+.tool-group summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; cursor:pointer; font-weight:600; list-style:none; }
+.tool-group summary::after { content:'+'; color:var(--dim); font-weight:400; }
+.tool-group[open] summary::after { content:'−'; }
+.tool-group summary::-webkit-details-marker { display:none; }
+#hud .result { border-radius:0; border-bottom:1px solid #272726; }
+#hud .results li { margin:0; }
+#hud.collapsed { bottom:auto; height:auto; }
+#hud .pad button { background:#202020; }
