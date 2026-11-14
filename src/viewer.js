@@ -86,8 +86,12 @@ export function createViewer(container) {
     orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO + 0.22, roll: 0 }
   });
 
-  if (ION_TOKEN) {
-    C.createWorldTerrainAsync({ requestWaterMask: true, requestVertexNormals: true })
+  {
+    const options = { requestWaterMask: true, requestVertexNormals: true };
+    const terrainReady = ION_TOKEN ? C.createWorldTerrainAsync(options)
+      : C.IonResource.fromAssetId(1, { server: '/api/ion/', accessToken: '' })
+        .then(resource => C.CesiumTerrainProvider.fromUrl(resource, options));
+    terrainReady
       .then((terrain) => { viewer.terrainProvider = terrain; })
       .catch(() => {});
   }
