@@ -83,11 +83,25 @@ export function createPanel(root) {
     try {
       const response = await fetch(`/api/object?name=${encodeURIComponent(name)}`);
       if (!response.ok) return;
-      const { article } = await response.json();
-      if (current !== token || !article?.link) return;
-      const paragraph = element('p', 'article');
-      paragraph.append(externalLink(article.link, article.snippet ?? article.link));
-      extra.append(paragraph);
+      const { articles, photos } = await response.json();
+      if (current !== token) return;
+      if (articles.length) extra.append(element('h3',undefined,'Further reading'));
+      for (const item of articles) {
+        const card = element('section','source-card');
+        card.append(element('small',undefined,new URL(item.link).hostname), externalLink(item.link,item.title), element('p',undefined,item.snippet));
+        extra.append(card);
+      }
+      if (photos.length) gallery.append(element('h3',undefined,'Image archive'));
+      const grid = element('div','grid');
+      for (const photo of photos) {
+        const link = externalLink(photo.link,'');
+        const img = new Image();
+        img.loading = 'lazy'; img.alt = photo.title; img.src = photo.thumbnail;
+        img.onerror = () => img.remove();
+        link.append(img,element('span',undefined,photo.title));
+        grid.append(link);
+      }
+      gallery.append(grid);
     } catch {
       // Web search is optional and needs a SERPAPI_KEY.
     }
@@ -129,7 +143,7 @@ export function createPanel(root) {
 
   function show(name, options = {}) {
     const current = reset(name, options.subtitle);
-    loadImagery(name, current);
+
     loadArticle(name, current);
     if (name === 'Earth' && options.location) showEarthWeather(options.location, current);
     if (name === 'Sun') showSpaceWeather(current);
@@ -153,5 +167,13 @@ export function createPanel(root) {
     loadImagery(event.category, current);
   }
 
-  return { show, showEvent, hide };
+  return { show, showEvent, hide, showContact(contact) {
+    const current = reset(contact.name, 'Satellite tracking');
+    loadArticle(contact.name,current);
+    if (contact.speed) extra.append(definitionList([
+      ['Mission',contact.job],['Ground position',contact.lat.toFixed(2)+'°, '+contact.lon.toFixed(2)+'°'],
+      ['Altitude',contact.alt.toFixed(0)+' km'],['Orbital speed',contact.speed.toFixed(2)+' km/s']
+    ]));
+    body.textContent = 'NORAD ' + contact.norad + ' · Position propagated from CelesTrak orbital elements.';
+  } };
 }

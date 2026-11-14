@@ -1,3 +1,4 @@
+import { catalogControls } from './catalog-search.js';
 import * as C from 'cesium';
 
 function element(tag, className, text) {
@@ -41,6 +42,7 @@ export function createHud(root, context) {
   };
   viewer.trackedEntityChanged.addEventListener(entity => { selector.value = entity?.id || ''; });
   fleet.append(selector, element('p', 'control-hint', 'W A S D orbit · + / − zoom · Esc return'));
+  catalogControls(fleet,satellites,context.chooseContact);
   // Weather
   const weatherSection = section('Weather');
   const status = element('p', 'status');
@@ -61,6 +63,7 @@ export function createHud(root, context) {
     }, spec.note);
     const slider = document.createElement('input');
     slider.type = 'range';
+    slider.setAttribute('aria-label', spec.label + ' opacity');
     slider.min = '0';
     slider.max = '1';
     slider.step = '0.05';

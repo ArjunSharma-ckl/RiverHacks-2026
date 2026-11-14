@@ -78,6 +78,7 @@ export function createSatellites(viewer) {
 
   return {
     entities,
+    visible: true,
     track(entity) {
       viewer.trackedEntity = entity;
       if (!entity) viewer.camera.flyHome(0.8);
@@ -86,6 +87,7 @@ export function createSatellites(viewer) {
       for (const entity of entities) entity.label.show = show;
     },
     setFleet(show) {
+      this.visible = show;
       if (!show && viewer.trackedEntity) this.track(undefined);
       for (const entity of entities) entity.show = show;
     }

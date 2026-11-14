@@ -66,20 +66,30 @@ const EVENT_COLORS = {
   'Water Color': '#7fffd4', 'Manmade': '#9aa7b8'
 };
 
-function pin(color) {
+function pin(color, category) {
   const element = document.createElement('canvas');
   element.width = 32;
   element.height = 32;
   const context = element.getContext('2d');
   context.beginPath();
   context.arc(16, 16, 11, 0, Math.PI * 2);
-  context.fillStyle = `${color}33`;
+  context.fillStyle = "#101a21";
   context.fill();
   context.lineWidth = 2.5;
   context.strokeStyle = color;
   context.stroke();
   context.beginPath();
-  context.arc(16, 16, 3.5, 0, Math.PI * 2);
+  const paths = {
+    Wildfires:'M16 6 Q18 13 21 16 Q23 23 16 25 Q8 23 11 17 Q14 14 16 6Z',
+    Volcanoes:'M6 23 L13 13 L16 16 L19 13 L26 23Z',
+    Floods:'M6 14 Q10 10 15 14 T26 14 M6 20 Q10 16 15 20 T26 20',
+    'Severe Storms':'M17 6 L10 18 H16 L14 26 L23 13 H17Z',
+    'Sea and Lake Ice':'M16 7 V25 M8 11 L24 21 M8 21 L24 11',
+    Earthquakes:'M5 17 H11 L14 9 L17 24 L20 15 H27'
+  };
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.stroke(new Path2D(paths[category] || 'M16 9 L23 16 L16 23 L9 16Z'));
   context.fillStyle = color;
   context.fill();
   return element.toDataURL('image/png');
@@ -181,7 +191,7 @@ export function createWeather(viewer, { onStatus } = {}) {
           name: event.title,
           position: C.Cartesian3.fromDegrees(event.longitude, event.latitude, 18000),
           billboard: {
-            image: pin(color),
+            image: pin(color,event.category),
             width: 26,
             height: 26,
             scaleByDistance: new C.NearFarScalar(2.0e6, 1.1, 4.0e7, 0.55)

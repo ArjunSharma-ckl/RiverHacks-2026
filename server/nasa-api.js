@@ -1,3 +1,4 @@
+import { report } from './reports.js';
 import { imageryTile } from './arcgis.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
@@ -48,6 +49,8 @@ function searchTerm(params) {
 }
 
 const POWER_PARAMETERS = [
+  ['T2MDEW', 'Dew point', '°C'],
+  ['PS', 'Surface pressure', 'kPa'],
   ['T2M', 'Air temperature', '°C'],
   ['T2M_MAX', 'Daily maximum', '°C'],
   ['T2M_MIN', 'Daily minimum', '°C'],
@@ -213,26 +216,7 @@ export function createApi(env = {}) {
     '/nasa/apod': () => cached('apod', 60 * MINUTE, () =>
       getJson(`https://api.nasa.gov/planetary/apod?api_key=${nasaKey}`)),
 
-    // Kept from the original app: optional web search enrichment.
-    '/object': (params) => {
-      const name = params.get('name');
-      if (!name || !SUBJECTS.has(name)) throw new Error('unknown subject');
-      if (!serpKey) throw new Error('missing SERPAPI_KEY');
-      return cached(`serp:${name}`, 24 * 60 * MINUTE, async () => {
-        const search = (engine) => {
-          const query = new URLSearchParams({ engine, q: `${name} NASA astronomy`, api_key: serpKey });
-          return getJson(`https://serpapi.com/search.json?${query}`);
-        };
-        const [web, images] = await Promise.all([search('google'), search('google_images')]);
-        return {
-          article: web.organic_results?.find((item) => item.snippet && item.link?.startsWith('https://')),
-          photos: (images.images_results ?? [])
-            .filter((item) => item.thumbnail?.startsWith('https://') && item.link?.startsWith('https://'))
-            .slice(0, 4)
-            .map(({ thumbnail, title, link }) => ({ thumbnail, title, link }))
-        };
-      });
-    }
+    '/object': params => report(params.get('name'), serpKey)
   };
 
   return async function handle(req, res) {
