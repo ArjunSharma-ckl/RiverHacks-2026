@@ -10,6 +10,7 @@ import { createSatellites } from './satellites.js';
 import { createWeather, WEATHER_LAYERS } from './weather.js';
 import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
+import { createControls } from './controls.js';
 import { SUBJECTS } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
@@ -26,6 +27,13 @@ const sky = createSky(viewer);
 const satellites = createSatellites(viewer);
 const trackContact = addCatalog(viewer, satellites);
 
+const controls = createControls(viewer, {
+  onEscape: () => {
+    if (viewer.trackedEntity) satellites.track(undefined);
+    else controls.home();
+  }
+});
+
 let statusHandler = () => {};
 const weather = createWeather(viewer, { onStatus: (entries) => statusHandler(entries) });
 
@@ -39,6 +47,7 @@ createHud(document.getElementById('hud'), {
   weather,
   lensFlare,
   chooseContact(contact) { trackContact(contact); panel.showContact(contact); },
+  controls,
   setStatus: (handler) => { statusHandler = handler; }
 });
 
@@ -82,31 +91,6 @@ viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
   }
   panel.hide();
 }, C.ScreenSpaceEventType.LEFT_CLICK);
-const held = new Set();
-const axes = [0, 0, 0];
-const bindings = {w:[0,1],s:[0,-1],a:[1,1],d:[1,-1],'+':[2,1],'=':[2,1],'-':[2,-1],'_':[2,-1]};
-window.addEventListener('keydown', event => {
-  if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,select,textarea,[contenteditable=true]')) return;
-  if (event.key === 'Escape' && viewer.trackedEntity) satellites.track(undefined);
-  const key = event.key.toLowerCase();
-  if (Object.hasOwn(bindings,key)) { event.preventDefault(); held.add(key); }
-});
-window.addEventListener('keyup',event => held.delete(event.key.toLowerCase()));
-window.addEventListener('blur',() => { held.clear(); axes.fill(0); });
-let previous = performance.now();
-scene.preUpdate.addEventListener(() => {
-  const now = performance.now(), dt = Math.min((now-previous)/1000,0.05);
-  previous = now;
-  const input = [0,0,0];
-  for (const key of held) { const [axis,sign] = bindings[key]; input[axis] += sign; }
-  axes.forEach((value,i) => { axes[i] += (input[i]-value)*(1-Math.exp(-14*dt)); });
-  if (axes.every(value => Math.abs(value)<0.001)) return;
-  const range = viewer.trackedEntity ? C.Cartesian3.magnitude(camera.position) : camera.positionCartographic.height;
-  const angle = dt*(viewer.trackedEntity ? 1 : C.Math.clamp(range/6378137,0.000001,1));
-  camera.rotateUp(axes[0]*angle); camera.rotateLeft(axes[1]*angle);
-  camera.zoomIn(Math.min(Math.max(0,range-(viewer.trackedEntity ? 2 : 160)), range*(1-Math.exp(-axes[2]*dt*1.8))));
-});
-
 viewer.trackedEntityChanged.addEventListener(target => {
   scene.screenSpaceCameraController.minimumZoomDistance = target ? 2 : 160;
 });
