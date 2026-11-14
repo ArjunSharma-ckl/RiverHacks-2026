@@ -306,6 +306,15 @@ function workTotals(m) {
   prepareDuties(m);
   return (
     "<h2>Station output</h2>" +
+    line(
+      "Material stocks",
+      fmt(m.inventory.regolith, 0) +
+        " kg regolith / " +
+        m.inventory.components +
+        " components",
+    ) +
+    line("Greenhouse construction", m.construction + "/4 sections") +
+    '<p class="note">Mine 8 kg → fabricate a component using 2 kWh → build a section. Four sections complete the greenhouse.</p>' +
     Object.entries(stations)
       .map(([k, s]) =>
         line(

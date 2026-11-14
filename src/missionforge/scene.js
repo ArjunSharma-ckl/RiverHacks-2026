@@ -201,7 +201,9 @@ export function createScene(onPick) {
     fires.show = false;
     base.entities.removeAll();
     model("Habitat", "habitat", 0, 0);
-    model("Science module", "habitat2", -8, 3);
+    model("Science module", "habitat2", -8, 6);
+    model("Emergency shelter", "medical", 0, 17);
+    model("Crew quarters", "habitat", -10, -18);
     for (const station of Object.values(stations))
       model(station.name, station.model, ...station.at);
     if (c.rover) model("Rover", "rover", 7, -5);
@@ -233,6 +235,9 @@ export function createScene(onPick) {
   function sync(m, rate = 0) {
     if (!placed) return;
     actors.sync(m, rate);
+    let greenhouse = base.entities.getById("Constructed greenhouse");
+    if (m.construction >= 4 && !greenhouse)
+      model("Constructed greenhouse", "laboratory", -28, 16);
     for (let i = 0; i < 4; i++)
       base.entities.getById("Solar " + i).box.material = m.active.solar
         ? orange

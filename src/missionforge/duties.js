@@ -41,6 +41,48 @@ export const stations = {
     model: "logistics",
   },
 };
+Object.assign(stations, {
+  mine: {
+    name: "Regolith excavation",
+    task: "Mine regolith",
+    output: "Regolith extracted",
+    unit: "kg",
+    yield: 4,
+    at: [29, 17],
+    door: [26, 15],
+    model: "recycler",
+  },
+  forge: {
+    name: "Fabrication workshop",
+    task: "Fabricate components",
+    output: "Components produced",
+    unit: "parts",
+    yield: 1,
+    at: [21, 4],
+    door: [18, 4],
+    model: "logistics",
+  },
+  build: {
+    name: "Construction yard",
+    task: "Build greenhouse",
+    output: "Construction work",
+    unit: "sections",
+    yield: 1,
+    at: [-19, 16],
+    door: [-15, 16],
+    model: "laboratory",
+  },
+  power: {
+    name: "Battery shelter",
+    task: "Inspect power systems",
+    output: "Power inspections",
+    unit: "checks",
+    yield: 1,
+    at: [19, 15],
+    door: [16, 15],
+    model: "medical",
+  },
+});
 const defaultDuty = (role) =>
   ({
     Commander: "stores",
@@ -56,6 +98,11 @@ export function prepareDuties(m) {
       origin: [-3 + i * 1.25, -4],
       cycles: 0,
     }));
+  m.inventory ??= { regolith: 0, components: 0 };
+  m.construction ??= 0;
+  for (const key of Object.keys(stations)) {
+    if (m.production) m.production[key] ??= 0;
+  }
   m.production ??= { water: 0, lab: 0, med: 0, stores: 0 };
 }
 export const offDuty = (m, i) =>
@@ -127,8 +174,29 @@ export function advanceDuties(m, dt) {
     d.elapsed += hours;
     if (!done) return;
     d.cycles += done;
-    const amount = stations[d.key].yield * done;
-    m.production[d.key] += amount;
+    let completed = done;
+    if (d.key === "mine") m.inventory.regolith += 4 * done;
+    if (d.key === "forge") {
+      completed = Math.min(
+        done,
+        Math.floor(m.inventory.regolith / 8),
+        Math.floor(m.resources.battery / 2),
+      );
+      m.inventory.regolith -= completed * 8;
+      m.resources.battery -= completed * 2;
+      m.inventory.components += completed;
+    }
+    if (d.key === "build") {
+      completed = Math.min(
+        done,
+        m.inventory.components,
+        Math.max(0, 4 - m.construction),
+      );
+      m.inventory.components -= completed;
+      m.construction += completed;
+    }
+    const amount = stations[d.key].yield * completed;
+    m.production[d.key] = (m.production[d.key] ?? 0) + amount;
     if (d.key === "water")
       m.resources.water = Math.min(m.initial.water, m.resources.water + amount);
   });
