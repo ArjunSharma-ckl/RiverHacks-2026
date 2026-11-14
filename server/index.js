@@ -49,7 +49,7 @@ async function bodyFor(path, encoding) {
   if (!encoding) return readFile(path);
   const key = `${path}|${encoding}`;
   const hit = compressedCache.get(key);
-  if (hit) return hit;
+  if (hit && extname(path) !== '.html') return hit;
   const raw = await readFile(path);
   const body = encoding === 'br'
     ? brotliCompressSync(raw, { params: { [constants.BROTLI_PARAM_QUALITY]: 6 } })
@@ -105,3 +105,4 @@ createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log(`serving ${ROOT} on :${PORT}`);
 });
+

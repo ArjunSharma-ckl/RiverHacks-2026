@@ -1,0 +1,112 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { sites, rank, interpret } from "../src/missionforge/sites.js";
+import {
+  start,
+  advance,
+  respond,
+  inject,
+  vitals,
+  generation,
+  SOL,
+} from "../src/missionforge/simulation.js";
+const data = Object.fromEntries(
+  sites.map((s) => [
+    s.id,
+    JSON.parse(
+      readFileSync(
+        new URL("../public/data/" + s.id + ".json", import.meta.url),
+      ),
+    ),
+  ]),
+);
+const cfg = {
+  crew: 4,
+  days: 7,
+  array: 8,
+  sun: 7.2,
+  battery: 48,
+  oxygen: 36,
+  water: 64,
+  load: 1.8,
+  parts: 3,
+  rover: true,
+  backup: true,
+  roles: ["Commander", "Engineer", "Medical", "Geology"],
+};
+test("catalog rankings depend on mission and environment", () => {
+  function first(q) {
+    return [...sites].sort(
+      (a, b) =>
+        rank(b, data[b.id], interpret(q, 0), q).score -
+        rank(a, data[a.id], interpret(q, 0), q).score,
+    )[0].id;
+  }
+  assert.equal(first("dry rocky habitat solar"), "atacama");
+  assert.equal(first("cold volcanic geology"), "iceland");
+  assert.equal(rank({}, null).score, null);
+  assert.ok(rank(sites[0], null).coverage < 1);
+});
+test("failed array changes mean generation and drains battery; repair uses a spare", () => {
+  const m = start(cfg),
+    baseline = generation(m);
+  inject(m, "solar");
+  assert.ok(generation(m) < baseline);
+  advance(m, 1);
+  assert.ok(m.resources.battery < 48);
+  respond(m, "solar", 1);
+  assert.equal(m.parts, 2);
+  assert.equal(generation(m), baseline);
+});
+test("oxygen, rover and medical events propagate to the same state", () => {
+  const m = start(cfg),
+    normal = start(cfg);
+  m.traverse = true;
+  inject(m, "oxygen");
+  inject(m, "rover");
+  inject(m, "medical", "Hypoxia drill");
+  advance(m, 1);
+  advance(normal, 1);
+  assert.ok(m.resources.oxygen < normal.resources.oxygen);
+  assert.equal(m.km, 0);
+  assert.equal(vitals(m, 0).spo2, 89);
+  respond(m, "rover", 1);
+  respond(m, "medical", 2);
+  advance(m, 1);
+  assert.ok(m.km > 0);
+  assert.equal(vitals(m, 0).status, "In recovery");
+  assert.equal(m.medkits, 1);
+});
+test("clock clamps at planned end and depleted inventories stop the run", () => {
+  const m = start(cfg);
+  advance(m, 9999);
+  assert.equal(m.outcome, "Planned duration reached");
+  assert.ok(Math.abs(m.h - 7 * SOL) < 1e-7);
+  const failed = start({ ...cfg, water: 0.01 });
+  advance(failed, 100);
+  assert.equal(failed.resources.water, 0);
+  assert.match(failed.outcome, /Aborted/);
+  const h = failed.h;
+  advance(failed, 1);
+  assert.equal(failed.h, h);
+});
+test("invalid steps, duplicate failures and exhausted spares preserve state", () => {
+  const m = start({ ...cfg, parts: 0, rover: false });
+  advance(m, NaN);
+  advance(m, -1);
+  assert.equal(m.h, 0);
+  assert.equal(inject(m, "rover"), false);
+  inject(m, "comms");
+  assert.equal(inject(m, "comms"), false);
+  assert.equal(respond(m, "comms", 1), "No spare parts remaining");
+  assert.ok(m.active.comms);
+});
+test("daily mean budgets are reproducible across manual step sizes", () => {
+  const a = start(cfg),
+    b = start(cfg);
+  advance(a, 12);
+  for (let i = 0; i < 12; i++) advance(b, 1);
+  assert.deepEqual(a.resources, b.resources);
+  assert.equal(a.used, b.used);
+});

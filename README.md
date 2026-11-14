@@ -1,5 +1,25 @@
-# RiverHacks 2026 — God's Eye
+# MissionForge
+Earth is our proving ground.
 
+Compare Earth analog sites using NASA POWER climate normals, deploy a research habitat on the existing Cesium globe and run MF-001, the Atacama Habitat Expedition.
+
+## Run locally
+
+Use Node 22.12+ or Node 24. Run `npm install` and `npm run dev`, then open the URL printed by Vite. Run `npm test` for deterministic engine and ranking checks. For the production server run `npm run build` followed by `npm start` (default port 10000).
+
+## Three-minute demonstration
+
+1. Select **Find a Mars analog site** and enter “dry rocky habitat solar”. Inspect Atacama and expand its comparison with Iceland.
+2. Establish a research habitat. Keep four crew, seven sols, solar power and the robotic rover. Launch the mission.
+3. Start a rover traverse and advance one sol. Inject a solar array failure, advance an hour and replace the controller.
+4. Inject a crew medical concern, open ASTRA and choose a training response. View and export the after-action report.
+5. Use **Orbital explorer** to open the original satellite catalog, weather layers and planetary controls.
+
+The core demo uses bundled site climate records, thumbnails and models. Detailed imagery and recent environmental observations require upstream access. Optional terrain, FIRMS and evidence-search credentials are documented in `.env.example`. Configure server-side credentials in the Render environment. The existing Render blueprint builds from main and serves both entry points through the Node server.
+
+See [data provenance](DATA_SOURCES.md), [asset credits](ASSET_CREDITS.md) and [simulation assumptions](SIMULATION_ASSUMPTIONS.md).
+
+## Original orbital explorer
 A live, cinematic view of Earth built on NASA data: real near-real-time imagery,
 real solar lighting, real sky positions, and the weather that is happening right
 now.
@@ -92,3 +112,4 @@ server/index.js    production static + API server
 zoom.
 
 Starlink spacecraft model by Malacodart, distributed under CC BY 4.0. The local copy has a blue material tint. https://sketchfab.com/3d-models/starlink-spacex-satellite-0a60f6720c5141c9a1c6d71aac108b31
+
