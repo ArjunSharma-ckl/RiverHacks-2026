@@ -57,7 +57,18 @@ export function createSatellites(viewer) {
       model: {
         uri: '/models/' + config.model + '.glb',
         minimumPixelSize: 18, shadows: C.ShadowMode.ENABLED,
+        // An outline in the craft's own colour: the models are small and grey
+        // against a dark sky, and this is what makes each one identifiable.
+        silhouetteColor: color,
+        silhouetteSize: 1.6,
         distanceDisplayCondition: new C.DistanceDisplayCondition(0, 2501)
+      },
+      path: {
+        show: false,
+        leadTime: 2800, trailTime: 2800, width: 2, resolution: 30,
+        material: new C.PolylineGlowMaterialProperty({
+          glowPower: 0.22, taperPower: 0.5, color: color.withAlpha(0.85)
+        })
       },
       label: {
         distanceDisplayCondition: new C.DistanceDisplayCondition(0, 2500),
@@ -81,6 +92,9 @@ export function createSatellites(viewer) {
     visible: true,
     track(entity) {
       viewer.trackedEntity = entity;
+      // The orbit only makes sense while you are following something, so it
+      // appears with the camera rather than cluttering the whole fleet.
+      for (const other of entities) other.path.show = other === entity;
       if (!entity) viewer.camera.flyHome(0.8);
     },
     setLabels(show) {

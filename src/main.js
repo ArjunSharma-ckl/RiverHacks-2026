@@ -5,6 +5,7 @@ import './style.css';
 import { createViewer, addBaseImagery } from './viewer.js';
 import { initLayers } from './layers.js';
 import { createSky } from './sky.js';
+import { paintGalaxy } from './galaxy.js';
 import { addCatalog } from './orbit-catalog.js';
 import { createSatellites } from './satellites.js';
 import { createWeather, WEATHER_LAYERS } from './weather.js';
@@ -22,6 +23,8 @@ initLayers(viewer, [
 ]);
 addBaseImagery();
 
+
+paintGalaxy(scene);
 
 const sky = createSky(viewer);
 const satellites = createSatellites(viewer);
