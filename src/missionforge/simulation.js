@@ -1,3 +1,4 @@
+import { advanceDuties, dutyPose, prepareDuties } from "./duties.js";
 export const SOL = 24.6597;
 export const roster = [
   "K. Rivera",
@@ -107,7 +108,10 @@ export function vitals(s, i) {
         (s.traverse ? 10 : 0) +
         (incident === "Fatigue" ? 34 : 0),
     );
-  const stress = incident ? 18 : 0;
+  prepareDuties(s);
+  const activity = dutyPose(s, i);
+  const stress =
+    (incident ? 18 : 0) + (activity.walking ? 9 : activity.working ? 4 : 0);
   return {
     name: roster[i],
     role: s.cfg.roles[i],
@@ -168,6 +172,7 @@ export function advance(s, hours) {
     r.water = Math.max(0, r.water - ((n * 1.6) / 24) * dt);
     r.food = Math.max(0, r.food - ((n * 0.64) / 24) * dt);
     if (moving) s.km += drivingHours * 0.22;
+    advanceDuties(s, dt);
     s.h += dt;
     left -= dt;
     if (Object.values(r).some((v) => v <= 0)) {
