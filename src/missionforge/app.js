@@ -1,9 +1,11 @@
 import { cue, toggleSound } from "./audio.js";
 import { launchSequence } from "./launch.js";
+import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
 import "./design.css";
+import './workspace.css';
 import { sites, profiles, coords, rank, interpret, factors } from "./sites.js";
 import {
   SOL,
@@ -59,6 +61,7 @@ let sortBy = "Suitability",
   researchType = "Studies",
   searchTimer,
   groundQuestion = "";
+let drawerOpen = true, drawerShift = 0, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
 let gtAnswer = "",
   quality = "Balanced";
 let crewIndex = 0;
@@ -209,7 +212,8 @@ function reasoning(s) {
   );
 }
 function rows() {
-  return ranked()
+  const minerals={atacama:'Salt',iceland:'Basalt',haughton:'Impact breccia',death:'Silica',mauna:'Basalt',mcmurdo:'Basalt'};
+  return ranked().filter(s => (filterTemp==='Any' || (filterTemp==='Below 0°C' ? (annual(s,'T2M')??100)<0 : filterTemp==='0–15°C' ? (annual(s,'T2M')??100)>=0 && (annual(s,'T2M')??100)<=15 : (annual(s,'T2M')??-100)>15)) && (filterMineral==='Any' || minerals[s.id]===filterMineral))
     .map(
       (s) =>
         `<button class="row" data-act="site:${s.id}">${photo(s)}<span><strong>${s.name}</strong><small>${s.country} · ${s.type}</small><span class="score-reason">${esc(reasoning(s))}</span></span><b>${ranking(s).score ?? "—"}</b></button>`,
@@ -217,8 +221,12 @@ function rows() {
     .join("");
 }
 function discover() {
-  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Scores use the selected mission weights. Each row shows its largest contribution and largest deduction.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Surface material is a broad site classification, not a verified mineral assay.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
+function mapHome(){return `${label('Home map / Conditions')}<h1>Explore Earth</h1><p>Rotate and zoom the globe. Filter candidate analogs by climate and surface material.</p>${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}<div id="rankings">${rows()}</div>${btn('manual','Evaluate a point on the globe')}`;}
+function researchPanel(){return `${label('GroundTruth / Research')}<h1>Ask about a site</h1><p>Search cited web evidence about ${esc(site.name)}. Results require a configured SERPAPI_KEY.</p><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What equipment risks matter here?"></label>${btn('ask-research','Search evidence')}<div id="research-answer" role="status">${researchAnswer}</div>`;}
+const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
+function facilityControls(){return `<details open><summary>Planned settlement facilities</summary><p class="note">Pressurized modules share enclosed corridors. Surface work still requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div></details>`;}
 function breakdown(s) {
   const r = ranking(s);
   return factors
@@ -263,7 +271,7 @@ function inspect() {
     )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a>${select("research-type", "Evidence collection", ["Studies", "Operations", "News", "Logistics"], researchType)}<label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search evidence")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}<br><small>${esc(r.source)} · ${esc(r.category || researchType)} · ${esc(r.date || "Date unavailable")}</small></p>`).join("")}</details>`;
 }
 function design() {
-  return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 6)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
+  return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 6)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
     ["array", "Array rating (kW)", 1, 40],
     ["battery", "Battery capacity (kWh)", 1, 300],
     ["load", "Habitat load (kW)", 0.1, 10],
@@ -276,7 +284,7 @@ function design() {
     )
     .join(
       "",
-    )}</div>${["rover", "backup"].map((k) => `<label><input id="${k}" type="checkbox" ${cfg[k] ? "checked" : ""}> ${k === "rover" ? "Robotic rover" : "Backup power"}</label>　`).join("")}</details><details><summary>Crew manifest</summary><div class="fields">${roster
+    )}</div>${["rover", "backup"].map((k) => `<label><input id="${k}" type="checkbox" ${cfg[k] ? "checked" : ""}> ${k === "rover" ? "Robotic rover" : "Backup power"}</label>　`).join("")}</details>${facilityControls()}<details><summary>Crew manifest</summary><div class="fields">${roster
     .slice(0, cfg.crew)
     .map((name, i) => select("role" + i, name, roles, cfg.roles[i]))
     .join(
@@ -359,10 +367,11 @@ function groundTruth() {
     "</div></details>"
   );
 }
+function environmentControls(){const env=mission?.environment||{temperature:-35,wind:12,dust:0,radiation:0.2},moon=mission?.cfg.mode==='Moon projection';return `<details open><summary>Live environment</summary><p class="note">Changes apply during the running simulation.${moon?' The Moon has no atmospheric wind; dust is a local plume scenario.':''}</p>${[['temperature','Temperature °C',-120,55,1],...(moon?[]:[['wind','Wind m/s',0,60,1]]),['dust',moon?'Dust plume opacity %':'Dust opacity %',0,100,1],['radiation','Radiation mSv/day',0,5,.1]].map(([key,title,min,max,step])=>`<label class="field">${title}<input type="range" data-environment="${key}" min="${min}" max="${max}" step="${step}" value="${env[key]}"><output>${env[key]}</output></label>`).join('')}</details>`;}
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -376,7 +385,7 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Habitat integrity", fmt(m.integrity ?? 100, 1) + "%")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load * (1+Math.max(0,Math.abs(m.environment?.temperature??-35)-35)*0.003), 2) + " kW")}${line('Crew radiation dose',fmt(m.crewDose??0,3)+' mSv simulated')}${line('Surface travel',(m.environment?.wind??0)>=25?'Paused by wind':'Available')}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Habitat integrity", fmt(m.integrity ?? 100, 1) + "%")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
@@ -410,43 +419,21 @@ function render() {
   holder.append(atlas);
   const mode = page === "control";
   document.body.classList.toggle("dark", mode);
-  document.title =
-    "MissionForge | " +
-    {
-      home: "Earth analog atlas",
-      discover: "Site discovery",
-      inspect: site.name,
-      design: "Mission design",
-      control: "Mission control",
-      report: "After-action report",
-    }[page];
+  document.title = "MissionForge | " + ({map:'Earth map',discover:'Site discovery',travel:'Travel planning',inspect:site.name,design:'Mission planning',control:'Mission simulation',report:'After-action report',research:'GroundTruth research'}[page]||'Explorer');
   document
     .querySelectorAll(".mast nav a")
     .forEach((a) =>
       a.classList.toggle(
         "active",
-        a.hash ===
-          "#" +
-            (page === "home"
-              ? "home"
-              : ["inspect", "discover"].includes(page)
-                ? "discover"
-                : "mission"),
+        a.hash === "#" + (["inspect","discover"].includes(page) ? "discover" : page),
       ),
     );
-  if (page === "home") app.innerHTML = home();
-  else if (page === "report") app.innerHTML = report();
-  else {
-    const content = { discover, inspect, design, control }[page];
-    app.innerHTML = `<section class="layout ${page === "inspect" ? "site-inspection" : ""}"><div class="panel">${content()}</div>${viewport()}</section>`;
-  }
+  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
+  const tabs = [['map','Home map'],['travel','Travel'],['design','Mission planning'],['control','Mission sim'],['discover','Site atlas'],['research','Ask GroundTruth']];
+  app.innerHTML = `<section class="workspace ${drawerOpen?'':'drawer-closed'}" style="--drawer-shift:${drawerShift}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" class="${(page==='inspect'&&id==='discover')||page===id?'selected':''}" title="${name}" aria-label="${name}">${name}</button>`).join('')}</nav><div class="panel-drawer"><div class="drawer-head" id="drawer-handle"><span>MISSIONFORGE / ${esc(page.toUpperCase())}</span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel">${content()}</div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
   const dest = app.querySelector(".viewport");
-  if (dest) dest.prepend(atlas);
-  else {
-    atlas.hidden = true;
-    document.body.append(atlas);
-  }
-  atlas.hidden = !dest;
+  dest.prepend(atlas);
+  atlas.hidden = false;
 }
 function update() {
   const panel = app.querySelector(".panel");
@@ -454,7 +441,7 @@ function update() {
     render();
     return;
   }
-  const content = { discover, inspect, design, control }[page];
+  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
   morphdom(panel, '<div class="panel">' + content() + "</div>", {
     onBeforeElUpdated(oldEl, newEl) {
       if (oldEl.tagName === "DETAILS") newEl.open = oldEl.open;
@@ -482,17 +469,21 @@ function go(name) {
 }
 function displayScene() {
   if (!scene) return;
-  if (["home", "discover"].includes(page)) scene.overview();
+  if (["map", "discover", "research"].includes(page)) scene.overview();
+  else if (page === 'travel') { scene.overview(); if(trip.stops.length)scene.showRoute(routePoints()); }
   else if (page === "inspect") scene.inspect(site);
   else if (["design", "control"].includes(page)) {
     scene.place(site, cfg);
+    scene.setFacilities(cfg.facilities||{});
     if (page === "control") scene.sync(mission, playing ? speed : 0);
   }
 }
 function route() {
   const target = location.hash.slice(1);
   page = [
-    "home",
+    "map",
+    "travel",
+    "research",
     "discover",
     "inspect",
     "design",
@@ -504,7 +495,7 @@ function route() {
       ? mission
         ? "control"
         : "design"
-      : "home";
+      : "discover";
   if (!mission && ["control", "report"].includes(page)) page = "design";
   if (page !== "control") {
     playing = false;
@@ -635,6 +626,7 @@ app.addEventListener("submit", (e) => {
   }
 });
 app.addEventListener("input", (e) => {
+  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(e.target.value);e.target.nextElementSibling.textContent=e.target.value;scene?.sync(mission,playing?speed:0);return;}
   if (e.target.id === "gt-question") groundQuestion = e.target.value;
   if (e.target.id === "query") {
     query = e.target.value;
@@ -658,6 +650,11 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
+  if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined){changeTrip(e.target);update();if(page==='travel')scene?.showRoute(routePoints());return;}
+  if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
+  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(value);scene?.sync(mission,playing?speed:0);save();update();return;}
+  if(id==='temperature-filter'){filterTemp=value;update();return;}
+  if(id==='mineral-filter'){filterMineral=value;update();return;}
   if (page === "design") {
     if (id.startsWith("role")) cfg.roles[Number(id.slice(4))] = value;
     else if (["rover", "backup"].includes(id)) cfg[id] = checked;
@@ -730,10 +727,19 @@ app.addEventListener("change", (e) => {
   update();
 });
 app.addEventListener("click", async (e) => {
+  const workspace=e.target.closest('[data-workspace]');if(workspace){go(workspace.dataset.workspace);return;}
+  const drawer=e.target.closest('[data-drawer]');if(drawer){drawerOpen=!drawerOpen;document.querySelector('.workspace')?.classList.toggle('drawer-closed',!drawerOpen);return;}
+  const travel=e.target.closest('[data-travel]');if(travel){travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();return;}
   const button = e.target.closest("[data-act]");
   if (!button) return;
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
+  if(act==='ask-research'){
+    researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
+    if(!researchQuestion)return toast('Enter a research question');
+    researchAnswer='<p>Searching cited sources…</p>';update();
+    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<p><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)}</a><br>${esc(r.snippet)}</p>`).join('')||'<p>No cited results returned.</p>';}catch{researchAnswer='<p>Research unavailable. Configure SERPAPI_KEY on the server.</p>';}update();return;
+  }
   if (["helmet", "follow", "overviewCamera"].includes(act)) {
     cameraPreset = {
       helmet: "Helmet",
@@ -745,7 +751,7 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (
-    ["home", "discover", "inspect", "design", "control", "report"].includes(act)
+    ["map", "travel", "research", "discover", "inspect", "design", "control", "report"].includes(act)
   )
     return go(act);
   if (act === "skip") {
@@ -990,6 +996,10 @@ app.addEventListener("click", async (e) => {
   save();
   update();
 });
+let dragStart=null;
+app.addEventListener('pointerdown',e=>{const handle=e.target.closest('#drawer-handle');if(!handle||e.target.closest('button'))return;const workspace=app.querySelector('.workspace');dragStart={x:e.clientX,shift:drawerShift,workspace};handle.setPointerCapture(e.pointerId);});
+app.addEventListener('pointermove',e=>{if(!dragStart)return;drawerShift=Math.max(0,Math.min(innerWidth*.32,dragStart.shift+e.clientX-dragStart.x));dragStart.workspace.style.setProperty('--drawer-shift',drawerShift+'px');});
+app.addEventListener('pointerup',()=>{dragStart=null});
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ["Helmet", "Follow crew"].includes(cameraPreset)) {
     cameraPreset = "Overview";
@@ -999,6 +1009,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("hashchange", route);
 route();
+loadRates().then(()=>{if(page==='travel')update();});
 try {
   const { createScene } = await import("./scene.js");
   scene = createScene((id) => {

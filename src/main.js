@@ -12,6 +12,7 @@ import { createWeather, WEATHER_LAYERS } from './weather.js';
 import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
 import { createControls } from './controls.js';
+import { mountMissionControls } from './mission.js';
 import { SUBJECTS } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
@@ -36,6 +37,8 @@ const controls = createControls(viewer, {
     else controls.home();
   }
 });
+
+mountMissionControls(viewer);
 
 let statusHandler = () => {};
 const weather = createWeather(viewer, { onStatus: (entries) => statusHandler(entries) });
@@ -114,3 +117,4 @@ scene.canvas.addEventListener('wheel', event => {
   camera.flyTo({destination:C.Cartesian3.fromRadians(location.longitude,location.latitude,
     location.height + Math.max(160, C.Cartesian3.distance(camera.positionWC,ground)*0.72)), duration:0.65});
 }, {capture:true,passive:false});
+

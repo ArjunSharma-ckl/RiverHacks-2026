@@ -59,6 +59,21 @@ test("failed array changes mean generation and drains battery; repair uses a spa
   assert.equal(m.parts, 2);
   assert.equal(generation(m), baseline);
 });
+test('live conditions change the same mission state and planned facilities gate work',()=>{
+  const baseline=start({...cfg,mode:'Mars projection'}), stressed=start({...cfg,mode:'Mars projection',facilities:{water:false}});
+  stressed.environment.dust=80;
+  stressed.environment.temperature=-90;
+  stressed.environment.wind=30;
+  stressed.environment.radiation=2;
+  stressed.traverse=true;
+  assert.ok(generation(stressed)<generation(baseline));
+  advance(stressed,2);
+  advance(baseline,2);
+  assert.ok(stressed.resources.battery<baseline.resources.battery);
+  assert.equal(stressed.km,0);
+  assert.ok(stressed.crewDose>0);
+  assert.equal(stressed.production.water,0);
+});
 test("oxygen, rover and medical events propagate to the same state", () => {
   const m = start(cfg),
     normal = start(cfg);

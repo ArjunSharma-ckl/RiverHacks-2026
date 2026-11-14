@@ -106,7 +106,7 @@ export function prepareDuties(m) {
   m.production ??= { water: 0, lab: 0, med: 0, stores: 0 };
 }
 export const offDuty = (m, i) =>
-  m.active.storm || (i === 0 && (m.health || m.recoverAt > m.h));
+  m.active.storm || m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction'}[m.duties?.[i]?.key]]===false || (i === 0 && (m.health || m.recoverAt > m.h));
 const travel = 0.2,
   work = 0.55,
   cycle = travel * 2 + work;
@@ -154,6 +154,7 @@ export function assignDuty(m, i, key) {
   if (
     !m.duties[i] ||
     !stations[key] ||
+    m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction'}[key]]===false ||
     key === m.duties[i].key ||
     m.outcome !== "In progress"
   )
@@ -165,7 +166,7 @@ export function assignDuty(m, i, key) {
 export function advanceDuties(m, dt) {
   prepareDuties(m);
   m.duties.forEach((d, i) => {
-    if (m.active.storm || (i === 0 && m.health)) return;
+    if (m.active.storm || offDuty(m,i) || (i === 0 && m.health)) return;
     const hours =
       i === 0 ? Math.max(0, dt - Math.max(0, m.recoverAt - m.h)) : dt;
     // Credit each work interval exactly once, including multi-hour manual steps.

@@ -68,6 +68,7 @@ export function start(cfg) {
   };
   return {
     cfg: structuredClone(cfg),
+    environment: { temperature: cfg.mode==='Earth analog test' ? 5 : cfg.mode==='Moon projection' ? -60 : -35, wind: cfg.mode==='Moon projection' ? 0 : 12, dust: 0, radiation: cfg.mode==='Earth analog test' ? 0.02 : 0.2 },
     h: 0,
     resources,
     initial: { ...resources },
@@ -75,6 +76,7 @@ export function start(cfg) {
     used: 0,
     km: 0,
     roverEnergy: 2.4,
+    crewDose: 0,
     traverse: false,
     parts: cfg.parts,
     backup: cfg.backup ? 20 : 0,
@@ -93,9 +95,10 @@ export const log = (s, msg) => s.logs.push({ h: s.h, msg });
 export function generation(s) {
   return (
     ((s.cfg.array * s.cfg.sun) / 24) *
-    (s.cfg.mode === "Mars projection" ? 0.43 : 1) *
+    (s.cfg.mode === "Mars projection" ? 0.43 : s.cfg.mode === 'Moon projection' ? 0.6 : 1) *
     (s.active.solar ? 0.15 : 1) *
-    (s.active.storm ? 0.35 : 1)
+    (s.active.storm ? 0.35 : 1) *
+    (1-Math.min(1,Math.max(0,s.environment?.dust||0)/100)*0.7)
   );
 }
 export function vitals(s, i) {
@@ -138,6 +141,7 @@ export function advance(s, hours) {
       s.traverse &&
       !s.active.rover &&
       !s.active.storm &&
+      (s.environment?.wind ?? 0) < 25 &&
       (!s.active.comms || s.mitigated.autonomy) &&
       s.cfg.rover &&
       (s.roverEnergy ?? 2.4) > 0;
@@ -151,13 +155,14 @@ export function advance(s, hours) {
       log(s, "Rover battery depleted · traverse paused");
     }
     const supply = generation(s) * dt,
-      demand = s.cfg.load * s.load * dt + charge;
+      demand = s.cfg.load * s.load * dt * (1+Math.max(0,Math.abs(s.environment?.temperature??-35)-35)*0.003) + charge;
     const backup = s.mitigated.solar
       ? Math.min(s.backup, Math.max(0, demand - supply))
       : 0;
     s.backup -= backup;
     s.generated += supply;
     s.used += demand;
+    s.crewDose += Math.max(0,s.environment?.radiation??0.2)*dt/24;
     r.battery = Math.max(
       0,
       Math.min(s.cfg.battery, r.battery + supply + backup - demand),
