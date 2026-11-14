@@ -110,3 +110,19 @@ test("daily mean budgets are reproducible across manual step sizes", () => {
   assert.deepEqual(a.resources, b.resources);
   assert.equal(a.used, b.used);
 });
+
+test("rover uses its own pack, recharges from the habitat and obeys link state", () => {
+  const m = start(cfg);
+  m.traverse = true;
+  inject(m, "comms");
+  advance(m, 1);
+  assert.equal(m.km, 0);
+  respond(m, "comms", 3);
+  advance(m, 1);
+  assert.ok(m.km > 0 && m.roverEnergy < 2.4);
+  m.traverse = false;
+  const before = m.used;
+  advance(m, 1);
+  assert.equal(m.roverEnergy, 2.4);
+  assert.ok(m.used - before > cfg.load);
+});

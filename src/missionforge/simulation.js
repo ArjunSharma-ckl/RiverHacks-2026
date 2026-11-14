@@ -73,6 +73,7 @@ export function start(cfg) {
     generated: 0,
     used: 0,
     km: 0,
+    roverEnergy: 2.4,
     traverse: false,
     parts: cfg.parts,
     backup: cfg.backup ? 20 : 0,
@@ -130,9 +131,23 @@ export function advance(s, hours) {
       n = s.cfg.crew,
       r = s.resources;
     const moving =
-      s.traverse && !s.active.rover && !s.active.storm && s.cfg.rover;
+      s.traverse &&
+      !s.active.rover &&
+      !s.active.storm &&
+      (!s.active.comms || s.mitigated.autonomy) &&
+      s.cfg.rover &&
+      (s.roverEnergy ?? 2.4) > 0;
+    const available = s.roverEnergy ?? 2.4;
+    const charge =
+      s.cfg.rover && !moving ? Math.min(2.4 - available, 0.32 * dt) : 0;
+    const drivingHours = moving ? Math.min(dt, available / 0.12) : 0;
+    s.roverEnergy = Math.max(0, available + charge - 0.12 * drivingHours);
+    if (moving && s.roverEnergy < 1e-8) {
+      s.traverse = false;
+      log(s, "Rover battery depleted · traverse paused");
+    }
     const supply = generation(s) * dt,
-      demand = (s.cfg.load * s.load + (moving ? 0.32 : 0)) * dt;
+      demand = s.cfg.load * s.load * dt + charge;
     const backup = s.mitigated.solar
       ? Math.min(s.backup, Math.max(0, demand - supply))
       : 0;
@@ -152,7 +167,7 @@ export function advance(s, hours) {
     );
     r.water = Math.max(0, r.water - ((n * 1.6) / 24) * dt);
     r.food = Math.max(0, r.food - ((n * 0.64) / 24) * dt);
-    if (moving) s.km += dt * 0.22;
+    if (moving) s.km += drivingHours * 0.22;
     s.h += dt;
     left -= dt;
     if (Object.values(r).some((v) => v <= 0)) {
@@ -223,13 +238,18 @@ export function respond(s, id, index) {
     s.traverse = false;
     consequence = "Rover parked";
   } else if (id === "comms" && index === 3) {
+    s.mitigated.autonomy = true;
     consequence = "Local operations only";
   }
   const persists =
     (["solar", "oxygen"].includes(id) && index !== 1) ||
     (id === "storm" && index !== 1) ||
     (["rover", "comms"].includes(id) && index === 3);
-  if (!persists) delete s.active[id];
+  if (!persists) {
+    delete s.active[id];
+    delete s.mitigated[id];
+    if (id === "comms") delete s.mitigated.autonomy;
+  }
   log(s, failures[id][index] + " · " + consequence);
   if (id === "storm" && index === 1) advance(s, 4);
 }

@@ -258,7 +258,7 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
