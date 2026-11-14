@@ -62,6 +62,9 @@ export function crewScene(viewer, base, local) {
       const point = local(pose.x, pose.y);
       const cart = C.Cartographic.fromCartesian(point),
         terrain = scene.globe.getHeight(cart) ?? 0;
+      const job = mission.duties[i].key;
+      const heavy = job === "mine" || job === "build";
+      const stroke = Math.sin(phase * (heavy ? 0.33 : 0.51));
       cart.height = terrain + (pose.walking ? 0.024 * Math.abs(walk) : 0);
       const world = C.Cartographic.toCartesian(cart);
       entity.position.setValue(world);
@@ -70,7 +73,8 @@ export function crewScene(viewer, base, local) {
       entity.orientation.setValue(
         C.Transforms.headingPitchRollQuaternion(
           world,
-          new C.HeadingPitchRoll(pose.heading - Math.PI / 2, 0, 0),
+          new C.HeadingPitchRoll(pose.heading - Math.PI / 2,
+            pose.working && heavy ? -.12 - .1 * stroke : 0, 0),
         ),
       );
       for (const [name, angle] of [
@@ -78,11 +82,11 @@ export function crewScene(viewer, base, local) {
         ["LegR", -walk * 0.38],
         [
           "ArmL",
-          pose.working ? -0.9 + 0.18 * Math.sin(phase * 0.4) : -walk * 0.35,
+          pose.working ? (heavy ? -1.02 + .66 * stroke : -.85 + .14 * stroke) : -walk * 0.35,
         ],
         [
           "ArmR",
-          pose.working ? -0.62 - 0.15 * Math.sin(phase * 0.4) : walk * 0.35,
+          pose.working ? (heavy ? -.89 + .58 * stroke : -.64 - .25 * stroke) : walk * 0.35,
         ],
       ]) {
         entity.model.nodeTransformations[name].rotation.setValue(

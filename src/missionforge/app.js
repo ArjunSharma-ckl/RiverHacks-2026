@@ -1,4 +1,5 @@
 import { cue, toggleSound } from "./audio.js";
+import { launchSequence } from "./launch.js";
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
@@ -160,9 +161,9 @@ function lensContent() {
     : "";
 }
 const viewport = () =>
-  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><span class="maptag">${page === "control" ? "Surface operations" : "Earth observation"}</span>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
 function home() {
-  return `<section class="hero">${viewport()}<div class="heroText">${label("Earth-to-Mars mission preparation")}<h1>Find Earth.<br><em>Prepare for Mars.</em></h1><p>Discover Mars analog sites on Earth, establish a research habitat, and put your crew to the test.</p><div class="actions"><a class="primary" href="#discover">Find a Mars analog site　→</a><a class="quiet" href="#mission">Explore simulation ↗</a></div></div><div class="mapfoot">WGS 84　 /　 NASA BLUE MARBLE</div></section><section class="catalog"><div class="sectionhead"><div>${label("Terrestrial analogs")}<h2>Field site atlas</h2></div>${btn("discover", "Explore all 6 sites　→")}</div><div class="cardgrid">${[sites[0], sites[1], sites[2]].map((s) => `<button class="card" data-act="site:${s.id}"><div class="imageband">${photo(s)}<span class="tag">${s.type.toUpperCase()}</span></div><div class="cardfoot"><div><small>${s.country.toUpperCase()}</small><h3>${s.name}</h3></div><b>↗</b></div></button>`).join("")}</div><div class="foot"><small>Earth is our proving ground.</small><small>Imagery © Esri and contributors</small></div></section>`;
+  return `<section class="hero">${viewport()}<div class="heroText">${label("Earth-to-Mars mission preparation")}<h1>Find Earth.<br><em>Prepare for Mars.</em></h1><p>Discover Mars analog sites on Earth, establish a research habitat, and put your crew to the test.</p><div class="actions"><a class="primary" href="#discover">Find a Mars analog site　→</a><a class="quiet" href="#mission">Explore simulation ↗</a></div></div></section><section class="catalog"><div class="sectionhead"><div>${label("Terrestrial analogs")}<h2>Field site atlas</h2></div>${btn("discover", "Explore all 6 sites　→")}</div><div class="cardgrid">${[sites[0], sites[1], sites[2]].map((s) => `<button class="card" data-act="site:${s.id}"><div class="imageband">${photo(s)}<span class="tag">${s.type.toUpperCase()}</span></div><div class="cardfoot"><div><small>${s.country.toUpperCase()}</small><h3>${s.name}</h3></div><b>↗</b></div></button>`).join("")}</div><div class="foot"><small>Earth is our proving ground.</small><small>Imagery © Esri and contributors</small></div></section>`;
 }
 function reasoning(s) {
   const r = ranking(s),
@@ -599,8 +600,7 @@ async function loadObs() {
 }
 async function launch() {
   if (document.querySelector(".launch-screen")) return;
-  const { launchSequence } = await import("./launch.js");
-  await launchSequence(site.name);
+  const playback = launchSequence(site.name);
   gtAnswer = "";
   groundQuestion = "";
   incident = "solar";
@@ -612,7 +612,10 @@ async function launch() {
     profile: profiles[profile],
     sun: annual(site, "ALLSKY_SFC_SW_DWN") ?? 5,
   };
-  mission = start(cfg);
+  const expedition = start(cfg);
+  scene?.place(site, cfg);
+  await playback;
+  mission = expedition;
   playing = true;
   tab = "Systems";
   save();
@@ -1016,6 +1019,7 @@ try {
     update();
   });
   document.querySelector("#map-status")?.remove();
+  scene.quality(quality);
   displayScene();
 } catch (err) {
   console.error("Earth initialization", err);

@@ -1,62 +1,86 @@
-import { cue, toggleSound } from "./audio.js";
-export function launchSequence(site) {
-  return new Promise((resolve) => {
-    const panel = document.createElement("div");
-    panel.className = "launch-screen";
-    const target = document.createElement("span");
-    target.textContent = site;
-    panel.innerHTML =
-      '<div class="launch-stars"></div><header>MISSIONFORGE / MF-001 <button id="launch-mute">Sound off</button><button id="launch-skip">Skip sequence →</button></header><div class="launch-rocket"><div class="rocket-nose"></div><div class="rocket-body">MF<br>001</div><i class="booster left"></i><i class="booster right"></i><div class="engine"></div></div><footer><small>EXPEDITION TRANSFER · SIMULATED</small><h2 id="launch-phase">T−3 / Systems ready</h2><p>Destination · </p></footer>';
-    panel.querySelector("footer p").append(target);
-    document.body.append(panel);
-    let stopFilm;
-    if (!matchMedia("(prefers-reduced-motion:reduce)").matches)
-      import("./flight.js")
-        .then(({ flightScene }) => {
-          if (panel.isConnected) {
-            stopFilm = flightScene(panel);
-            panel.classList.add("has-film");
-          }
-        })
-        .catch(() => {});
-    let ended = false,
-      timers = [];
-    const finish = () => {
-      if (ended) return;
-      ended = true;
-      timers.forEach(clearTimeout);
-      stopFilm?.();
-      panel.remove();
+const film = "/cinematics/mission-launch";
+const phases = [
+  [0, "T−3"], [.74, "T−2"], [1.47, "T−1"], [2.2, "Ignition"],
+  [3.4, "Tower clear"], [4.5, "Stage separation"], [6.5, "Orbital transfer"],
+  [8.7, "Powered descent"], [11.3, "Landing burn"], [12.6, "Contact"],
+  [13.2, "Crew deployment"],
+];
 
+export function launchSequence(site) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+  const panel = document.createElement("dialog");
+  panel.className = "launch-screen";
+  panel.setAttribute("aria-label", "Expedition launch film");
+  panel.innerHTML = `<video playsinline preload="auto" poster="${film}-poster.webp"></video>
+    <header><strong>MISSIONFORGE</strong><button id="launch-mute"></button>
+    <input type="range" min="0" max="1" step=".05" aria-label="Film volume">
+    <button id="launch-skip">Skip film →</button></header>
+    <footer><small>ILLUSTRATIVE FLIGHT</small><h2>T−3</h2><p></p></footer>`;
+  const video = panel.querySelector("video");
+  const mute = panel.querySelector("#launch-mute");
+  const volume = panel.querySelector("input");
+  const label = panel.querySelector("h2");
+  panel.querySelector("p").textContent = site;
+  video.muted = localStorage.getItem("mf-sound") !== "on";
+  video.volume = Math.max(0, Math.min(1, Number(localStorage.getItem("mf-volume") ?? .72) || 0));
+  volume.value = video.volume;
+  const soundLabel = () => { mute.textContent = video.muted ? "Sound off" : "Sound on"; };
+  soundLabel();
+  mute.onclick = () => {
+    video.muted = !video.muted;
+    localStorage.setItem("mf-sound", video.muted ? "off" : "on");
+    soundLabel();
+  };
+  volume.oninput = () => {
+    video.volume = Number(volume.value);
+    video.muted = video.volume === 0;
+    localStorage.setItem("mf-volume", volume.value);
+    localStorage.setItem("mf-sound", video.muted ? "off" : "on");
+    soundLabel();
+  };
+  document.body.append(panel);
+  panel.showModal();
+  return new Promise((resolve) => {
+    let watchdog;
+    let done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      clearTimeout(watchdog);
+      video.pause();
+      video.removeAttribute("src");
+      video.replaceChildren();
+      video.load();
+      panel.close();
+      panel.remove();
       resolve();
+    }
+    const watch = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(finish, 7000);
     };
+    video.ontimeupdate = () => {
+      if (done) return;
+      label.textContent = phases.findLast(([time]) => video.currentTime >= time)[1];
+      watch();
+    };
+    video.onended = video.onerror = panel.oncancel = finish;
     panel.querySelector("#launch-skip").onclick = finish;
-    const sound = panel.querySelector("#launch-mute");
-    sound.textContent =
-      localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off";
-    sound.onclick = () =>
-      (sound.textContent = toggleSound() ? "Sound on" : "Sound off");
-    const stages = [
-      [800, "T−2 / Guidance aligned", 440],
-      [1600, "T−1 / Ignition", 330],
-      [2400, "Liftoff / Ascent", 65],
-      [4400, "First stage separation", 120],
-      [5900, "Transfer complete / Field arrival", 220],
-      [8100, "Ramp deployed / Crew egress", 440],
-    ];
-    stages.forEach(([ms, text, freq]) =>
-      timers.push(
-        setTimeout(() => {
-          panel.querySelector("#launch-phase").textContent = text;
-          cue(freq, ms === 2400 ? 3 : 0.3);
-        }, ms),
-      ),
-    );
-    timers.push(
-      setTimeout(
-        finish,
-        matchMedia("(prefers-reduced-motion:reduce)").matches ? 1000 : 10500,
-      ),
-    );
+    for (const [file, type] of [
+      [matchMedia("(max-width: 700px)").matches ? "720p.mp4" : "1080p.mp4", "video/mp4"],
+      ["1080p.webm", "video/webm"],
+    ]) {
+      const source = document.createElement("source");
+      source.src = film + "-" + file;
+      source.type = type;
+      video.append(source);
+    }
+    watch();
+    video.play().catch(async () => {
+      if (done) return;
+      video.muted = true;
+      soundLabel();
+      try { await video.play(); } catch { finish(); }
+    });
   });
 }

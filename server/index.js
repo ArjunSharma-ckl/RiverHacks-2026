@@ -1,6 +1,7 @@
 // Production server for Render: serves the built client and the /api routes.
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { createApi } from './nasa-api.js';
@@ -21,6 +22,8 @@ const TYPES = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
   '.gif': 'image/gif',
   '.ico': 'image/x-icon',
   '.glb': 'model/gltf-binary',
@@ -93,6 +96,32 @@ createServer(async (req, res) => {
     }
 
     try {
+      if (/\.(mp4|webm)$/i.test(target)) {
+        const { size } = await stat(target);
+        const range = req.headers.range;
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range ?? '');
+        let start = 0, end = size - 1;
+        if (range) {
+          if (match && (match[1] || match[2])) {
+            start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+            if (match[1] && match[2]) end = Math.min(end, Number(match[2]));
+          } else start = size;
+          if (start > end) {
+            res.writeHead(416, { 'Content-Range': 'bytes */' + size });
+            return res.end();
+          }
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+        }
+        res.writeHead(range ? 206 : 200, {
+          'Accept-Ranges': 'bytes', 'Content-Type': TYPES[extname(target)],
+          'Content-Length': end - start + 1, 'Cache-Control': 'public, max-age=3600'
+        });
+        if (req.method === 'HEAD') return res.end();
+        const stream = createReadStream(target, { start, end });
+        res.on('close', () => stream.destroy());
+        stream.on('error', () => res.destroy());
+        return stream.pipe(res);
+      }
       await sendFile(res, target, requested.includes('/assets/') || requested.startsWith('/cesium/'), req.headers['accept-encoding']);
     } catch {
       // Unknown paths fall back to the single page.

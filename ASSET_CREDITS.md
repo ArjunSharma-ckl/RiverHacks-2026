@@ -14,6 +14,4 @@ The habitat shells use opaque materials with their original texture maps for Ces
 
 The field suit, water reclamation plant, medical bay, geology laboratory and logistics depot are original MissionForge glTF models. Rebuild them with `node scripts/build-station-models.mjs`. The articulated suit provides the moving mission crew. The original NASA astronaut remains in the asset library.
 
-The launch transition uses original CSS rocket graphics and Web Audio oscillator cues. It introduces no external audio or movie assets.
-
-The 3D ascent uses the NASA Saturn V GLB from [NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Saturn%20V). The launch tower, exhaust, stage separation, lander and hinged ramp are original illustrative geometry. The landing scene reuses the field suit and medical module.
+The launch film opens with actual Artemis I launch imagery and pad audio from NASA Kennedy Space Center. The ascent and transfer use NASA Marshall Space Flight Center’s SLS and Orion visualization. The edit depicts an illustrative expedition. Kestrel, its landing, the boarding ramp, environment lighting, effects and additional sound design are original MissionForge production assets. The landing uses the field suit, habitat, rover and representative terrain imagery credited above. See the [cinematic production notes](cinematic-source/README.md) for source identifiers and edit points.
