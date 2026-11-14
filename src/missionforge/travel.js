@@ -1,71 +1,34 @@
-import { sites } from './sites.js';
-
-const cities = {
-  'Houston, USA': [29.7604, -95.3698], 'New York, USA': [40.7128, -74.006],
-  'Los Angeles, USA': [34.0522, -118.2437], 'London, UK': [51.5072, -0.1276],
-  'Santiago, Chile': [-33.4489, -70.6693], 'Reykjavik, Iceland': [64.1466, -21.9426],
-};
-const defaults = { name: 'New analog expedition', city: 'Houston, USA', travelers: 4, capacity: 8,
-  currency: 'USD', flightBase: 260, flightKm: 0.11, charterBase: 2100,
-  charterKm: 1.8, groundKm: 0.7, lodging: 95, shortFlightCo2: 125,
-  carCo2: 170, stops: [], overrides: {} };
-export let trip = structuredClone(defaults);
-try { trip = { ...trip, ...JSON.parse(localStorage.getItem('mf-travel-v1') || '{}') }; } catch {}
-try {
-  const shared = new URLSearchParams(location.search).get('trip');
-  if (shared) trip = { ...structuredClone(defaults), ...JSON.parse(decodeURIComponent(escape(atob(shared)))) };
-} catch {}
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const n = (v) => Math.max(0, Number(v) || 0);
-const rad = Math.PI / 180;
-function km(a,b) { const d=(b.lat-a.lat)*rad, l=(b.lon-a.lon)*rad; return 12742*Math.asin(Math.min(1,Math.sqrt(Math.sin(d/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(l/2)**2))); }
-const rates = { USD: 1, EUR: null, GBP: null, CAD: null, INR: null };
-let rateDate = '';
-try { const cached=JSON.parse(localStorage.getItem('mf-currency-rates')||'{}'); if(cached.date && cached.rates){Object.assign(rates,cached.rates);rateDate=cached.date;} } catch {}
-export async function loadRates(){
-  if(rateDate===new Date().toISOString().slice(0,10))return;
-  try { const res=await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,GBP,CAD,INR');if(!res.ok)throw Error('rates');const data=await res.json();Object.assign(rates,data.rates);rateDate=data.date;localStorage.setItem('mf-currency-rates',JSON.stringify({date:rateDate,rates})); } catch {}
-}
-const symbol = { USD: '$', EUR: '€', GBP: '£', CAD: 'C$', INR: '₹' };
-function money(v) { const rate=rates[trip.currency];return rate ? `${symbol[trip.currency] || '$'}${(v * rate).toLocaleString(undefined,{maximumFractionDigits:0})}` : 'Rate unavailable'; }
-export function saveTrip() { localStorage.setItem('mf-travel-v1', JSON.stringify(trip)); }
-export function addSite(s) { trip.stops.push({ name:s.name,lat:s.lat,lon:s.lon,nights:2,mode:'Flight' }); saveTrip(); }
-export function routePoints() { const [lat,lon] = cities[trip.city] || [Number(trip.startLat)||0, Number(trip.startLon)||0]; return [{name:trip.city,lat,lon},...trip.stops]; }
-export function totals() {
-  const points=routePoints(); let transport=0,co2=0;
-  const legs=trip.stops.map((stop,i)=>{const distance=km(points[i],stop), mode=stop.mode || 'Flight';
-    const base=mode==='Ground' ? distance*n(trip.groundKm) : mode==='Charter' ? Math.ceil(n(trip.travelers)/Math.max(1,n(trip.capacity)))*(n(trip.charterBase)+distance*n(trip.charterKm)) : n(trip.travelers)*(n(trip.flightBase)+distance*n(trip.flightKm));
-    const price=trip.overrides[i] === undefined ? base : n(trip.overrides[i]); transport+=price;
-    co2+=distance*(mode==='Ground' ? n(trip.carCo2) : n(trip.shortFlightCo2)*n(trip.travelers))/1000;
-    return {from:points[i].name,to:stop.name,distance,mode,price}; });
-  const lodging=trip.stops.reduce((s,x)=>s+n(x.nights)*n(trip.travelers)*n(trip.lodging),0);
-  return {legs,transport,lodging,total:transport+lodging,co2};
-}
-const field=(id,label,value,step='1')=>`<label class="field">${label}<input data-trip="${id}" type="number" step="${step}" value="${esc(value)}"></label>`;
-export function travelHtml() {
-  const t=totals();
-  return `<span class="eyebrow">Travel / Itinerary</span><h1>Plan the route</h1>
-  <label class="field">Project name<input data-trip="name" value="${esc(trip.name)}"></label>
-  <div class="actions pills"><button data-travel="import">Import selected site</button><button data-travel="add">Add stop</button><button data-travel="new">New project</button></div>
-  <h2>Stops</h2>${trip.stops.map((s,i)=>`<fieldset class="trip-stop"><legend>Stop ${i+1}</legend><label class="field">Location<input data-stop="${i}:name" value="${esc(s.name)}"></label><div class="fields">${['lat','lon','nights'].map(k=>`<label class="field">${k==='lat'?'Latitude':k==='lon'?'Longitude':'Nights'}<input type="number" step="${k==='nights'?1:.0001}" data-stop="${i}:${k}" value="${esc(s[k])}"></label>`).join('')}</div><label class="field">Transport<select data-stop="${i}:mode">${['Flight','Charter','Ground'].map(m=>`<option ${s.mode===m?'selected':''}>${m}</option>`).join('')}</select></label><button data-travel="remove:${i}">Remove stop</button></fieldset>`).join('') || '<p>Add a site or a latitude and longitude stop.</p>'}
-  <details><summary>Trip settings</summary><label class="field">Starting city<select data-trip="city">${Object.keys(cities).map(c=>`<option ${c===trip.city?'selected':''}>${c}</option>`).join('')}<option ${trip.city==='Custom'?'selected':''}>Custom</option></select></label><div class="fields">${field('startLat','Start latitude',routePoints()[0].lat,'.0001')}${field('startLon','Start longitude',routePoints()[0].lon,'.0001')}${field('travelers','Travelers',trip.travelers)}${field('capacity','Plane capacity',trip.capacity)}</div><label class="field">Currency<select data-trip="currency">${Object.keys(rates).map(c=>`<option ${c===trip.currency?'selected':''}>${c}</option>`).join('')}</select></label><small>${rateDate?`Reference rates ${esc(rateDate)} · `:'Rates unavailable · '}<a href="https://frankfurter.dev/v1/" target="_blank" rel="noopener">Frankfurter</a>. Trip prices are estimates.</small><div class="fields">${[['flightBase','Flight base fare'],['flightKm','Flight per km'],['charterBase','Charter base'],['charterKm','Charter per km'],['groundKm','Ground per km'],['lodging','Lodging per person/night'],['shortFlightCo2','Short flight g CO₂/passenger km'],['carCo2','Car g CO₂/vehicle km']].map(([k,l])=>field(k,l,trip[k],'.01')).join('')}</div></details>
-  <h2>Legs and prices</h2>${t.legs.map((l,i)=>`<div class="trip-leg"><b>${esc(l.from)} → ${esc(l.to)}</b><small>${l.distance.toFixed(0)} km · ${l.mode}</small><label class="field">Price for this leg (${trip.currency})<input type="number" min="0" step="1" data-leg="${i}" value="${Math.round(l.price*(rates[trip.currency]||1))}" ${rates[trip.currency]?'':'disabled'}></label></div>`).join('')}
-  <h2>Trip estimate</h2><div class="trip-totals"><div>Transport <b>${money(t.transport)}</b></div><div>Lodging <b>${money(t.lodging)}</b></div><div>Total <b>${money(t.total)}</b></div><div>Per person <b>${money(t.total/Math.max(1,n(trip.travelers)))}</b></div><div>CO₂ estimate <b>${t.co2.toFixed(0)} kg</b></div></div><small>Ground emissions are per vehicle. Air emissions are per passenger. Estimates exclude return legs.</small><div class="actions pills"><button data-travel="map">Show route on globe</button><button data-travel="pdf">Export PDF</button><button data-travel="share">Copy share link</button></div>`;
-}
-export function changeTrip(target) {
-  if (target.dataset.trip) { const k=target.dataset.trip; trip[k]=target.type==='number'?Number(target.value):target.value; if(k==='city'){const c=cities[trip.city];if(c){trip.startLat=c[0];trip.startLon=c[1];}} }
-  else if(target.dataset.stop){const [i,k]=target.dataset.stop.split(':');trip.stops[Number(i)][k]=target.type==='number'?Number(target.value):target.value;}
-  else if(target.dataset.leg!==undefined && rates[trip.currency]){trip.overrides[Number(target.dataset.leg)]=n(target.value)/rates[trip.currency];}
-  saveTrip();
-}
-export function travelAction(action,selected,onMap) {
-  const [kind,index]=action.split(':');
-  if(kind==='import') addSite(selected);
-  if(kind==='add') trip.stops.push({name:'New stop',lat:0,lon:0,nights:1,mode:'Flight'});
-  if(kind==='remove') {trip.stops.splice(Number(index),1);trip.overrides={};}
-  if(kind==='new') trip=structuredClone(defaults);
-  if(kind==='map') onMap(routePoints());
-  if(kind==='pdf') window.print();
-  if(kind==='share') {const link=new URL(location.href);link.hash='travel';link.searchParams.set('trip',btoa(unescape(encodeURIComponent(JSON.stringify(trip)))));navigator.clipboard.writeText(link.href).then(()=>alert('Share link copied')).catch(()=>prompt('Copy share link',link.href));}
-  saveTrip();
-}
+// Travel estimates are editable planning inputs. Location coordinates come from
+// explicit geocoder selections or a selected catalog site, never a default 0,0.
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const amount=v=>Math.max(0,Number(v)||0);
+const defaults={name:'Analog expedition',origin:{name:'Houston, United States',lat:29.7604,lon:-95.3698},originQuery:'Houston, United States',travelers:4,capacity:8,currency:'USD',flightBase:260,flightKm:.11,charterBase:2100,charterKm:1.8,groundKm:.7,lodging:95,shortFlightCo2:125,carCo2:170,stops:[],overrides:{}};
+export let trip=structuredClone(defaults);
+try{trip={...trip,...JSON.parse(localStorage.getItem('mf-travel-v1')||'{}')}}catch{}
+try{const shared=new URLSearchParams(location.search).get('trip');if(shared)trip={...structuredClone(defaults),...JSON.parse(decodeURIComponent(escape(atob(shared))))}}catch{}
+if(!trip.origin||!Number.isFinite(Number(trip.origin.lat))||!Number.isFinite(Number(trip.origin.lon)))trip.origin=structuredClone(defaults.origin);
+trip.stops=(trip.stops||[]).filter(s=>s&&Number.isFinite(Number(s.lat))&&Number.isFinite(Number(s.lon))&&!(Number(s.lat)===0&&Number(s.lon)===0));
+let searchTarget='',results=[],searchMessage='',waypointQuery='';
+const rates={USD:1,EUR:null,GBP:null,CAD:null,INR:null};let rateDate='';
+try{const cached=JSON.parse(localStorage.getItem('mf-currency-rates')||'{}');if(cached.date&&cached.rates){Object.assign(rates,cached.rates);rateDate=cached.date}}catch{}
+export async function loadRates(){if(rateDate===new Date().toISOString().slice(0,10))return;try{const response=await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,GBP,CAD,INR');if(!response.ok)throw Error('rates');const data=await response.json();Object.assign(rates,data.rates);rateDate=data.date;localStorage.setItem('mf-currency-rates',JSON.stringify({date:rateDate,rates}))}catch{}}
+const symbols={USD:'$',EUR:'€',GBP:'£',CAD:'C$',INR:'₹'};
+const rate=()=>rates[trip.currency];
+const money=v=>rate()?`${symbols[trip.currency]}${(v*rate()).toLocaleString(undefined,{maximumFractionDigits:0})}`:'Rate unavailable';
+export function saveTrip(){localStorage.setItem('mf-travel-v1',JSON.stringify(trip))}
+export function ensureScoutedSite(site){if(!site||!Number.isFinite(Number(site.lat))||!Number.isFinite(Number(site.lon)))return;let index=trip.stops.findIndex(s=>s.scouted);if(index<0)index=trip.stops.findIndex(s=>s.siteId===site.id||s.name===site.name);const stop={name:site.name,lat:Number(site.lat),lon:Number(site.lon),nights:index>=0?trip.stops[index].nights:2,mode:index>=0?trip.stops[index].mode:'Flight',scouted:true,siteId:site.id};if(index<0)trip.stops.push(stop);else trip.stops[index]=stop;saveTrip()}
+export function routePoints(){return [trip.origin,...trip.stops.filter(s=>!s.pending&&Number.isFinite(Number(s.lat))&&Number.isFinite(Number(s.lon)))].map(p=>({name:p.name,lat:Number(p.lat),lon:Number(p.lon)}))}
+const rad=Math.PI/180;
+const km=(a,b)=>{const d=(b.lat-a.lat)*rad,l=(b.lon-a.lon)*rad;return 12742*Math.asin(Math.min(1,Math.sqrt(Math.sin(d/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(l/2)**2)))};
+export function totals(){const points=routePoints(),legs=[];let transport=0,co2=0;for(let i=1;i<points.length;i++){const stop=trip.stops.find(s=>s.name===points[i].name&&s.lat===points[i].lat&&s.lon===points[i].lon)||trip.stops[i-1],distance=km(points[i-1],points[i]),mode=stop.mode||'Flight';const base=mode==='Ground'?distance*amount(trip.groundKm):mode==='Charter'?Math.ceil(amount(trip.travelers)/Math.max(1,amount(trip.capacity)))*(amount(trip.charterBase)+distance*amount(trip.charterKm)):amount(trip.travelers)*(amount(trip.flightBase)+distance*amount(trip.flightKm));const price=trip.overrides[i-1]===undefined?base:amount(trip.overrides[i-1]);transport+=price;co2+=distance*(mode==='Ground'?amount(trip.carCo2):amount(trip.shortFlightCo2)*amount(trip.travelers))/1000;legs.push({from:points[i-1].name,to:points[i].name,distance,mode,price})}const lodging=trip.stops.reduce((sum,s)=>sum+amount(s.nights)*amount(trip.travelers)*amount(trip.lodging),0);return{legs,transport,lodging,total:transport+lodging,co2}}
+const field=(key,title,step='1')=>`<label class="field">${title}<input data-trip="${key}" type="number" step="${step}" min="0" value="${esc(trip[key])}"></label>`;
+function optionsFor(target){if(searchTarget!==target)return'';return `<div class="city-results" role="listbox">${results.length?results.map((r,i)=>`<button type="button" data-travel="select:${i}" role="option"><strong>${esc(r.name)}</strong><small>${esc([r.admin1,r.country].filter(Boolean).join(', '))} · ${r.latitude.toFixed(3)}, ${r.longitude.toFixed(3)}</small></button>`).join(''):`<p>${esc(searchMessage||'No matching city found. Try a city and country.')}</p>`}</div>`}
+export function travelHtml(){const t=totals(),destination=trip.stops.find(s=>s.scouted);return `<div class="travel-hero"><span class="eyebrow">Expedition logistics</span><h1>Plan your route</h1><p>Choose a real departure city. The destination follows the site you are scouting.</p><div class="travel-route-summary"><span>${esc(trip.origin.name)}</span><b>→</b><span>${esc(destination?.name||'Select a site')}</span></div></div>
+  <div class="travel-stats"><div><small>Total estimate</small><strong>${money(t.total)}</strong></div><div><small>Distance</small><strong>${t.legs.reduce((a,l)=>a+l.distance,0).toFixed(0)} km</strong></div><div><small>CO₂ estimate</small><strong>${t.co2.toFixed(0)} kg</strong></div></div>
+  <section class="travel-section"><div class="section-title"><span>01</span><h2>Departure</h2></div><label class="field">Search city<input data-trip="originQuery" value="${esc(trip.originQuery||trip.origin.name)}" placeholder="City, country"></label><button type="button" data-travel="search:origin">Find departure city</button>${optionsFor('origin')}<p class="travel-coordinate">Using ${esc(trip.origin.name)} · ${trip.origin.lat.toFixed(4)}, ${trip.origin.lon.toFixed(4)}</p><small>City coordinates by <a href="https://open-meteo.com/en/docs/geocoding-api" target="_blank" rel="noopener">Open-Meteo</a>.</small></section>
+  <section class="travel-section"><div class="section-title"><span>02</span><h2>Stops</h2></div>${trip.stops.map((s,i)=>`<article class="travel-stop"><div class="travel-stop-head"><b>${i+1}. ${esc(s.name)}</b><span>${s.scouted?'SCOUTED SITE':'WAYPOINT'}</span></div><p>${Number(s.lat).toFixed(4)}, ${Number(s.lon).toFixed(4)}</p>${s.scouted?'':`<label class="field">Change city<input data-stop="${i}:query" value="${esc(s.query||s.name)}" placeholder="City, country"></label><button data-travel="search:stop:${i}">Find city</button>${optionsFor('stop:'+i)}<button data-travel="remove:${i}">Remove stop</button>`}<div class="fields"><label class="field">Nights<input type="number" min="0" step="1" data-stop="${i}:nights" value="${esc(s.nights)}"></label><label class="field">Transport<select data-stop="${i}:mode">${['Flight','Charter','Ground'].map(m=>`<option ${s.mode===m?'selected':''}>${m}</option>`).join('')}</select></label></div></article>`).join('')}<div class="waypoint-entry"><label class="field">Add a city before the scouted site<input data-waypoint-query value="${esc(waypointQuery)}" placeholder="e.g. Reykjavik, Iceland"></label><button data-travel="search:waypoint">Find waypoint</button>${optionsFor('waypoint')}</div></section>
+  <section class="travel-section"><div class="section-title"><span>03</span><h2>Trip settings</h2></div><label class="field">Project name<input data-trip="name" value="${esc(trip.name)}"></label><div class="fields">${field('travelers','Travelers')}${field('capacity','Plane capacity')}</div><label class="field">Currency<select data-trip="currency">${Object.keys(rates).map(c=>`<option ${c===trip.currency?'selected':''}>${c}</option>`).join('')}</select></label><small>${rateDate?'Reference rates '+esc(rateDate):'Currency service unavailable'} · <a href="https://frankfurter.dev/v1/" target="_blank" rel="noopener">Frankfurter</a></small><details><summary>Rates and carbon assumptions</summary><div class="fields">${[['flightBase','Flight base fare'],['flightKm','Flight per km'],['charterBase','Charter base'],['charterKm','Charter per km'],['groundKm','Ground per km'],['lodging','Lodging per person/night'],['shortFlightCo2','Flight g CO₂/passenger km'],['carCo2','Car g CO₂/vehicle km']].map(([k,title])=>field(k,title,'.01')).join('')}</div></details></section>
+  <section class="travel-section"><div class="section-title"><span>04</span><h2>Legs & cost</h2></div>${t.legs.map((l,i)=>`<div class="trip-leg"><b>${esc(l.from)} → ${esc(l.to)}</b><small>${l.distance.toFixed(0)} km · ${l.mode}</small><label class="field">Leg price (${trip.currency})<input type="number" min="0" step="1" data-leg="${i}" value="${Math.round(l.price*(rate()||1))}" ${rate()?'':'disabled'}></label></div>`).join('')}<div class="trip-totals"><div>Transport <b>${money(t.transport)}</b></div><div>Lodging <b>${money(t.lodging)}</b></div><div>Total <b>${money(t.total)}</b></div><div>Per person <b>${money(t.total/Math.max(1,amount(trip.travelers)))}</b></div></div><small>Planning estimates exclude return legs. Ground emissions are per vehicle; flight emissions are per passenger.</small><div class="actions pills"><button data-travel="map">Show route on globe</button><button data-travel="pdf">Export PDF</button><button data-travel="share">Copy share link</button></div></section>`}
+export function changeTrip(target){if(target.dataset.trip){const key=target.dataset.trip;trip[key]=target.type==='number'?Number(target.value):target.value}else if(target.dataset.stop){const[i,key]=target.dataset.stop.split(':');trip.stops[Number(i)][key]=target.type==='number'?Number(target.value):target.value}else if(target.dataset.leg!==undefined&&rate()){trip.overrides[Number(target.dataset.leg)]=amount(target.value)/rate()}else if(target.dataset.waypointQuery!==undefined){waypointQuery=target.value}saveTrip()}
+async function searchCities(query){if(!query.trim()){results=[];searchMessage='Enter a city name first.';return}try{const url='https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query.trim(),count:'6',language:'en',format:'json'});const response=await fetch(url,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('geocoder');const data=await response.json();results=(data.results||[]).filter(x=>Number.isFinite(x.latitude)&&Number.isFinite(x.longitude));searchMessage=results.length?'':'No city found. Try adding a country.'}catch{results=[];searchMessage='City search is unavailable. Try again when connected.'}}
+export async function travelAction(action,selected,onMap){const[kind,arg,extra]=action.split(':');if(kind==='search'){searchTarget=arg==='stop'?'stop:'+extra:arg;const query=arg==='origin'?trip.originQuery:arg==='waypoint'?waypointQuery:trip.stops[Number(extra)]?.query||trip.stops[Number(extra)]?.name||'';await searchCities(query)}else if(kind==='select'){const r=results[Number(arg)];if(!r)return;const city={name:[r.name,r.admin1,r.country].filter(Boolean).join(', '),lat:r.latitude,lon:r.longitude};if(searchTarget==='origin'){trip.origin=city;trip.originQuery=city.name}else if(searchTarget==='waypoint'){trip.stops.splice(Math.max(0,trip.stops.findIndex(s=>s.scouted)),0,{...city,nights:1,mode:'Flight'});waypointQuery=''}else if(searchTarget.startsWith('stop:')){const i=Number(searchTarget.split(':')[1]);trip.stops[i]={...trip.stops[i],...city,query:city.name,pending:false}}searchTarget='';results=[]}else if(kind==='remove'){trip.stops.splice(Number(arg),1);trip.overrides={}}else if(kind==='map')onMap(routePoints());else if(kind==='pdf')window.print();else if(kind==='share'){const link=new URL(location.href);link.hash='travel';link.searchParams.set('trip',btoa(unescape(encodeURIComponent(JSON.stringify(trip)))));navigator.clipboard.writeText(link.href).then(()=>alert('Share link copied')).catch(()=>prompt('Copy share link',link.href))}saveTrip()}

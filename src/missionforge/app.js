@@ -1,6 +1,6 @@
 import { cue, toggleSound } from "./audio.js";
 import { launchSequence } from "./launch.js";
-import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates } from './travel.js';
+import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
@@ -61,7 +61,12 @@ let sortBy = "Suitability",
   researchType = "Studies",
   searchTimer,
   groundQuestion = "";
-let drawerOpen = true, drawerShift = 0, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
+let drawerOpen = true, drawerWidth = Number(localStorage.getItem('mf-drawer-width')) || 390, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
+const explorerFields=[['olivine','Olivine'],['plagioclase','Plagioclase'],['lowCalciumPyroxene','Low calcium pyroxene'],['highCalciumPyroxene','High calcium pyroxene'],['smfe','SMFe'],['roughness','Terrain roughness'],['surfaceTemperature','Average surface temperature (°C)']];
+let explorerValues={};
+try{explorerValues=JSON.parse(localStorage.getItem('mf-explorer-inputs')||'{}')}catch{}
+let missionHistory=[];
+try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}catch{}
 let gtAnswer = "",
   quality = "Balanced";
 let crewIndex = 0;
@@ -113,6 +118,7 @@ try {
 } catch {}
 function save() {
   try {
+    if(mission?.cfg?.site){mission.id??=String(Date.now());const entry={id:mission.id,site:mission.cfg.site,mode:mission.cfg.mode,crew:mission.cfg.crew,h:mission.h,outcome:mission.outcome};missionHistory=[entry,...missionHistory.filter(x=>x.id!==entry.id)].slice(0,30);localStorage.setItem('mf-mission-history',JSON.stringify(missionHistory));}
     localStorage.setItem(
       "missionforge-v1",
       JSON.stringify({ cfg, site, mission, profile }),
@@ -164,10 +170,7 @@ function lensContent() {
     : "";
 }
 const viewport = () =>
-  `<div class="viewport"><div class="crew-lens">${lensContent()}</div>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
-function home() {
-  return `<section class="hero">${viewport()}<div class="heroText">${label("Earth-to-Mars mission preparation")}<h1>Find Earth.<br><em>Prepare for Mars.</em></h1><p>Discover Mars analog sites on Earth, establish a research habitat, and put your crew to the test.</p><div class="actions"><a class="primary" href="#discover">Find a Mars analog site　→</a><a class="quiet" href="#mission">Explore simulation ↗</a></div></div></section><section class="catalog"><div class="sectionhead"><div>${label("Terrestrial analogs")}<h2>Field site atlas</h2></div>${btn("discover", "Explore all 6 sites　→")}</div><div class="cardgrid">${[sites[0], sites[1], sites[2]].map((s) => `<button class="card" data-act="site:${s.id}"><div class="imageband">${photo(s)}<span class="tag">${s.type.toUpperCase()}</span></div><div class="cardfoot"><div><small>${s.country.toUpperCase()}</small><h3>${s.name}</h3></div><b>↗</b></div></button>`).join("")}</div><div class="foot"><small>Earth is our proving ground.</small><small>Imagery © Esri and contributors</small></div></section>`;
-}
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
 function reasoning(s) {
   const r = ranking(s),
     total = r.w.reduce((sum, w, i) => sum + (r.scores[i] === null ? 0 : w), 0);
@@ -216,15 +219,16 @@ function rows() {
   return ranked().filter(s => (filterTemp==='Any' || (filterTemp==='Below 0°C' ? (annual(s,'T2M')??100)<0 : filterTemp==='0–15°C' ? (annual(s,'T2M')??100)>=0 && (annual(s,'T2M')??100)<=15 : (annual(s,'T2M')??-100)>15)) && (filterMineral==='Any' || minerals[s.id]===filterMineral))
     .map(
       (s) =>
-        `<button class="row" data-act="site:${s.id}">${photo(s)}<span><strong>${s.name}</strong><small>${s.country} · ${s.type}</small><span class="score-reason">${esc(reasoning(s))}</span></span><b>${ranking(s).score ?? "—"}</b></button>`,
+        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(reasoning(s))}</span></span><b class="site-card-score">${ranking(s).score ?? "—"}<small>/100</small></b></button>`,
     )
     .join("");
 }
 function discover() {
   return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Surface material is a broad site classification, not a verified mineral assay.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
-function mapHome(){return `${label('Home map / Conditions')}<h1>Explore Earth</h1><p>Rotate and zoom the globe. Filter candidate analogs by climate and surface material.</p>${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}<div id="rankings">${rows()}</div>${btn('manual','Evaluate a point on the globe')}`;}
-function researchPanel(){return `${label('GroundTruth / Research')}<h1>Ask about a site</h1><p>Search cited web evidence about ${esc(site.name)}. Results require a configured SERPAPI_KEY.</p><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What equipment risks matter here?"></label>${btn('ask-research','Search evidence')}<div id="research-answer" role="status">${researchAnswer}</div>`;}
+function pastMissions(){const entries=[...(mission?[{id:mission.id||'current',site:mission.cfg.site||site,mode:mission.cfg.mode,crew:mission.cfg.crew,h:mission.h,outcome:mission.outcome,current:true}]:[]),...missionHistory.filter(x=>x.id!==mission?.id)];return `${label('Mission archive')}<h1>Past missions</h1><p>Resume a saved simulation or revisit an analog site.</p><div class="mission-cards">${entries.length?entries.map(x=>`<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h logged</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}</p><div class="actions pills">${x.current?btn('resume-mission','Resume mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div></div></article>`).join(''):`<div class="empty-card"><h2>No missions yet</h2><p>Choose an analog site and launch your first simulation. It will appear here.</p>${btn('discover','Browse sites','primary')}</div>`}</div>`;}
+function siteExplorer(){return `${label('Site explorer / Input staging')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements. This form saves a structured input record for the matching AI planned next.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(explorerValues,null,2))}</pre></details><p class="note">No matching score is calculated yet. Mineral values and roughness retain the units of your source data.</p>`;}
+function researchPanel(){return `${label('GroundTruth / Evidence search')}<h1>Ask GroundTruth</h1><p>Explore cited source material for <strong>${esc(site.name)}</strong>.</p><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><label class="field">Your question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What do NASA and USGS report about this site?"></label>${btn('ask-research','Search trusted sources','primary')}<div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Ask a question to see cited results.</p>'}</div><details><summary>Connect SerpAPI</summary><p>Add <code>SERPAPI_KEY=your_key</code> to <code>.env.local</code> in the repository root, then restart the server. Set the same variable in your Render environment for deployment. Keep the key out of browser code.</p></details>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
 function facilityControls(){return `<details open><summary>Planned settlement facilities</summary><p class="note">Pressurized modules share enclosed corridors. Surface work still requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div></details>`;}
 function breakdown(s) {
@@ -371,7 +375,7 @@ function environmentControls(){const env=mission?.environment||{temperature:-35,
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Edit plan")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -415,25 +419,31 @@ function report() {
     )}</tbody></table>${line("Battery trend", spark(m.history.map((v) => v.battery)))}${timeline(m)}${astra(m)}<p>Deterministic training model. Mean daily irradiance, constant crew demand and simplified health relationships. Mars gravity, radiation and atmospheric exposure are outside this model.</p><div class="actions">${btn("export", "Export report", "primary")}${btn("control", "Return to mission")}${btn("retry", "Retry mission")}${btn("design", "Revise configuration")}${btn("discover", "Compare another site")}</div></article>`;
 }
 function render() {
-  const holder = document.createDocumentFragment();
-  holder.append(atlas);
   const mode = page === "control";
   document.body.classList.toggle("dark", mode);
-  document.title = "MissionForge | " + ({map:'Earth map',discover:'Site discovery',travel:'Travel planning',inspect:site.name,design:'Mission planning',control:'Mission simulation',report:'After-action report',research:'GroundTruth research'}[page]||'Explorer');
+  document.title = "MissionForge | " + ({past:'Past missions',explorer:'Site explorer',discover:'Site atlas',travel:'Travel planning',inspect:site.name,design:'Mission planning',control:'Mission simulation',report:'After-action report',research:'GroundTruth research'}[page]||'Explorer');
+  const activeTab=page==='inspect'?'discover':['design','control','report'].includes(page)?'mission':page;
   document
     .querySelectorAll(".mast nav a")
     .forEach((a) =>
       a.classList.toggle(
         "active",
-        a.hash === "#" + (["inspect","discover"].includes(page) ? "discover" : page),
+        a.hash === "#" + activeTab,
       ),
     );
-  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
-  const tabs = [['map','Home map'],['travel','Travel'],['design','Mission planning'],['control','Mission sim'],['discover','Site atlas'],['research','Ask GroundTruth']];
-  app.innerHTML = `<section class="workspace ${drawerOpen?'':'drawer-closed'}" style="--drawer-shift:${drawerShift}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" class="${(page==='inspect'&&id==='discover')||page===id?'selected':''}" title="${name}" aria-label="${name}">${name}</button>`).join('')}</nav><div class="panel-drawer"><div class="drawer-head" id="drawer-handle"><span>MISSIONFORGE / ${esc(page.toUpperCase())}</span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel">${content()}</div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
-  const dest = app.querySelector(".viewport");
-  dest.prepend(atlas);
-  atlas.hidden = false;
+  const content = { past:pastMissions, explorer:siteExplorer, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
+  if(!app.querySelector('.workspace')){
+    const tabs=[['past','Past missions'],['discover','Site atlas'],['explorer','Site explorer'],['travel','Travel'],['mission','Mission'],['research','GroundTruth']];
+    app.innerHTML=`<section class="workspace" style="--drawer-width:${drawerWidth}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" title="${name}" aria-label="${name}">${name}</button>`).join('')}</nav><div class="panel-drawer"><div class="drawer-head"><span id="drawer-title"></span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel"></div><div class="drawer-resize" role="separator" aria-label="Resize side panel" aria-orientation="vertical" tabindex="0"></div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
+    app.querySelector('.viewport').prepend(atlas);
+    atlas.hidden=false;
+  }
+  const workspace=app.querySelector('.workspace');
+  workspace.classList.toggle('drawer-closed',!drawerOpen);
+  workspace.style.setProperty('--drawer-width',drawerWidth+'px');
+  app.querySelector('#drawer-title').textContent='MISSIONFORGE / '+page.toUpperCase();
+  app.querySelectorAll('[data-workspace]').forEach(button=>button.classList.toggle('selected',button.dataset.workspace===activeTab));
+  update();
 }
 function update() {
   const panel = app.querySelector(".panel");
@@ -441,7 +451,7 @@ function update() {
     render();
     return;
   }
-  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
+  const content = { past:pastMissions, explorer:siteExplorer, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
   morphdom(panel, '<div class="panel">' + content() + "</div>", {
     onBeforeElUpdated(oldEl, newEl) {
       if (oldEl.tagName === "DETAILS") newEl.open = oldEl.open;
@@ -469,19 +479,22 @@ function go(name) {
 }
 function displayScene() {
   if (!scene) return;
-  if (["map", "discover", "research"].includes(page)) scene.overview();
+  if (["past", "discover", "research"].includes(page)) scene.overview();
+  else if(page==='explorer')scene.preview(site);
   else if (page === 'travel') { scene.overview(); if(trip.stops.length)scene.showRoute(routePoints()); }
   else if (page === "inspect") scene.inspect(site);
-  else if (["design", "control"].includes(page)) {
+  else if(page==='design')scene.preview(site);
+  else if(page==='control'){
     scene.place(site, cfg);
     scene.setFacilities(cfg.facilities||{});
-    if (page === "control") scene.sync(mission, playing ? speed : 0);
+    scene.sync(mission, playing ? speed : 0);
   }
 }
 function route() {
   const target = location.hash.slice(1);
   page = [
-    "map",
+    "past",
+    "explorer",
     "travel",
     "research",
     "discover",
@@ -492,7 +505,7 @@ function route() {
   ].includes(target)
     ? target
     : target === "mission"
-      ? mission
+      ? mission && mission.cfg.site?.id===site.id
         ? "control"
         : "design"
       : "discover";
@@ -506,8 +519,10 @@ function route() {
     site = mission.cfg.site;
     cfg = structuredClone(mission.cfg);
   }
+  if(page==='travel')ensureScoutedSite(site);
   equip = "";
   render();
+  app.querySelector('.panel').scrollTop=0;
   displayScene();
   if (page === "inspect") loadObs();
   window.scrollTo(0, 0);
@@ -626,6 +641,7 @@ app.addEventListener("submit", (e) => {
   }
 });
 app.addEventListener("input", (e) => {
+  if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query')){changeTrip(e.target);return;}
   if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(e.target.value);e.target.nextElementSibling.textContent=e.target.value;scene?.sync(mission,playing?speed:0);return;}
   if (e.target.id === "gt-question") groundQuestion = e.target.value;
   if (e.target.id === "query") {
@@ -650,7 +666,8 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
-  if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined){changeTrip(e.target);update();if(page==='travel')scene?.showRoute(routePoints());return;}
+  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));update();return;}
+  if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
   if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
   if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(value);scene?.sync(mission,playing?speed:0);save();update();return;}
   if(id==='temperature-filter'){filterTemp=value;update();return;}
@@ -729,11 +746,16 @@ app.addEventListener("change", (e) => {
 app.addEventListener("click", async (e) => {
   const workspace=e.target.closest('[data-workspace]');if(workspace){go(workspace.dataset.workspace);return;}
   const drawer=e.target.closest('[data-drawer]');if(drawer){drawerOpen=!drawerOpen;document.querySelector('.workspace')?.classList.toggle('drawer-closed',!drawerOpen);return;}
-  const travel=e.target.closest('[data-travel]');if(travel){travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();return;}
+  const prompt=e.target.closest('[data-research-prompt]');if(prompt){researchQuestion=prompt.dataset.researchPrompt+' at '+site.name;update();app.querySelector('#research-question')?.focus();return;}
+  const travel=e.target.closest('[data-travel]');if(travel){await travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();if(page==='travel'&&/^(select|remove)/.test(travel.dataset.travel))scene?.showRoute(routePoints());return;}
   const button = e.target.closest("[data-act]");
   if (!button) return;
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
+  if(act==='resume-mission'&&mission){site=mission.cfg.site;cfg=structuredClone(mission.cfg);go('control');return;}
+  if(act==='archive-site'){const archived=missionHistory.find(x=>x.site?.id===id);const selected=sites.find(x=>x.id===id)||archived?.site;if(selected)choose(selected);return;}
+  if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));toast('Site inputs saved locally for AI integration');update();return;}
+  if(act==='clear-explorer'){explorerValues={};localStorage.removeItem('mf-explorer-inputs');update();return;}
   if(act==='ask-research'){
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
     if(!researchQuestion)return toast('Enter a research question');
@@ -751,7 +773,7 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (
-    ["map", "travel", "research", "discover", "inspect", "design", "control", "report"].includes(act)
+    ["past", "explorer", "mission", "travel", "research", "discover", "inspect", "design", "control", "report"].includes(act)
   )
     return go(act);
   if (act === "skip") {
@@ -997,9 +1019,10 @@ app.addEventListener("click", async (e) => {
   update();
 });
 let dragStart=null;
-app.addEventListener('pointerdown',e=>{const handle=e.target.closest('#drawer-handle');if(!handle||e.target.closest('button'))return;const workspace=app.querySelector('.workspace');dragStart={x:e.clientX,shift:drawerShift,workspace};handle.setPointerCapture(e.pointerId);});
-app.addEventListener('pointermove',e=>{if(!dragStart)return;drawerShift=Math.max(0,Math.min(innerWidth*.32,dragStart.shift+e.clientX-dragStart.x));dragStart.workspace.style.setProperty('--drawer-shift',drawerShift+'px');});
-app.addEventListener('pointerup',()=>{dragStart=null});
+app.addEventListener('pointerdown',e=>{const handle=e.target.closest('.drawer-resize');if(!handle)return;dragStart={x:e.clientX,width:drawerWidth,workspace:app.querySelector('.workspace')};handle.setPointerCapture(e.pointerId);e.preventDefault();});
+app.addEventListener('pointermove',e=>{if(!dragStart)return;drawerWidth=Math.max(260,Math.min(innerWidth-160,dragStart.width+e.clientX-dragStart.x));dragStart.workspace.style.setProperty('--drawer-width',drawerWidth+'px');});
+app.addEventListener('pointerup',()=>{if(dragStart)localStorage.setItem('mf-drawer-width',String(drawerWidth));dragStart=null});
+app.addEventListener('keydown',e=>{if(!e.target.matches('.drawer-resize'))return;if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();drawerWidth=Math.max(260,Math.min(innerWidth-160,drawerWidth+(e.key==='ArrowRight'?24:-24)));app.querySelector('.workspace')?.style.setProperty('--drawer-width',drawerWidth+'px');localStorage.setItem('mf-drawer-width',String(drawerWidth));}});
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ["Helmet", "Follow crew"].includes(cameraPreset)) {
     cameraPreset = "Overview";

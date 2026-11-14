@@ -18,8 +18,8 @@ for (const [name, height] of [
       delete m.extensions;
       m.pbrMetallicRoughness.metallicFactor = 0;
       m.pbrMetallicRoughness.roughnessFactor = 0.85;
-      m.emissiveTexture = m.pbrMetallicRoughness.baseColorTexture;
-      m.emissiveFactor = [0.35, 0.35, 0.35];
+      delete m.emissiveTexture;
+      m.emissiveFactor = [0, 0, 0];
     }
   if (g.nodes[scene.nodes[0]].name !== "MissionForge normalized origin") {
     const min = [Infinity, Infinity, Infinity],

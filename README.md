@@ -3,7 +3,11 @@ Earth is our proving ground.
 
 Compare Earth analog sites using NASA POWER climate normals, plan travel, deploy a research habitat on the existing Cesium globe and run MF-001, the Atacama Habitat Expedition.
 
-The default entry is `/orbit.html`. Select **Find a field site** to open the shared globe workspace. Its draggable, collapsible drawer has Home map condition filters, Travel, Mission planning, Mission sim, Site atlas and GroundTruth research tabs. Travel supports latitude and longitude stops, nights, transport rates, per-leg overrides, cost and carbon estimates, route arcs, a share link, and browser Save as PDF. Currency reference rates load from [Frankfurter](https://frankfurter.dev/v1/). GroundTruth requires `SERPAPI_KEY` on the server.
+The default entry is `/orbit.html`. Select **Find a field site** to open the shared Cesium globe workspace. Its resizable, collapsible drawer has Past missions, Site atlas, Site explorer, Travel, Mission and GroundTruth tabs. The globe stays mounted when changing tabs. Mission setup previews the selected Earth terrain before facilities and crew appear at launch. The Site explorer stores numeric mineral, roughness and temperature inputs locally for a future matching model.
+
+Travel follows the site currently being scouted. It resolves departure and waypoint cities through [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api), then draws route arcs and estimates transport, lodging, per-person cost and carbon. Rates and leg prices are editable. Currency reference rates load from [Frankfurter](https://frankfurter.dev/v1/). Export PDF opens the browser's Save as PDF workflow.
+
+To enable GroundTruth locally, open `.env.local` in the repository root and enter `SERPAPI_KEY=your_actual_key`. If the file is missing, create it from `.env.example`. Restart `npm run dev` after editing it. For Render, add `SERPAPI_KEY` in the service's Environment settings and redeploy. The key stays on the server and is not placed in client code.
 
 ## Run locally
 
@@ -11,8 +15,8 @@ Use Node 22.12+ or Node 24. Run `npm install` and `npm run dev`, then open the U
 
 ## Three-minute demonstration
 
-1. Select **Find a Mars analog site** and enter “dry rocky habitat solar”. Inspect Atacama and expand its comparison with Iceland.
-2. Establish a research habitat. Keep four crew, seven sols, solar power and the robotic rover. Launch the mission.
+1. Open **Site atlas** and enter “dry rocky habitat solar”. Inspect Atacama and expand its comparison with Iceland.
+2. Open **Mission** to preview the selected terrain. Keep four crew, seven sols, solar power and the robotic rover, then launch the mission.
 3. Start a rover traverse and advance one sol. Inject a solar array failure, advance an hour and replace the controller.
 4. Inject a crew medical concern, open ASTRA and choose a training response. View and export the after-action report.
 5. Use **Orbital explorer** to open the original satellite catalog, weather layers and planetary controls.

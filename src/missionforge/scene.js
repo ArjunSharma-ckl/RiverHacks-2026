@@ -17,7 +17,9 @@ export function createScene(onPick) {
   scene.moon.show = false;
   scene.globe.showWaterEffect = false;
   scene.screenSpaceCameraController.minimumZoomDistance = 1;
-  viewer.shadows = false;
+  viewer.shadows = true;
+  scene.shadowMap.softShadows = true;
+  scene.shadowMap.darkness = 0.3;
   viewer.targetFrameRate = 30;
   viewer.useBrowserRecommendedResolution = true;
   viewer.resolutionScale = Math.min(
@@ -75,6 +77,7 @@ export function createScene(onPick) {
     matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1.05;
   function overview() {
     actors.reset();
+    if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
     itinerary.entities.removeAll();
     groundClick = null;
     placed = false;
@@ -83,7 +86,7 @@ export function createScene(onPick) {
     pins.show = true;
     camera.flyTo({ destination: pos(-68, -6, 11900000), duration: duration() });
   }
-  function inspect(s) {
+  function inspect(s, height=42000) {
     actors.reset();
     itinerary.entities.removeAll();
     site = s;
@@ -93,11 +96,14 @@ export function createScene(onPick) {
     fires.entities.removeAll();
     pins.show = true;
     if (!pins.entities.getById(s.id)) pin(s);
+    showGroundTile(s,0.55);
     camera.flyTo({
-      destination: pos(s.lon, s.lat, 42000),
+      destination: pos(s.lon, s.lat, height),
+      orientation:{heading:0,pitch:-C.Math.PI_OVER_TWO,roll:0},
       duration: duration(),
     });
   }
+  function preview(s){inspect(s,5200);pins.show=false;}
   const local = (east, north, z = 0) =>
     pos(
       site.lon +
@@ -123,7 +129,7 @@ export function createScene(onPick) {
             }
           : {}),
         heightReference: C.HeightReference.CLAMP_TO_GROUND,
-        imageBasedLightingFactor: new C.Cartesian2(1, 1),
+        imageBasedLightingFactor: new C.Cartesian2(0.72, 0.82),
       },
     });
   }
@@ -141,6 +147,12 @@ export function createScene(onPick) {
   function view(preset = "Overview", astronaut = 0) {
     if (!placed) return;
     if (actors.cameraMode(preset, astronaut)) return;
+    if(preset==='Overview'){
+      const point=C.Cartographic.fromDegrees(site.lon,site.lat);
+      const ground=scene.globe.getHeight(point)??0;
+      camera.flyTo({destination:pos(site.lon,site.lat,ground+95),orientation:{heading:0,pitch:-1.47,roll:0},duration:duration()});
+      return;
+    }
     const e =
       preset === "Rover"
         ? base.entities.getById("Rover")
@@ -157,19 +169,26 @@ export function createScene(onPick) {
         duration: duration(),
         offset: new C.HeadingPitchRange(
           0.55,
-          preset === "Tactical" ? -1.55 : -0.62,
+          preset === "Tactical" ? -1.55 : -0.75,
           preset === "Overview"
-            ? 52
+            ? 105
             : preset === "Tactical"
-              ? 67
+              ? 125
               : preset === "Habitat"
-                ? 23
+                ? 34
                 : 10,
         ),
       },
     );
   }
   let groundLayer;
+  let groundSite='';
+  function showGroundTile(s,opacity=0.55){
+    if(groundSite===s.id&&groundLayer){groundLayer.alpha=opacity;return;}
+    if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
+    groundSite=s.id;
+    if(tiles[s.id]){groundLayer=C.ImageryLayer.fromProviderAsync(C.SingleTileImageryProvider.fromUrl('/assets/mission/'+s.id+'-ground.jpg',{rectangle:C.Rectangle.fromDegrees(...tiles[s.id]),credit:'Esri World Imagery and contributors'}));groundLayer.alpha=opacity;viewer.imageryLayers.add(groundLayer);}
+  }
   function place(s, c) {
     if (
       placed &&
@@ -182,22 +201,7 @@ export function createScene(onPick) {
     )
       return;
     camera.cancelFlight();
-    if (groundLayer) {
-      viewer.imageryLayers.remove(groundLayer);
-      groundLayer = null;
-    }
-    if (tiles[s.id]) {
-      groundLayer = C.ImageryLayer.fromProviderAsync(
-        C.SingleTileImageryProvider.fromUrl(
-          "/assets/mission/" + s.id + "-ground.jpg",
-          {
-            rectangle: C.Rectangle.fromDegrees(...tiles[s.id]),
-            credit: "Esri World Imagery and contributors",
-          },
-        ),
-      );
-      viewer.imageryLayers.add(groundLayer);
-    }
+    showGroundTile(s,0.18);
     site = s;
     placed = true;
     pins.show = false;
@@ -206,15 +210,15 @@ export function createScene(onPick) {
     itinerary.entities.removeAll();
     model("Habitat", "habitat", 0, 0);
     model("Science module", "habitat2", -8, 6);
-    model("Kestrel descent vehicle", "kestrel", 12, -18);
-    box("North pressure passage", 0, 8.3, 1, [1.6, 12.6, 1.95], "#a0a6a3");
-    box("West pressure passage", -4.2, 5.8, 1, [7.5, 1.55, 1.95], "#a0a6a3");
+    model("Kestrel descent vehicle", "kestrel", 60, -65);
+    box("North pressure passage", 0, 8.3, 1, [1.6, 12.6, 1.95], "#6d7976");
+    box("West pressure passage", -4.2, 5.8, 1, [7.5, 1.55, 1.95], "#6d7976");
     model("Emergency shelter", "medical", 0, 17);
     model("Crew quarters", "habitat", -10, -18);
     for (const station of Object.values(stations))
       model(station.name, station.model, ...station.at);
     // Enclosed pressure passages connect the inhabited modules through a central spine.
-    const passage=(id,x,y,w,h)=>box(id,x,y,1,[w,h,2.05],"#a2b3b2");
+    const passage=(id,x,y,w,h)=>{box(id,x,y,1,[w,h,2.05],"#65716e");box(id+' roof seam',x,y,2.05,[Math.max(.18,w-.2),Math.max(.18,h-.2),.09],"#303e3b")};
     passage("South pressure spine",0,-7.5,2.2,15);
     passage("West pressure spine",-9,-2,18,2.2);
     passage("East pressure spine",7,-7,14,2.2);
@@ -264,7 +268,8 @@ export function createScene(onPick) {
       itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:'12px sans-serif',pixelOffset:new C.Cartesian2(12,-15),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
       if(i){const a=points[i-1],g=new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a.lon,a.lat),C.Cartographic.fromDegrees(p.lon,p.lat));const positions=[];for(let j=0;j<=48;j++){const f=j/48,q=g.interpolateUsingFraction(f);positions.push(pos(C.Math.toDegrees(q.longitude),C.Math.toDegrees(q.latitude),10000+Math.sin(Math.PI*f)*Math.min(500000,g.surfaceDistance*.12)));}itinerary.entities.add({polyline:{positions,width:3,material:C.Color.fromCssColorString('#9de9c9')}});}
     }
-    camera.flyTo({destination:pos(points.at(-1).lon,points.at(-1).lat,Math.max(2000000,points.length*1800000)),duration:duration()});
+    const sphere=C.BoundingSphere.fromPoints(points.map(p=>pos(p.lon,p.lat)));
+    camera.flyToBoundingSphere(sphere,{duration:duration(),offset:new C.HeadingPitchRange(0,-C.Math.PI_OVER_TWO,Math.max(500000,sphere.radius*3.4))});
   }
   function sync(m, rate = 0) {
     if (!placed) return;
@@ -311,6 +316,7 @@ export function createScene(onPick) {
     detach: actors.reset,
     overview,
     inspect,
+    preview,
     place,
     view,
     sync,
