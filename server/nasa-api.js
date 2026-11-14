@@ -1,3 +1,5 @@
+import { research } from './analog-api.js';
+import { report } from './reports.js';
 import { imageryTile } from './arcgis.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
@@ -48,6 +50,8 @@ function searchTerm(params) {
 }
 
 const POWER_PARAMETERS = [
+  ['T2MDEW', 'Dew point', '°C'],
+  ['PS', 'Surface pressure', 'kPa'],
   ['T2M', 'Air temperature', '°C'],
   ['T2M_MAX', 'Daily maximum', '°C'],
   ['T2M_MIN', 'Daily minimum', '°C'],
@@ -63,6 +67,20 @@ export function createApi(env = {}) {
   const firmsKey = env.FIRMS_MAP_KEY;
 
   const routes = {
+    '/analog/climate': p => {
+      const lat = number(p, 'lat', -90, 90), lon = number(p, 'lon', -180, 180);
+      const q = new URLSearchParams({latitude:lat.toFixed(4), longitude:lon.toFixed(4), community:'RE', format:'JSON', parameters:'T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS'});
+      return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
+    },
+    '/analog/research': p => cached('research:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/ion/v1/assets/1/endpoint': async () => {
+      const response = await fetch('https://api.cesium.com/v1/assets/1/endpoint', {
+        headers: { Authorization: 'Bearer ' + env.CESIUM_ION_ACCESS_TOKEN },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!response.ok) throw new Error('Terrain unavailable');
+      return response.json();
+    },
     // Open natural events: storms, wildfires, floods, volcanoes, ice.
     '/nasa/events': () => cached('events', 5 * MINUTE, async () => {
       const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=200&days=45');
@@ -178,15 +196,16 @@ export function createApi(env = {}) {
       if (!firmsKey) throw new Error('missing FIRMS_MAP_KEY');
       const latitude = number(params, 'lat', -90, 90);
       const longitude = number(params, 'lon', -180, 180);
+      const sensor = ['VIIRS_SNPP_NRT','MODIS_NRT'].includes(params.get('sensor')) ? params.get('sensor') : 'VIIRS_NOAA20_NRT';
       const box = [longitude - 5, latitude - 5, longitude + 5, latitude + 5].map((v) => v.toFixed(2)).join(',');
-      return cached(`fires:${box}`, 10 * MINUTE, async () => {
+      return cached(`fires:${sensor}:${box}`, 10 * MINUTE, async () => {
         const response = await fetch(
-          `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsKey}/VIIRS_NOAA20_NRT/${box}/1`,
+          `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsKey}/${sensor}/${box}/1`,
           { signal: AbortSignal.timeout(25000) }
         );
         if (!response.ok) throw new Error('upstream');
         const [header, ...rows] = (await response.text()).trim().split('\n');
-        const columns = header.split(',');
+        const columns = header.trim().split(','); if (!columns.includes('acq_date')) throw new Error('FIRMS unavailable');
         const detections = rows.slice(0, 500).map((row) => {
           const cells = row.split(',');
           const record = {};
@@ -195,7 +214,7 @@ export function createApi(env = {}) {
             latitude: Number(record.latitude),
             longitude: Number(record.longitude),
             brightness: Number(record.bright_ti4),
-            confidence: record.confidence
+            sensor: sensor, date: record.acq_date, time: record.acq_time, confidence: record.confidence
           };
         });
         return { detections };
@@ -205,32 +224,15 @@ export function createApi(env = {}) {
     '/nasa/apod': () => cached('apod', 60 * MINUTE, () =>
       getJson(`https://api.nasa.gov/planetary/apod?api_key=${nasaKey}`)),
 
-    // Kept from the original app: optional web search enrichment.
-    '/object': (params) => {
-      const name = params.get('name');
-      if (!name || !SUBJECTS.has(name)) throw new Error('unknown subject');
-      if (!serpKey) throw new Error('missing SERPAPI_KEY');
-      return cached(`serp:${name}`, 24 * 60 * MINUTE, async () => {
-        const search = (engine) => {
-          const query = new URLSearchParams({ engine, q: `${name} NASA astronomy`, api_key: serpKey });
-          return getJson(`https://serpapi.com/search.json?${query}`);
-        };
-        const [web, images] = await Promise.all([search('google'), search('google_images')]);
-        return {
-          article: web.organic_results?.find((item) => item.snippet && item.link?.startsWith('https://')),
-          photos: (images.images_results ?? [])
-            .filter((item) => item.thumbnail?.startsWith('https://') && item.link?.startsWith('https://'))
-            .slice(0, 4)
-            .map(({ thumbnail, title, link }) => ({ thumbnail, title, link }))
-        };
-      });
-    }
+    '/object': params => report(params.get('name'), serpKey)
   };
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname.startsWith('/arcgis/imagery/')) return imageryTile(req, res, env, url.pathname);
-    const route = routes[url.pathname];
+    const category=url.pathname.match(/^\/research\/(site|incident|logistics|news|medical-support)$/)?.[1];
+    if(category)url.searchParams.set("category",category);
+    const route = category ? p=>cached("gt:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' || !route) {
@@ -257,4 +259,3 @@ export function nasaApiPlugin(loadEnv) {
   };
   return { name: 'nasa-api', configureServer: configure, configurePreviewServer: configure };
 }
-

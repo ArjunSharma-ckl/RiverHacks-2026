@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analog Simulation Planner | RiverHacks</title>
+  <script type="module" src="/src/planner.js"></script>
+</head>
+<body>
+  <main class="planner">
+    <nav><strong>RiverHacks</strong><a href="/">Back to globe</a></nav>
+    <h1>Analog simulation planner</h1>
+    <p>Compare the shape of a Mars or Moon terrain patch with measured Earth elevation.</p>
+    <form>
+      <label for="render">Upload an overhead image or elevation grid</label>
+      <input id="render" type="file" accept="image/png,image/jpeg,image/webp,.json">
+      <div id="image-only" hidden>
+        <label><input id="overhead" type="checkbox"> This image looks straight down and contains only terrain.</label>
+        <p>Image mode estimates the relative depth of the center square. Use a measured elevation grid to compare real slopes and heights.</p>
+      </div>
+      <label for="example">Or try measured NASA terrain</label>
+      <select id="example"><option value="">Choose an example</option></select>
+      <img id="preview" alt="Terrain image selected for analysis" hidden>
+      <button type="submit">Compare terrain</button>
+      <small>Files stay in your browser. Image mode downloads a depth model on first use.</small>
+    </form>
+    <p id="result" role="status" aria-live="polite"></p>
+    <section id="comparison" aria-label="Terrain comparison" hidden></section>
+    <details>
+      <summary>Elevation grid format</summary>
+      <p>Upload JSON with <code>size</code> (33–129), <code>widthMetres</code>, <code>heightMetres</code>, and <code>values</code> (row-major elevations in metres). Use a terrain patch close to 8 km across. If you resampled the grid, include <code>nativeResolutionMetres</code> to preserve the original sampling limit.</p>
+      <p><a href="/analogs/planetary/shackleton.json" download>Download a sample elevation grid</a></p>
+    </details>
+    <a href="https://science.nasa.gov/solar-system/analog-explorer/" target="_blank" rel="noopener">NASA Planetary Analog Explorer</a>
+  </main>
+</body>
+</html>

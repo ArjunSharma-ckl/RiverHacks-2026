@@ -5,7 +5,8 @@ services:
     plan: free
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
-    autoDeploy: true
+    branch: main
+    autoDeployTrigger: commit
     healthCheckPath: /healthz
     envVars:
       - key: NODE_VERSION

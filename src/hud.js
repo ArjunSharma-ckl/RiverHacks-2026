@@ -1,3 +1,4 @@
+import { catalogControls } from './catalog-search.js';
 import * as C from 'cesium';
 
 function element(tag, className, text) {
@@ -19,15 +20,49 @@ function toggle(label, checked, onChange, note) {
 }
 
 export function createHud(root, context) {
-  const { viewer, scene, sky, satellites, weather, lensFlare } = context;
+  const { viewer, scene, sky, satellites, weather, lensFlare, controls } = context;
   const sections = element('div', 'hud-body');
 
   function section(heading) {
-    const node = element('section');
-    node.append(element('h3', undefined, heading));
+    const node = element('details', 'tool-group');
+    node.open = heading === 'Satellite tracking';
+    node.append(element('summary', undefined, heading));
     sections.append(node);
     return node;
   }
+
+  // Movement pad: same actions as the keys, for anyone who would rather click.
+  const nav = section('Navigation');
+  const pad = element('div', 'pad');
+  for (const [direction, glyph, title] of [
+    ['up', '\u25B2', 'Move up (W)'],
+    ['left', '\u25C0', 'Move left (A)'],
+    ['home', '\u2302', 'Centre Earth (Esc)'],
+    ['right', '\u25B6', 'Move right (D)'],
+    ['down', '\u25BC', 'Move down (S)'],
+    ['out', '\u2212', 'Zoom out'],
+    ['in', '+', 'Zoom in']
+  ]) {
+    const button = element('button', `pad-${direction}`, glyph);
+    button.type = 'button';
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    if (direction === 'home') {
+      button.onclick = () => controls.home();
+    } else {
+      // Hold to keep moving; a tap nudges.
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        controls.press(direction);
+      });
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+        button.addEventListener(type, () => controls.release(direction));
+      }
+    }
+    pad.append(button);
+  }
+  nav.append(pad, element('p', 'control-hint',
+    'W A S D or arrow keys \u00b7 + / \u2212 zoom \u00b7 hold Shift for faster \u00b7 Esc to centre'));
 
   const fleet = section('Satellite tracking');
   const selector = element('select');
@@ -40,7 +75,9 @@ export function createHud(root, context) {
     satellites.track(target);
   };
   viewer.trackedEntityChanged.addEventListener(entity => { selector.value = entity?.id || ''; });
-  fleet.append(selector, element('p', 'control-hint', 'W A S D orbit · + / − zoom · Esc return'));
+  fleet.append(selector);
+  catalogControls(fleet,satellites,context.chooseContact);
+  sections.prepend(fleet);
   // Weather
   const weatherSection = section('Weather');
   const status = element('p', 'status');
@@ -61,6 +98,7 @@ export function createHud(root, context) {
     }, spec.note);
     const slider = document.createElement('input');
     slider.type = 'range';
+    slider.setAttribute('aria-label', spec.label + ' opacity');
     slider.min = '0';
     slider.max = '1';
     slider.step = '0.05';
@@ -147,8 +185,10 @@ export function createHud(root, context) {
   }, 500);
 
   const hideButton = document.getElementById('hud-toggle');
+  hideButton.setAttribute('aria-expanded', 'true');
   hideButton.onclick = () => {
     const hidden = root.classList.toggle('collapsed');
+    hideButton.setAttribute('aria-expanded', String(!hidden));
     hideButton.textContent = hidden ? 'Show controls' : 'Hide controls';
   };
 

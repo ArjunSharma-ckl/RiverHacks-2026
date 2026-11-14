@@ -5,4 +5,4 @@ dist/
 __pycache__/
 *.py[cod]
 backend/data/observations.jsonl
-data/earthchem_data/*
+data/earthchem_data/*.cache/

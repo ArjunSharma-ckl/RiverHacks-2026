@@ -1,5 +1,5 @@
 import * as C from 'cesium';
-import { gibsWmts } from './gibs.js';
+import { gibsWms } from './gibs.js';
 import { setLayer } from './layers.js';
 
 const ION_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
@@ -16,7 +16,7 @@ export function createViewer(container) {
     timeline: false, animation: false, fullscreenButton: false, homeButton: false,
     geocoder: false, sceneModePicker: false, navigationHelpButton: false,
     baseLayerPicker: false, infoBox: false, selectionIndicator: false,
-    shouldAnimate: true, shadows: true,
+    shouldAnimate: true, shadows: false,
     contextOptions: { webgl: { powerPreference: 'high-performance' } }
   });
 
@@ -24,6 +24,7 @@ export function createViewer(container) {
 
   // Globe: true solar lighting, a scattering-based atmosphere and a black base
   // so nothing blue bleeds through gaps in the imagery.
+  scene.globe.showWaterEffect = false;
   scene.globe.enableLighting = true;
   scene.globe.dynamicAtmosphereLighting = true;
   scene.globe.dynamicAtmosphereLightingFromSun = false;
@@ -31,50 +32,52 @@ export function createViewer(container) {
   scene.globe.atmosphereLightIntensity = 14;
   scene.globe.baseColor = C.Color.fromCssColorString('#04070d');
   scene.globe.depthTestAgainstTerrain = true;
-  scene.globe.maximumScreenSpaceError = 1.25;
+  scene.globe.maximumScreenSpaceError = 2;
 
   scene.skyAtmosphere.perFragmentAtmosphere = true;
-  scene.skyAtmosphere.atmosphereLightIntensity = 55;
+  scene.skyAtmosphere.atmosphereLightIntensity = 62;
   scene.skyAtmosphere.saturationShift = 0.08;
   scene.skyAtmosphere.brightnessShift = 0.04;
 
-  scene.sun.glowFactor = 1.6;
+  scene.sun.glowFactor = 2.6;
   scene.moon = new C.Moon({ textureUrl: '/textures/moon.jpg', onlySunLighting: true });
   scene.fog.enabled = true;
 
   // Tone mapping plus bloom is what makes the sun read as a light source
   // rather than a white circle.
   scene.highDynamicRange = true;
-  scene.msaaSamples = 4;
+  scene.msaaSamples = 2;
   scene.postProcessStages.fxaa.enabled = true;
   const bloom = scene.postProcessStages.bloom;
-  bloom.enabled = true;
+  bloom.enabled = false;
   bloom.uniforms.glowOnly = false;
-  bloom.uniforms.contrast = 118;
-  bloom.uniforms.brightness = -0.35;
+  bloom.uniforms.contrast = 94;
+  bloom.uniforms.brightness = -0.26;
   bloom.uniforms.delta = 1.2;
-  bloom.uniforms.sigma = 2.4;
+  bloom.uniforms.sigma = 3.1;
   bloom.uniforms.stepSize = 1;
 
   let lensFlare;
   try {
     lensFlare = C.PostProcessStageLibrary.createLensFlareStage();
     scene.postProcessStages.add(lensFlare);
-    lensFlare.uniforms.intensity = 1.35;
-    lensFlare.uniforms.distortion = 8;
-    lensFlare.uniforms.dirtAmount = 0.22;
+    lensFlare.enabled = false;
+    lensFlare.uniforms.intensity = 0.9;
+    lensFlare.uniforms.distortion = 4.0;
+    lensFlare.uniforms.dirtAmount = 0.05;
   } catch {
     lensFlare = undefined;
   }
 
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
-  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
+  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.
   scene.screenSpaceCameraController.maximumZoomDistance = 7.5e7;
-  scene.screenSpaceCameraController.minimumZoomDistance = 2;
+  scene.screenSpaceCameraController.minimumZoomDistance = 160;
+  scene.screenSpaceCameraController.zoomFactor = 7.5;
 
   clock.currentTime = C.JulianDate.now();
   clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
@@ -83,11 +86,15 @@ export function createViewer(container) {
 
   camera.setView({
     destination: C.Cartesian3.fromDegrees(-62, 18, 24000000),
-    orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO + 0.22, roll: 0 }
+    orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 }
   });
 
-  if (ION_TOKEN) {
-    C.createWorldTerrainAsync({ requestWaterMask: true, requestVertexNormals: true })
+  {
+    const options = { requestWaterMask: false, requestVertexNormals: true };
+    const terrainReady = ION_TOKEN ? C.createWorldTerrainAsync(options)
+      : C.IonResource.fromAssetId(1, { server: '/api/ion/', accessToken: '' })
+        .then(resource => C.CesiumTerrainProvider.fromUrl(resource, options));
+    terrainReady
       .then((terrain) => { viewer.terrainProvider = terrain; })
       .catch(() => {});
   }
@@ -99,11 +106,11 @@ export function createViewer(container) {
 // over once you are close enough for it to matter.
 export function addBaseImagery() {
   setLayer('bluemarble', new C.ImageryLayer(
-    gibsWmts({
+    gibsWms({
       layer: 'BlueMarble_ShadedRelief_Bathymetry',
       time: '2004-01-01',
-      matrixSet: 'GoogleMapsCompatible_Level8',
-      extension: 'jpeg',
+      format: 'image/jpeg',
+      transparent: false,
       maximumLevel: 8
     }),
     { brightness: 0.92, saturation: 0.88, contrast: 1.07, gamma: 1.04 }
@@ -118,4 +125,5 @@ export function addBaseImagery() {
     { minimumTerrainLevel: 6, brightness: 0.86, saturation: 0.78, contrast: 1.06 }
   ));
 }
+
 

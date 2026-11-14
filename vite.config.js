@@ -8,6 +8,9 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 6000,
+    rolldownOptions: {
+      input: { missionforge: 'index.html', orbit: 'orbit.html', planner: 'planner.html' },
+    },
   },
   plugins: [
     nasaApiPlugin(loadEnv),
