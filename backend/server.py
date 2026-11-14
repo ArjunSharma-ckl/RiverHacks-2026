@@ -4,11 +4,13 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from backend.catalog import EQUIPMENT_BY_ID, PHASES, PHASE_BY_ID, RESOURCES
 from backend.landing_sites import load_snapshot
+from backend.lunar_temperature import load_temperature_snapshot, refresh_lunar_temperatures
 from backend.storage import append_observation, list_observations
 
 
@@ -164,6 +166,14 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                     ]
                 self._send_json(200, snapshot)
                 return
+            if parsed.path == "/api/lunar-temperatures":
+                try:
+                    snapshot = load_temperature_snapshot()
+                except (OSError, json.JSONDecodeError):
+                    self._send_json(404, {"error": "No lunar temperature snapshot is saved yet."})
+                    return
+                self._send_json(200, snapshot)
+                return
             if parsed.path == "/api/observations":
                 phase_id = query.get("phase_id", [None])[0]
                 if phase_id is not None and phase_id not in PHASE_BY_ID:
@@ -185,6 +195,13 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlsplit(self.path)
+        if parsed.path == "/api/lunar-temperatures/refresh":
+            try:
+                snapshot = refresh_lunar_temperatures()
+                self._send_json(200, snapshot)
+            except (OSError, RuntimeError, URLError) as error:
+                self._send_json(502, {"error": "Could not refresh lunar temperatures from NASA PDS.", "detail": str(error)})
+            return
         if parsed.path != "/api/observations":
             self._send_json(404, {"error": "Route not found."})
             return

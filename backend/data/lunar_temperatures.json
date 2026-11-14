@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-11-14T17:46:12Z",
+  "source": {
+    "name": "NASA Planetary Data System, LRO Diviner Polar Resource Product",
+    "dataset_id": "LRO-L-DLRE-5-PRP-V2.0",
+    "product_id": "DLRE_PRP_SOUTH.TAB",
+    "product_url": "https://pds-geosciences.wustl.edu/lro/urn-nasa-pds-lro_diviner_derived1/data_derived_prp/dlre_prp_south.tab",
+    "label_url": "https://pds-geosciences.wustl.edu/lro/urn-nasa-pds-lro_diviner_derived1/data_derived_prp/dlre_prp_south.lbl",
+    "column_layout_url": "https://pds-geosciences.wustl.edu/lro/urn-nasa-pds-lro_diviner_derived1/label/dlre_prp.fmt",
+    "measurement": "modeled annual-average temperature at 2 cm below the surface",
+    "units": "K",
+    "spatial_method": "nearest PRP triangular mesh-cell center to each representative candidate point",
+    "temporal_coverage_note": "Derived from thermal-model fits to Diviner polar observations from the first mapping year.",
+    "limitations": [
+      "Values describe a representative point within each candidate region, not a spatial average over the entire region.",
+      "The PDS product is a thermal-model-derived annual average, not a current weather reading.",
+      "Only candidate sites with sourced reference points are sampled."
+    ]
+  },
+  "records": [
+    {
+      "landing_site_id": "moon-eb0cbb9caa4360e9",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Haworth",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -86.8,
+        "longitude_east": 336.4,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -86.803337097,
+        "longitude_east": 336.382040024,
+        "distance_from_reference_km": 0.1057
+      },
+      "temperature": {
+        "annual_average_kelvin": 122.201,
+        "annual_average_celsius": -150.949,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-27f5fc933e31a87a",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Malapert Massif",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -85.9,
+        "longitude_east": 0.3,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.902397156,
+        "longitude_east": 0.311389297,
+        "distance_from_reference_km": 0.0768
+      },
+      "temperature": {
+        "annual_average_kelvin": 175.085,
+        "annual_average_celsius": -98.065,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-420b0d35a4597c65",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton",
+      "reference_point": {
+        "point_id": "MMO10",
+        "latitude": -85.461,
+        "longitude_east": 31.49,
+        "coordinate_source_url": "https://doi.org/10.1029/2025JE009434",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.465034485,
+        "longitude_east": 31.44622612,
+        "distance_from_reference_km": 0.1612
+      },
+      "temperature": {
+        "annual_average_kelvin": 99.75,
+        "annual_average_celsius": -173.4,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-586e518e5cb84605",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton Plateau",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -84.1,
+        "longitude_east": 34.7,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -84.101722717,
+        "longitude_east": 34.739608765,
+        "distance_from_reference_km": 0.134
+      },
+      "temperature": {
+        "annual_average_kelvin": 183.968,
+        "annual_average_celsius": -89.182,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-19fc147c0ee85741",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 1",
+      "reference_point": {
+        "point_id": "NR101",
+        "latitude": -85.295,
+        "longitude_east": 36.917,
+        "coordinate_source_url": "https://doi.org/10.1029/2025JE009434",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.292915344,
+        "longitude_east": 36.924098969,
+        "distance_from_reference_km": 0.0656
+      },
+      "temperature": {
+        "annual_average_kelvin": 106.907,
+        "annual_average_celsius": -166.243,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-af94d3339a8a4fec",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 2",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -84.0,
+        "longitude_east": 58.7,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -84.006729126,
+        "longitude_east": 58.67130661,
+        "distance_from_reference_km": 0.2234
+      },
+      "temperature": {
+        "annual_average_kelvin": 141.294,
+        "annual_average_celsius": -131.856,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-18aeec26e30a3c89",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Peak near Cabeus B",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -83.6,
+        "longitude_east": 291.2,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -83.602149963,
+        "longitude_east": 291.209251404,
+        "distance_from_reference_km": 0.0723
+      },
+      "temperature": {
+        "annual_average_kelvin": 148.223,
+        "annual_average_celsius": -124.927,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-657cd16355c8d9d6",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Slater Plain",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -87.1,
+        "longitude_east": 127.2,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -87.102127075,
+        "longitude_east": 127.112129211,
+        "distance_from_reference_km": 0.1494
+      },
+      "temperature": {
+        "annual_average_kelvin": 85.243,
+        "annual_average_celsius": -187.907,
+        "depth_below_surface_m": 0.02
+      }
+    },
+    {
+      "landing_site_id": "moon-d481c6b41533915c",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "de Gerlache Rim 2",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -88.2,
+        "longitude_east": 295.9,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -88.201698303,
+        "longitude_east": 296.088935852,
+        "distance_from_reference_km": 0.1871
+      },
+      "temperature": {
+        "annual_average_kelvin": 153.612,
+        "annual_average_celsius": -119.538,
+        "depth_below_surface_m": 0.02
+      }
+    }
+  ]
+}

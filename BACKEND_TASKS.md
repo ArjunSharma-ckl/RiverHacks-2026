@@ -14,6 +14,8 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Document local startup, configuration, routes, and the observation format.
 - [x] Normalize and save current NASA lunar and Mars landing-target records with source provenance and a safe unresolved-site status.
 - [x] Provide a read API for saved landing targets and body-specific candidate regions.
+- [x] Query NASA PDS Diviner south-polar annual-average temperatures for the nine Artemis candidate regions and save the sampled values as JSON.
+- [x] Serve the saved lunar temperature snapshot and provide an explicit refresh operation.
 
 ## Implementation decisions
 
@@ -39,3 +41,12 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 - The Artemis IV target is currently the lunar South Pole region; the point landing site is not published. The nine NASA candidate regions are labeled as candidates, not selected sites.
 - NASA's SkyFall Mars site remains pending selection. The record intentionally has no site name or coordinates until NASA publishes one.
 - NASA's mission pages do not expose the target records as a unified structured feed. Review/update the source records from the cited NASA pages and run `python -m backend.landing_sites` to refresh the saved snapshot.
+
+## Lunar temperature memory
+
+- `backend/lunar_temperature.py` reads the PDS LRO Diviner Polar Resource Product (`LRO-L-DLRE-5-PRP-V2.0`, `DLRE_PRP_SOUTH.TAB`) and samples the nearest mesh cell for one published representative point in each Artemis candidate region.
+- The product's `temp_avg` column is annual-average temperature in kelvin at 2 cm depth. The product models the first mapping year's polar observations; it is not a live weather feed.
+- Region points are representative published coordinates, not exact selected landing sites. The saved values are sampled at a nearby mesh cell, not spatial means over entire candidate-region boundaries.
+- The PDS table is about 605 MB. The downloader caches it in the system temporary directory; `MISSION_PDS_CACHE_DIR` can point to another cache location. The source archive and fixed-width column layout are linked in code and in the generated JSON.
+- Run `python -m backend.lunar_temperature` or send `POST /api/lunar-temperatures/refresh` to query and save `backend/data/lunar_temperatures.json`. Read the saved snapshot with `GET /api/lunar-temperatures`.
+- The schema stores kelvin and Celsius alongside the point, source, and averaging metadata so Earth comparison data can later be added without confusing units or averaging windows. It does not fabricate Earth values.

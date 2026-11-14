@@ -21,6 +21,8 @@ The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `
 - `GET /api/resources` — provider catalog and documented service entry points.
 - `GET /api/landing-sites` — saved NASA Moon and Mars targets plus candidate regions.
 - `GET /api/landing-sites?body=Moon` — filter landing targets by body (`Moon` or `Mars`).
+- `GET /api/lunar-temperatures` — saved annual-average Diviner temperature samples for the nine Artemis lunar candidate regions.
+- `POST /api/lunar-temperatures/refresh` — query the NASA PDS Diviner south-polar table and replace the temperature snapshot.
 - `GET /api/observations?phase_id=phase-1&limit=100` — saved observations, newest first.
 - `POST /api/observations` — validate and save an observation as JSON.
 
@@ -35,6 +37,20 @@ python -m backend.landing_sites
 ```
 
 NASA has not exposed these mission targets as one structured feed. The sync algorithm validates NASA provenance, checks body/status/coordinate fields, generates stable IDs, deduplicates records, and atomically replaces the saved snapshot. Update the source-reviewed records in `backend/landing_sites.py` when NASA publishes changes, then run the refresh command.
+
+### Lunar temperature samples
+
+The supplied LOLA query is not a temperature query: LOLA is the laser altimeter, ODE returns product metadata/files rather than parsed temperature values, and `results=json` plus the assumed `div/result/products/product` response path do not match ODE REST v2. The temperature backend uses the PDS LRO Diviner Polar Resource Product instead. Its `temp_avg` values are modeled annual averages in kelvin at 2 cm below the surface.
+
+Run a refresh from the command line with:
+
+```powershell
+python -m backend.lunar_temperature
+```
+
+The first refresh downloads the approximately 605 MB south-polar PDS table and caches it outside the repository. Set `MISSION_PDS_CACHE_DIR` to choose the cache directory. The saved `backend/data/lunar_temperatures.json` records the nearest mesh-cell sample for one published representative point in each Artemis candidate region, with Celsius conversion and provenance. These are point samples, not whole-region spatial averages or exact crew landing sites. The schema includes temperature units and averaging-period metadata so Earth comparison readings can be added on a like-for-like basis.
+
+The server also exposes an explicit `POST /api/lunar-temperatures/refresh` operation and returns the saved snapshot from `GET /api/lunar-temperatures`. No Earth-location temperatures are populated yet; the current JSON contains the lunar half of the comparison.
 
 Example observation:
 
