@@ -131,4 +131,6 @@ Example observation:
 
 Observation records are appended to `backend/data/observations.jsonl` by default. The service binds to loopback and is intended for local development; add authentication and deployment controls before exposing it to a shared network.
 
+Data were downloaded from PetDB 2.0 (https://earthchem.org) on November 14 2026, using the following parameters: Analyzed Materials = Mineral: (Olivine, Plagioclase, Pyroxene (Not Classified), Saponite-Iron-Oxide)
+
 See [BACKEND_TASKS.md](BACKEND_TASKS.md) for the saved backend task list and implementation notes.

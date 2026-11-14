@@ -141,6 +141,30 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
         try:
+            if parsed.path in {"/", "/api", "/api/"}:
+                self._send_json(200, {
+                    "service": "RiverHacks Mission API",
+                    "status": "ok",
+                    "message": "Choose an API endpoint from this directory.",
+                    "endpoints": [
+                        {"method": "GET", "path": "/api/health", "description": "Service status."},
+                        {"method": "GET", "path": "/api/phases", "description": "Mission phases, roles, and equipment."},
+                        {"method": "GET", "path": "/api/resources", "description": "Planetary and Earth science data providers."},
+                        {"method": "GET", "path": "/api/landing-sites", "description": "Saved Moon and Mars targets and candidate regions."},
+                        {"method": "GET", "path": "/api/lunar-location?name=Mons%20Mouton", "description": "Resolve a lunar feature and return available temperature and mineral data."},
+                        {"method": "GET", "path": "/api/lunar-temperatures", "description": "Saved lunar temperature samples."},
+                        {"method": "GET", "path": "/api/lunar-minerals", "description": "Saved lunar mineral samples."},
+                        {"method": "GET", "path": "/api/observations", "description": "Saved mission observations."},
+                        {"method": "POST", "path": "/api/observations", "description": "Validate and save a mission observation."},
+                        {"method": "POST", "path": "/api/lunar-temperatures/refresh", "description": "Refresh lunar temperatures from NASA PDS."},
+                        {"method": "POST", "path": "/api/lunar-minerals/refresh", "description": "Refresh lunar mineral samples."},
+                    ],
+                })
+                return
+            if parsed.path == "/favicon.ico":
+                self.send_response(204)
+                self.end_headers()
+                return
             if parsed.path == "/api/health":
                 self._send_json(200, {"status": "ok"})
                 return
