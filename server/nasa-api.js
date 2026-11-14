@@ -63,6 +63,14 @@ export function createApi(env = {}) {
   const firmsKey = env.FIRMS_MAP_KEY;
 
   const routes = {
+    '/ion/v1/assets/1/endpoint': async () => {
+      const response = await fetch('https://api.cesium.com/v1/assets/1/endpoint', {
+        headers: { Authorization: 'Bearer ' + env.CESIUM_ION_ACCESS_TOKEN },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!response.ok) throw new Error('Terrain unavailable');
+      return response.json();
+    },
     // Open natural events: storms, wildfires, floods, volcanoes, ice.
     '/nasa/events': () => cached('events', 5 * MINUTE, async () => {
       const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=200&days=45');
