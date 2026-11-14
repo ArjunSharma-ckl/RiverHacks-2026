@@ -11,3 +11,5 @@
 
 NASA distributes the GLBs through its [3D Resources library](https://science.nasa.gov/3d-resources/). Educational and informational media use is subject to the [NASA media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/) and applicable third-party rights. Credits do not imply endorsement. Model geometry is preserved with a wrapper transform for approximate physical scale and a ground-aligned origin. The two habitat parts are staged as separate training modules. Models are requested when a base is established.
 The habitat shells use opaque materials with their original texture maps for Cesium compatibility. Ground patches use georeferenced World Imagery tiles at available levels 13–18. Their geographic bounds are stored with the scene.
+
+The field suit, water reclamation plant, medical bay, geology laboratory and logistics depot are original MissionForge glTF models. Rebuild them with `node scripts/build-station-models.mjs`. The articulated suit provides the moving mission crew. The original NASA astronaut remains in the asset library.

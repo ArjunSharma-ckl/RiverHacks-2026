@@ -1,3 +1,4 @@
+import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
 import "./design.css";
 import { sites, profiles, coords, rank, interpret, factors } from "./sites.js";
@@ -51,6 +52,7 @@ const photo = (s) =>
     : "";
 const cache = {},
   obs = new Map();
+let crewIndex = 0;
 let cameraPreset = "Overview";
 let site = sites[0],
   profile = 0,
@@ -139,21 +141,69 @@ const resourceName = {
   food: "Food",
 };
 const current = () => obs.get(site.id) || {};
+function lensContent() {
+  return ["Helmet", "Follow crew"].includes(cameraPreset) && page === "control"
+    ? `<div><b>${cameraPreset === "Helmet" ? "HELMET CAM" : "CHASE CAM"}　/　${roster[crewIndex]}</b><span>${dutyPose(mission, crewIndex).status} · ${vitals(mission, crewIndex).pulse} BPM</span></div>${btn("overviewCamera", "Exit camera")}`
+    : "";
+}
 const viewport = () =>
-  `<div class="viewport"><span class="maptag">${page === "control" ? "Surface operations" : "Earth observation"}</span>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><span class="maptag">${page === "control" ? "Surface operations" : "Earth observation"}</span>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
 function home() {
   return `<section class="hero">${viewport()}<div class="heroText">${label("Earth-to-Mars mission preparation")}<h1>Find Earth.<br><em>Prepare for Mars.</em></h1><p>Discover Mars analog sites on Earth, establish a research habitat, and put your crew to the test.</p><div class="actions"><a class="primary" href="#discover">Find a Mars analog site　→</a><a class="quiet" href="#mission">Explore simulation ↗</a></div></div><div class="mapfoot">WGS 84　 /　 NASA BLUE MARBLE</div></section><section class="catalog"><div class="sectionhead"><div>${label("Terrestrial analogs")}<h2>Field site atlas</h2></div>${btn("discover", "Explore all 6 sites　→")}</div><div class="cardgrid">${[sites[0], sites[1], sites[2]].map((s) => `<button class="card" data-act="site:${s.id}"><div class="imageband">${photo(s)}<span class="tag">${s.type.toUpperCase()}</span></div><div class="cardfoot"><div><small>${s.country.toUpperCase()}</small><h3>${s.name}</h3></div><b>↗</b></div></button>`).join("")}</div><div class="foot"><small>Earth is our proving ground.</small><small>Imagery © Esri and contributors</small></div></section>`;
+}
+function reasoning(s) {
+  const r = ranking(s),
+    total = r.w.reduce((sum, w, i) => sum + (r.scores[i] === null ? 0 : w), 0);
+  if (!total) return "Environmental inputs unavailable.";
+  const entries = r.scores.flatMap((value, i) =>
+    value === null
+      ? []
+      : [
+          {
+            i,
+            points: (value * r.w[i]) / total,
+            loss: ((100 - value) * r.w[i]) / total,
+          },
+        ],
+  );
+  const best = entries.slice().sort((a, b) => b.points - a.points)[0],
+    limit = entries.slice().sort((a, b) => b.loss - a.loss)[0];
+  const observations = [
+    fmt(annual(s, "T2M")) +
+      " °C mean, " +
+      fmt(annual(s, "PRECTOTCORR"), 2) +
+      " mm/day rain",
+    s.surface,
+    fmt(annual(s, "ALLSKY_SFC_SW_DWN"), 2) + " kWh/m²/day",
+    s.isolation + "/100 field estimate",
+    s.access + "/100 field estimate",
+    fmt(annual(s, "T2M")) + " °C mean",
+  ];
+  return (
+    factors[best.i] +
+    " contributes " +
+    fmt(best.points) +
+    " points (" +
+    observations[best.i] +
+    "). " +
+    (limit.loss > 0.05
+      ? factors[limit.i] +
+        " costs " +
+        fmt(limit.loss) +
+        " points relative to a perfect match."
+      : "All available criteria meet their targets.")
+  );
 }
 function rows() {
   return ranked()
     .map(
       (s) =>
-        `<button class="row" data-act="site:${s.id}">${photo(s)}<span><strong>${s.name}</strong><small>${s.country} · ${s.type}</small></span><b>${ranking(s).score ?? "—"}</b></button>`,
+        `<button class="row" data-act="site:${s.id}">${photo(s)}<span><strong>${s.name}</strong><small>${s.country} · ${s.type}</small><span class="score-reason">${esc(reasoning(s))}</span></span><b>${ranking(s).score ?? "—"}</b></button>`,
     )
     .join("");
 }
 function discover() {
-  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Scores use the selected mission weights. Each row shows its largest contribution and largest deduction.</p><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
 function breakdown(s) {
   const r = ranking(s);
@@ -233,8 +283,41 @@ function spark(vals) {
     hi = Math.max(...data) + 1;
   return `<svg class="spark" viewBox="0 0 120 28" role="img" aria-label="Trend from ${fmt(data[0])} to ${fmt(data.at(-1))}"><polyline fill="none" stroke="currentColor" stroke-width="2" points="${data.map((v, i) => `${(i * 119) / (data.length - 1)},${26 - ((v - lo) / (hi - lo)) * 24}`).join(" ")}"/></svg>`;
 }
+function pulseMonitor(m, i) {
+  const v = vitals(m, i),
+    alert = v.status !== "Nominal",
+    live = page === "control" && playing && m.outcome === "In progress";
+  const beat = "l 11 0 3 -2 4 2 4 0 2 4 3 -22 3 33 3 -17 3 2 4 0 4 -4 5 4 11 0";
+  return `<section class="pulse-monitor ${alert ? "attention" : ""}"><header><small>ASTRA / SUIT TELEMETRY</small><small>${live ? "STREAMING" : "HOLD"} · SIMULATED</small></header><div class="pulse-body"><div><strong>${v.pulse}</strong><small>BPM</small></div><svg viewBox="0 0 260 64" role="img" aria-label="Synthetic heartbeat at ${v.pulse} beats per minute"><g style="--beat:${60 / v.pulse}s;animation-play-state:${live ? "running" : "paused"}"><path d="M0 33 ${Array(7).fill(beat).join(" ")}"/></g></svg></div><footer><b>${v.name}</b><span>SpO₂ ${v.spo2}%　·　${v.status}</span></footer></section>`;
+}
+function crewControls(m) {
+  prepareDuties(m);
+  crewIndex = Math.min(crewIndex, m.cfg.crew - 1);
+  const duty = m.duties[crewIndex],
+    station = stations[duty.key];
+  return `<section class="crew-ops"><h2>Crew operations</h2><div class="fields">${select("operator", "Astronaut", roster.slice(0, m.cfg.crew), roster[crewIndex])}${select(
+    "workorder",
+    "Assignment",
+    Object.values(stations).map((s) => s.task),
+    station.task,
+  )}</div>${line(station.name, dutyPose(m, crewIndex).status)}<div class="actions pills">${btn("helmet", "Helmet view")}${btn("follow", "Follow astronaut")}${btn("overviewCamera", "Station overview")}</div></section>`;
+}
+function workTotals(m) {
+  prepareDuties(m);
+  return (
+    "<h2>Station output</h2>" +
+    Object.entries(stations)
+      .map(([k, s]) =>
+        line(
+          s.output,
+          fmt(m.production[k], k === "water" ? 2 : 0) + " " + s.unit,
+        ),
+      )
+      .join("")
+  );
+}
 function astra(m) {
-  return `<h2>ASTRA crew health</h2><small>Simulated training telemetry · ${m.medkits} medical kits</small>${roster
+  return `<h2>ASTRA crew health</h2>${pulseMonitor(m, Math.min(crewIndex, m.cfg.crew - 1))}<small>Simulated training telemetry · ${m.medkits} medical kits</small>${roster
     .slice(0, m.cfg.crew)
     .map((_, i) => {
       const v = vitals(m, i);
@@ -244,7 +327,8 @@ function astra(m) {
 }
 function control() {
   const m = mission;
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}</div><div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  prepareDuties(m);
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}</div>${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -258,14 +342,14 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load, 2) + " kW")}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
       .filter(([k]) => k !== "rover" || cfg.rover)
       .map(([, v]) => v[0]),
     failures[incident][0],
-  )}${incident === "medical" ? select("medical", "Training scenario", medicalCases, medical) : ""}</div>${btn("inject", "Trigger incident")}${select("camera", "Camera preset", ["Overview", "Habitat", ...(cfg.rover ? ["Rover"] : []), "Astronaut", "Tactical"], cameraPreset)}<small>Simulated systems · ${m.outcome}</small>`;
+  )}${incident === "medical" ? select("medical", "Training scenario", medicalCases, medical) : ""}</div>${btn("inject", "Trigger incident")}${select("camera", "Camera preset", ["Overview", "Habitat", ...(cfg.rover ? ["Rover"] : []), "Helmet", "Follow crew", "Tactical"], cameraPreset)}<small>Simulated systems · ${m.outcome}</small>`;
 }
 function timeline(m) {
   return `<h2>Incident timeline</h2>${m.logs
@@ -276,7 +360,7 @@ function timeline(m) {
 }
 function report() {
   const m = mission;
-  return `<article class="sheet">${label("MF-001 / After-action report")}<h1>${site.name} expedition</h1><p>${esc(m.cfg.objective)} · ${m.cfg.mode} · ${m.cfg.crew} crew</p>${line("Mission outcome", m.outcome)}${line("Elapsed / planned duration", fmt(m.h / SOL, 2) + " / " + m.cfg.days + " sols")}${line("Rover operations", fmt(m.km, 2) + " km")}${line("Energy generated / demanded", fmt(m.generated) + " / " + fmt(m.used) + " kWh")}${line("Objective status", m.outcome === "Planned duration reached" && (!/rover|geolog/i.test(m.cfg.objective) || m.km > 0) ? "Achieved" : "Open")}<h2>Resource balance</h2><table><thead><tr><th>Reserve</th><th>Initial</th><th>Final</th><th>Net change</th></tr></thead><tbody>${Object.entries(
+  return `<article class="sheet">${label("MF-001 / After-action report")}<h1>${site.name} expedition</h1><p>${esc(m.cfg.objective)} · ${m.cfg.mode} · ${m.cfg.crew} crew</p>${line("Mission outcome", m.outcome)}${line("Elapsed / planned duration", fmt(m.h / SOL, 2) + " / " + m.cfg.days + " sols")}${line("Rover operations", fmt(m.km, 2) + " km")}${line("Energy generated / demanded", fmt(m.generated) + " / " + fmt(m.used) + " kWh")}${line("Objective status", m.outcome === "Planned duration reached" && (!/rover|geolog/i.test(m.cfg.objective) || m.km > 0) ? "Achieved" : "Open")}${workTotals(m)}<h2>Resource balance</h2><table><thead><tr><th>Reserve</th><th>Initial</th><th>Final</th><th>Net change</th></tr></thead><tbody>${Object.entries(
     m.resources,
   )
     .map(
@@ -348,6 +432,8 @@ function update() {
       return !oldEl.isEqualNode(newEl);
     },
   });
+  const lens = app.querySelector(".crew-lens");
+  if (lens) lens.innerHTML = lensContent();
   const sceneNote = app.querySelector(".scene-note");
   if (equip) {
     const el = sceneNote ?? document.createElement("div");
@@ -366,7 +452,7 @@ function displayScene() {
   else if (page === "inspect") scene.inspect(site);
   else if (["design", "control"].includes(page)) {
     scene.place(site, cfg);
-    if (page === "control") scene.sync(mission);
+    if (page === "control") scene.sync(mission, playing ? speed : 0);
   }
 }
 function route() {
@@ -386,7 +472,11 @@ function route() {
         : "design"
       : "home";
   if (!mission && ["control", "report"].includes(page)) page = "design";
-  if (page !== "control") playing = false;
+  if (page !== "control") {
+    playing = false;
+    scene?.detach();
+    cameraPreset = "Overview";
+  }
   if (mission && ["control", "report"].includes(page)) {
     site = mission.cfg.site;
     cfg = structuredClone(mission.cfg);
@@ -476,6 +566,7 @@ async function loadObs() {
 }
 function launch() {
   incident = "solar";
+  crewIndex = 0;
   cameraPreset = "Overview";
   cfg = {
     ...cfg,
@@ -492,7 +583,7 @@ function launch() {
 function tick(h) {
   advance(mission, h);
   if (mission.outcome !== "In progress") playing = false;
-  scene?.sync(mission);
+  scene?.sync(mission, playing ? speed : 0);
   save();
   update();
 }
@@ -547,9 +638,27 @@ app.addEventListener("change", (e) => {
     delete current().fires;
     loadObs();
   }
+  if (id === "operator") {
+    crewIndex = roster.indexOf(value);
+    if (["Helmet", "Follow crew"].includes(cameraPreset))
+      scene?.view(cameraPreset, crewIndex);
+    update();
+    return;
+  }
+  if (id === "workorder") {
+    const key = Object.keys(stations).find((k) => stations[k].task === value);
+    if (assignDuty(mission, crewIndex, key)) {
+      log(mission, roster[crewIndex] + " assigned to " + stations[key].name);
+      scene?.sync(mission, playing ? speed : 0);
+      save();
+    }
+    update();
+    return;
+  }
   if (id === "camera") {
     cameraPreset = value;
-    scene?.view(value);
+    scene?.view(value, crewIndex);
+    update();
     return;
   }
   if (id === "research") {
@@ -563,6 +672,16 @@ app.addEventListener("click", async (e) => {
   if (!button) return;
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
+  if (["helmet", "follow", "overviewCamera"].includes(act)) {
+    cameraPreset = {
+      helmet: "Helmet",
+      follow: "Follow crew",
+      overviewCamera: "Overview",
+    }[act];
+    scene?.view(cameraPreset, crewIndex);
+    update();
+    return;
+  }
   if (
     ["home", "discover", "inspect", "design", "control", "report"].includes(act)
   )
@@ -697,9 +816,16 @@ app.addEventListener("click", async (e) => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     return;
   }
-  scene?.sync(mission);
+  scene?.sync(mission, playing ? speed : 0);
   save();
   update();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ["Helmet", "Follow crew"].includes(cameraPreset)) {
+    cameraPreset = "Overview";
+    scene?.view(cameraPreset);
+    update();
+  }
 });
 window.addEventListener("hashchange", route);
 route();
@@ -708,6 +834,11 @@ try {
   scene = createScene((id) => {
     const s = sites.find((x) => x.id === id);
     if (s) return choose(s);
+    if (page === "control" && /^crew[0-9]+$/.test(id)) {
+      crewIndex = Number(id.slice(4));
+      if (["Helmet", "Follow crew"].includes(cameraPreset))
+        scene?.view(cameraPreset, crewIndex);
+    }
     equip = id.startsWith("crew")
       ? roster[Number(id.slice(4))] + " · " + cfg.roles[Number(id.slice(4))]
       : id.startsWith("Solar")
@@ -725,11 +856,5 @@ try {
     "3D Earth unavailable · WebGL 2 required";
 }
 setInterval(() => {
-  if (
-    playing &&
-    page === "control" &&
-    !document.hidden &&
-    !["SELECT", "INPUT"].includes(document.activeElement.tagName)
-  )
-    tick(0.1 * speed);
+  if (playing && page === "control" && !document.hidden) tick(0.1 * speed);
 }, 3000);

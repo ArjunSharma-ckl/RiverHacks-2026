@@ -2,6 +2,8 @@ import * as C from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { createViewer, addBaseImagery } from "../viewer.js";
 import { initLayers, getLayer } from "../layers.js";
+import { crewScene } from "./crew-scene.js";
+import { stations } from "./duties.js";
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 export function createScene(onPick) {
@@ -17,7 +19,14 @@ export function createScene(onPick) {
   scene.screenSpaceCameraController.minimumZoomDistance = 1;
   viewer.shadows = false;
   viewer.targetFrameRate = 30;
-  viewer.resolutionScale = Math.min(devicePixelRatio, 1.25);
+  viewer.useBrowserRecommendedResolution = true;
+  viewer.resolutionScale = Math.min(
+    2,
+    Math.max(1, devicePixelRatio),
+    Math.sqrt(3600000 / Math.max(1, innerWidth * innerHeight)),
+  );
+  scene.msaaSamples = 4;
+  scene.postProcessStages.fxaa.enabled = true;
   const pins = new C.CustomDataSource("Analog field sites"),
     base = new C.CustomDataSource("Surface station"),
     fires = new C.CustomDataSource("FireWatch");
@@ -64,6 +73,7 @@ export function createScene(onPick) {
   const duration = () =>
     matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1.05;
   function overview() {
+    actors.reset();
     groundClick = null;
     placed = false;
     base.entities.removeAll();
@@ -72,6 +82,7 @@ export function createScene(onPick) {
     camera.flyTo({ destination: pos(-68, -6, 11900000), duration: duration() });
   }
   function inspect(s) {
+    actors.reset();
     site = s;
     groundClick = null;
     placed = false;
@@ -91,12 +102,23 @@ export function createScene(onPick) {
       site.lat + north / 111320,
       z,
     );
+  const actors = crewScene(viewer, base, local);
   function model(id, file, e, n) {
     base.entities.add({
       id,
       position: local(e, n),
       model: {
         uri: "/models/mission/" + file + ".glb",
+        ...(file === "field-suit"
+          ? {
+              nodeTransformations: Object.fromEntries(
+                ["LegL", "LegR", "ArmL", "ArmR"].map((name) => [
+                  name,
+                  { rotation: C.Quaternion.IDENTITY },
+                ]),
+              ),
+            }
+          : {}),
         heightReference: C.HeightReference.CLAMP_TO_GROUND,
         imageBasedLightingFactor: new C.Cartesian2(1, 1),
       },
@@ -113,8 +135,9 @@ export function createScene(onPick) {
       },
     });
   }
-  function view(preset = "Overview") {
+  function view(preset = "Overview", astronaut = 0) {
     if (!placed) return;
+    if (actors.cameraMode(preset, astronaut)) return;
     const e =
       preset === "Rover"
         ? base.entities.getById("Rover")
@@ -133,7 +156,7 @@ export function createScene(onPick) {
           0.55,
           preset === "Tactical" ? -1.55 : -0.62,
           preset === "Overview"
-            ? 35
+            ? 52
             : preset === "Tactical"
               ? 67
               : preset === "Habitat"
@@ -179,9 +202,11 @@ export function createScene(onPick) {
     base.entities.removeAll();
     model("Habitat", "habitat", 0, 0);
     model("Science module", "habitat2", -8, 3);
+    for (const station of Object.values(stations))
+      model(station.name, station.model, ...station.at);
     if (c.rover) model("Rover", "rover", 7, -5);
     for (let i = 0; i < c.crew; i++)
-      model("crew" + i, "crew", -3 + i * 1.6, -5 + (i % 2) * 1.3);
+      model("crew" + i, "field-suit", -3 + i * 1.6, -5 + (i % 2) * 1.3);
     for (let i = 0; i < 4; i++) {
       box(
         "Array support " + i,
@@ -205,8 +230,9 @@ export function createScene(onPick) {
     });
     view();
   }
-  function sync(m) {
+  function sync(m, rate = 0) {
     if (!placed) return;
+    actors.sync(m, rate);
     for (let i = 0; i < 4; i++)
       base.entities.getById("Solar " + i).box.material = m.active.solar
         ? orange
@@ -230,6 +256,7 @@ export function createScene(onPick) {
   overview();
   return {
     skip: () => camera.completeFlight(),
+    detach: actors.reset,
     overview,
     inspect,
     place,

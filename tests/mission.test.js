@@ -126,3 +126,29 @@ test("rover uses its own pack, recharges from the habitat and obeys link state",
   assert.equal(m.roverEnergy, 2.4);
   assert.ok(m.used - before > cfg.load);
 });
+
+test("crew duty work credits, reassignments and medical holds share the mission clock", async () => {
+  const { prepareDuties, assignDuty, dutyPose } =
+    await import("../src/missionforge/duties.js");
+  const m = start(cfg);
+  prepareDuties(m);
+  assert.equal(assignDuty(m, 0, "water"), true);
+  advance(m, 0.5);
+  assert.equal(dutyPose(m, 0).working, true);
+  assert.equal(m.production.water, 0);
+  advance(m, 0.26);
+  assert.equal(m.production.water, 0.35);
+  const position = dutyPose(m, 0);
+  assignDuty(m, 0, "med");
+  assert.deepEqual(m.duties[0].origin, [position.x, position.y]);
+  inject(m, "medical");
+  advance(m, 1);
+  assert.equal(m.duties[0].elapsed, 0);
+  respond(m, "medical", 2);
+  advance(m, 2.5);
+  assert.ok(Math.abs(m.duties[0].elapsed - 0.5) < 1e-8);
+  inject(m, "storm");
+  const before = structuredClone(m.production);
+  advance(m, 1);
+  assert.deepEqual(m.production, before);
+});
