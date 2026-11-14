@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: riverhacks-2026
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Optional. Without them the app still runs: GIBS imagery, EONET events
+      # and POWER surface data need no key at all.
+      - key: NASA_API_KEY            # api.nasa.gov - DONKI space weather, APOD
+        sync: false
+      - key: VITE_CESIUM_ION_ACCESS_TOKEN  # world terrain; read at build time
+        sync: false
+      - key: SERPAPI_KEY             # optional web-search enrichment
+        sync: false
+      - key: FIRMS_MAP_KEY           # optional FIRMS active-fire detections
+        sync: false

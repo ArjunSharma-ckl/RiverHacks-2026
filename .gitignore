@@ -1,3 +1,7 @@
+node_modules/
+dist/
+.env.local
+.vercel/
 __pycache__/
 *.py[cod]
 backend/data/observations.jsonl
