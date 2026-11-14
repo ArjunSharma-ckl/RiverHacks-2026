@@ -5,7 +5,9 @@ import * as C from 'cesium';
 // what pushes Earth into a corner of the window.
 export const HOME = { longitude: -62, latitude: 18, height: 24000000 };
 
-const ORBIT_RATE = 0.6;    // radians per second
+const ORBIT_RATE = 0.6;    // radians per second, when circling a tracked object
+const GROUND_RATE = 0.5;   // fraction of the visible ground width per second
+const EARTH_RADIUS = 6378137;
 const ZOOM_RATE = 1.1;     // fraction of the current distance per second
 const BOOST = 2.6;         // multiplier while Shift is held
 const TAP = 0.16;          // seconds of travel for a single click or tap
@@ -49,7 +51,13 @@ export function createControls(viewer, { onEscape } = {}) {
     // Constraining to the polar axis keeps "up" meaning north and stops the
     // view tumbling over the pole.
     camera.constrainedAxis = viewer.trackedEntity ? undefined : C.Cartesian3.UNIT_Z;
-    const angle = ORBIT_RATE * seconds;
+    // A fixed angular rate sweeps thousands of kilometres of ground per second
+    // when you are zoomed in close. Scaling the rate by altitude keeps the
+    // apparent speed the same at every zoom level: roughly two seconds to
+    // cross the view, whether that view is 20,000 km or 200 m wide.
+    const angle = (viewer.trackedEntity
+      ? ORBIT_RATE
+      : C.Math.clamp(GROUND_RATE * distance() / EARTH_RADIUS, 1e-6, 0.55)) * seconds;
     if (direction === 'up') return camera.rotateUp(angle);
     if (direction === 'down') return camera.rotateDown(angle);
     if (direction === 'left') return camera.rotateLeft(angle);
