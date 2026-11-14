@@ -18,6 +18,7 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Serve the saved lunar temperature snapshot and provide an explicit refresh operation.
 - [x] Sample published M3-derived lunar south-polar mineral abundance maps at the nine Artemis candidate points and save matched JSON records.
 - [x] Serve the saved lunar mineral snapshot and provide an explicit refresh operation.
+- [x] Resolve named lunar features through the USGS/IAU Gazetteer-backed service and return colocated Diviner temperature and M3-derived mineral samples when available.
 
 ## Implementation decisions
 
@@ -59,3 +60,4 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 - Each mineral record is keyed to the matching temperature snapshot's `landing_site_id`, mission, status, name, representative point, and sampled cell. It stores source array values for olivine, plagioclase, low- and high-calcium pyroxene, and SmFe; no scale conversion is applied because the record does not specify a percent/fraction scale.
 - The first collection downloads the 63 MB file, verifies its published size and MD5 checksum, and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to choose another cache directory. Refresh requires `h5py` (`python -m pip install -r requirements.txt`).
 - Run `python -m backend.lunar_minerals` or send `POST /api/lunar-minerals/refresh` to save `backend/data/lunar_minerals.json`; read it with `GET /api/lunar-minerals`. These are single-pixel representative samples, not means over candidate-region boundaries. The product is lunar-only and supplies no Mars mineral data.
+- `GET /api/lunar-location?name=Tycho` resolves a lunar crater/mountain name using GeoCode (whose feature list is sourced from the USGS/IAU Gazetteer), and samples both source products at the gazetteer feature center when their local caches are present. It returns per-product `available`/`unavailable` statuses; exact Artemis candidate names can instead return their saved representative-point samples with a note that the coordinate can differ from the gazetteer feature center. Ambiguous matches return HTTP 409, unknown names HTTP 404. Refresh the temperature/mineral collectors once to cache full products for arbitrary feature sampling.

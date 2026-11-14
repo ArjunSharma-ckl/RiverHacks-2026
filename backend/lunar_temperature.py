@@ -206,6 +206,68 @@ def _distance_km(latitude: float, longitude: float, point: dict) -> float:
     return math.hypot(dx, dy)
 
 
+def cached_pds_product_path() -> Path | None:
+    """Return the downloaded Diviner table when it is present and complete."""
+    path = _cache_path()
+    if path.is_file() and path.stat().st_size == PDS_TABLE_BYTES:
+        return path
+    return None
+
+
+def sample_temperature_at_point(
+    table_path: Path | str,
+    latitude: float,
+    longitude_east: float,
+    max_distance_km: float = SEARCH_RADIUS_KM,
+) -> dict | None:
+    """Find and return the nearest Diviner PRP mesh cell around a Moon point."""
+    if not math.isfinite(latitude) or not math.isfinite(longitude_east):
+        raise ValueError("Latitude and longitude must be finite numbers.")
+    if not -90.0 <= latitude <= 90.0:
+        raise ValueError("Latitude must be between -90 and 90 degrees.")
+    if not math.isfinite(max_distance_km) or max_distance_km <= 0:
+        raise ValueError("max_distance_km must be a positive finite number.")
+
+    point = {"latitude": latitude, "longitude_east": longitude_east % 360.0}
+    best = None
+    latitude_margin = max_distance_km / KM_PER_DEGREE
+    longitude_margin = min(
+        180.0,
+        max_distance_km
+        / (KM_PER_DEGREE * max(1e-6, math.cos(math.radians(latitude)))),
+    )
+    with Path(table_path).open("rb") as stream:
+        stream.readline()
+        for raw_line in stream:
+            values = _row_values(raw_line)
+            if values is None:
+                continue
+            longitude, cell_latitude, temperature_k = values
+            if abs(cell_latitude - latitude) > latitude_margin:
+                continue
+            if abs(_longitude_delta_degrees(longitude, point["longitude_east"])) > longitude_margin:
+                continue
+            distance = _distance_km(cell_latitude, longitude, point)
+            if distance <= max_distance_km and (best is None or distance < best[0]):
+                best = (distance, cell_latitude, longitude, temperature_k)
+
+    if best is None:
+        return None
+    distance, cell_latitude, cell_longitude, temperature_k = best
+    return {
+        "sample_cell": {
+            "latitude": cell_latitude,
+            "longitude_east": cell_longitude,
+            "distance_from_reference_km": round(distance, 4),
+        },
+        "temperature": {
+            "annual_average_kelvin": round(temperature_k, 3),
+            "annual_average_celsius": round(temperature_k - 273.15, 3),
+            "depth_below_surface_m": 0.02,
+        },
+    }
+
+
 def sample_candidate_points(table_path: Path | str, candidate_sites: list[dict]) -> list[dict]:
     """Find nearest PRP mesh cells for mapped Artemis candidate-region points."""
     mapped_sites = []

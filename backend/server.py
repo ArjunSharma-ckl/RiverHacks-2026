@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from backend.catalog import EQUIPMENT_BY_ID, PHASES, PHASE_BY_ID, RESOURCES
 from backend.landing_sites import load_snapshot
+from backend.lunar_location import lookup_lunar_location
 from backend.lunar_minerals import load_mineral_snapshot, refresh_lunar_minerals
 from backend.lunar_temperature import load_temperature_snapshot, refresh_lunar_temperatures
 from backend.storage import append_observation, list_observations
@@ -166,6 +167,24 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                         item for item in snapshot["candidate_sites"] if item["body"] == body
                     ]
                 self._send_json(200, snapshot)
+                return
+            if parsed.path == "/api/lunar-location":
+                name = query.get("name", [None])[0]
+                if name is None or not name.strip():
+                    raise RequestError("name is required and must contain a lunar crater or mountain name.")
+                try:
+                    result = lookup_lunar_location(name)
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except (OSError, RuntimeError) as error:
+                    self._send_json(502, {"error": "Could not resolve the lunar feature or sample its data.", "detail": str(error)})
+                    return
+                status_code = {
+                    "resolved": 200,
+                    "ambiguous": 409,
+                    "not-found": 404,
+                }.get(result["status"], 500)
+                self._send_json(status_code, result)
                 return
             if parsed.path == "/api/lunar-temperatures":
                 try:

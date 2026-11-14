@@ -61,6 +61,14 @@ def _cache_path() -> Path:
     return cache_dir / PRODUCT_ID.lower()
 
 
+def cached_mineral_product_path() -> Path | None:
+    """Return the expected-size mineral cube from the configured local cache."""
+    path = _cache_path()
+    if path.is_file() and path.stat().st_size == PRODUCT_BYTES:
+        return path
+    return None
+
+
 def _has_expected_checksum(path: Path) -> bool:
     if not path.is_file() or path.stat().st_size != PRODUCT_BYTES:
         return False
@@ -245,6 +253,49 @@ def sample_mineral_sites(product_path: Path | str, candidate_sites: list[dict]) 
             }
             records.append(record)
     return sorted(records, key=lambda item: item["site_name"] or "")
+
+
+def sample_mineral_at_point(
+    product_path: Path | str,
+    latitude: float,
+    longitude_east: float,
+) -> dict | None:
+    """Sample all mineral bands at an arbitrary south-polar coordinate."""
+    try:
+        row, column, pixel_x, pixel_y = _pixel_for_point(latitude, longitude_east)
+    except ValueError:
+        return None
+    h5py = _load_hdf5()
+    with h5py.File(product_path, "r") as product:
+        if HDF5_DATASET not in product:
+            raise RuntimeError(f"{PRODUCT_ID} is missing the expected {HDF5_DATASET} array.")
+        cube = product[HDF5_DATASET]
+        if cube.shape != HDF5_SHAPE:
+            raise RuntimeError(
+                f"Unexpected mineral cube shape {cube.shape}; expected {HDF5_SHAPE}."
+            )
+        # HDF5's MATLAB dimension reversal means [band, column, row].
+        abundance = {
+            name: float(cube[band, column, row])
+            for name, band in MINERAL_BANDS.items()
+        }
+    if not all(math.isfinite(value) for value in abundance.values()):
+        return None
+    sample_lat, sample_lon = _inverse_project_south_polar(pixel_x, pixel_y)
+    return {
+        "sample_cell": {
+            "latitude": sample_lat,
+            "longitude_east": sample_lon,
+            "distance_from_reference_km": round(
+                _distance_km(latitude, longitude_east, sample_lat, sample_lon), 4
+            ),
+        },
+        "mineral_composition": {
+            "abundance_values": abundance,
+            "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+            "map_pixel": {"row": row, "column": column},
+        },
+    }
 
 
 def build_mineral_snapshot(candidate_sites: list[dict], product_path: Path | str) -> dict:

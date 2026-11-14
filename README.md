@@ -21,6 +21,7 @@ The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `
 - `GET /api/resources` — provider catalog and documented service entry points.
 - `GET /api/landing-sites` — saved NASA Moon and Mars targets plus candidate regions.
 - `GET /api/landing-sites?body=Moon` — filter landing targets by body (`Moon` or `Mars`).
+- `GET /api/lunar-location?name=Tycho` — resolve an IAU-named lunar feature and return coordinates with temperature and mineral composition when available.
 - `GET /api/lunar-temperatures` — saved annual-average Diviner temperature samples for the nine Artemis lunar candidate regions.
 - `POST /api/lunar-temperatures/refresh` — query the NASA PDS Diviner south-polar table and replace the temperature snapshot.
 - `GET /api/lunar-minerals` — saved mineral abundance samples for the nine Artemis lunar candidate regions.
@@ -66,6 +67,16 @@ python -m backend.lunar_minerals
 ```
 
 The first run downloads about 63 MB and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to change the cache location. The JSON snapshot `backend/data/lunar_minerals.json` uses the same top-level and site identity/reference-point shape as `lunar_temperatures.json`, with `mineral_composition` in place of `temperature`. It preserves raw source values without interpreting them as percent or fraction. Each value samples one nearest map pixel, not the average composition of the full candidate region. The product covers lunar polar terrain only and does not provide Mars mineral data.
+
+### Look up a lunar crater or mountain
+
+Use the combined lookup endpoint with a feature name, for example:
+
+```text
+GET /api/lunar-location?name=Tycho
+```
+
+The backend resolves feature names through GeoCode, which uses the USGS/IAU Gazetteer of Planetary Nomenclature. It returns the gazetteer feature center, then samples the nearest Diviner temperature mesh cell and the corresponding M3-derived mineral map pixel when the source products are cached. Run `python -m backend.lunar_temperature` and `python -m backend.lunar_minerals` (or their API refresh routes) first to cache those products. Known Artemis candidate names can use their saved representative-point snapshots if a full product is not cached; the response marks that these coordinates may differ from the feature center. Data fields include an availability status and reason when a product does not cover a feature or is not cached. Ambiguous gazetteer matches return HTTP 409 with candidate names; unknown names return HTTP 404.
 
 Example observation:
 
