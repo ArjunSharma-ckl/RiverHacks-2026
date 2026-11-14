@@ -20,6 +20,7 @@ This file is the project's durable memory for backend scope, decisions, and comp
 - [x] Serve the saved lunar mineral snapshot and provide an explicit refresh operation.
 - [x] Resolve named lunar features through the USGS/IAU Gazetteer-backed service and return colocated Diviner temperature and M3-derived mineral samples when available.
 - [x] Match lunar mineral abundance vectors against georeferenced Earth rock-mode samples and save the top ten per lunar site as GeoJSON with match percentages.
+- [x] Match annual lunar surface temperatures against global Earth land-surface-temperature grid cells and save the top ten per lunar site as GeoJSON with match percentages.
 
 ## Implementation decisions
 
@@ -69,3 +70,10 @@ Each observation supports an open-ended `measurements` object so phase-specific 
 - Export `ROCK MODE` / `Whole Rock` data with `OL[MODE]`, `PLAG[MODE]`, `OPX[MODE]`, and `CPX[MODE]` columns from PetDB, then run `python -m backend.earth_mineral_matches --earth-data <export.csv>`. JSON and GeoJSON exports are also accepted. The script reads the existing lunar mineral snapshot and atomically writes `backend/data/earth_mineral_matches.geojson`; `--top` changes the default 10 matches per lunar site.
 - A GeoJSON feature represents one georeferenced Earth sample matched to one lunar candidate. `match_percentage` is a normalized L1-composition similarity: `100 × (1 − L1 distance / 2)`, where 100 means identical relative proportions and 0 means maximally different. Every input vector is normalized over the four shared mineral groups before scoring.
 - The mapper pairs lunar low-/high-calcium pyroxene with Earth OPX/CPX as broad family analogues, excludes the lunar-only SmFe channel, requires all four measured Earth modes and valid coordinates, and skips rows explicitly marked wt% or mol%. EarthChem coverage is sample-based, not a continuous map; the score is similarity, not probability. No EarthChem export is vendored, so the GeoJSON is generated when the user supplies a PetDB export.
+
+## Earth temperature matches memory
+
+- `backend/earth_temperature_matches.py` ranks NASA MODIS Terra `MOD11C3.061` monthly global land-surface-temperature grid cells against the nine saved Diviner lunar candidate temperatures. MOD11C3 V061 is a 0.05-degree global monthly product with day/night temperatures; average both channels and the annual monthly values to create a comparable annualized Earth grid.
+- Provide a CSV, JSON, or GeoJSON with one row per Earth grid cell, coordinates, and an annual average temperature field in kelvin or Celsius. Run `python -m backend.earth_temperature_matches --earth-data <annual-grid.csv>` to save the top ten per lunar site to `backend/data/earth_temperature_matches.geojson`; `--top`, `--lunar-data`, and `--output` are configurable.
+- Every GeoJSON feature includes `match_percentage`, defined as `100 × min(lunar K, Earth K) / max(lunar K, Earth K)`. It is a symmetric temperature-ratio similarity score (100 for equal temperatures), not a probability. Earth grid positions are sample cell centers, not weather stations. Earth MODIS clear-sky surface temperatures are not directly equivalent to the lunar thermal-model annual average at 2 cm depth, so interpret matches as rough temperature analogues only.
+- No Earth MODIS annual grid export is included in the repository; the GeoJSON is generated when the annualized data file is supplied.

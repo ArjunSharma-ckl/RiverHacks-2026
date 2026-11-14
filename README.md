@@ -55,6 +55,20 @@ The first refresh downloads the approximately 605 MB south-polar PDS table and c
 
 The server also exposes an explicit `POST /api/lunar-temperatures/refresh` operation and returns the saved snapshot from `GET /api/lunar-temperatures`. No Earth-location temperatures are populated yet; the current JSON contains the lunar half of the comparison.
 
+### Find Earth locations with similar temperatures
+
+NASA Earthdata's [MODIS/Terra MOD11C3 V061](https://search.earthdata.nasa.gov/search?q=C2565788897-LPCLOUD) provides monthly global land-surface temperatures on a 0.05-degree grid, with separate daytime and nighttime values. The [LP DAAC product guide](https://lpdaac.usgs.gov/documents/118/MOD11_User_Guide_V6.pdf) documents the product family and grid. For an annual comparison, create one row per Earth grid cell by averaging valid daytime and nighttime LST and then averaging the monthly values for a selected year or period. Convert values to kelvin before exporting; omit fill values.
+
+Run the matcher with that annualized grid:
+
+```powershell
+python -m backend.earth_temperature_matches --earth-data path\to\modis-annual-lst.csv
+```
+
+The CSV needs `latitude`, `longitude`, and `annual_average_kelvin` columns. It also accepts JSON or GeoJSON with the same fields, Celsius annual-temperature fields, or separate annual daytime/nighttime Kelvin fields. The script reads `backend/data/lunar_temperatures.json` and writes `backend/data/earth_temperature_matches.geojson`, with up to ten Earth grid locations per lunar candidate. Each feature includes `match_percentage`, both temperatures, absolute difference, data period, site, and rank. The percentage is `100 × min(lunar K, Earth K) / max(lunar K, Earth K)`: equal temperatures score 100 and larger relative differences score lower.
+
+MODIS values are clear-sky Earth surface temperatures; lunar values are modeled annual averages at 2 cm depth. Treat matches as rough temperature analogues, not like-for-like measurements. This repository does not include an annualized MODIS grid, so the GeoJSON is generated when the Earth data file is supplied. `--top`, `--lunar-data`, and `--output` adjust the run.
+
 ### Lunar mineral composition samples
 
 The collector in `backend/lunar_minerals.py` uses the raw 2201 x 2201 x 5 south-polar mineral abundance cube derived from NASA's Moon Mineralogy Mapper (M3) observations and calibrated using LOLA reflectance. The published [Zenodo raw-data release](https://zenodo.org/records/20725024) includes olivine, plagioclase, low- and high-calcium pyroxene, and SmFe at approximately 193 m/pixel; the peer-reviewed [study](https://doi.org/10.1029/2024JE008842) describes coverage from 83°S to the pole. This is a derived research dataset, not a PDS product itself.
