@@ -24,8 +24,9 @@ export function createHud(root, context) {
   const sections = element('div', 'hud-body');
 
   function section(heading) {
-    const node = element('section');
-    node.append(element('h3', undefined, heading));
+    const node = element('details', 'tool-group');
+    node.open = heading === 'Satellite tracking';
+    node.append(element('summary', undefined, heading));
     sections.append(node);
     return node;
   }
@@ -76,6 +77,7 @@ export function createHud(root, context) {
   viewer.trackedEntityChanged.addEventListener(entity => { selector.value = entity?.id || ''; });
   fleet.append(selector);
   catalogControls(fleet,satellites,context.chooseContact);
+  sections.prepend(fleet);
   // Weather
   const weatherSection = section('Weather');
   const status = element('p', 'status');
@@ -183,8 +185,10 @@ export function createHud(root, context) {
   }, 500);
 
   const hideButton = document.getElementById('hud-toggle');
+  hideButton.setAttribute('aria-expanded', 'true');
   hideButton.onclick = () => {
     const hidden = root.classList.toggle('collapsed');
+    hideButton.setAttribute('aria-expanded', String(!hidden));
     hideButton.textContent = hidden ? 'Show controls' : 'Hide controls';
   };
 

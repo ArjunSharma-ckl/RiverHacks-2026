@@ -58,8 +58,8 @@ export function createControls(viewer, { onEscape } = {}) {
     const angle = (viewer.trackedEntity
       ? ORBIT_RATE
       : C.Math.clamp(GROUND_RATE * distance() / EARTH_RADIUS, 1e-6, 0.55)) * seconds;
-    if (direction === 'up') return camera.rotateUp(angle);
-    if (direction === 'down') return camera.rotateDown(angle);
+    if (direction === 'up') return camera.rotateDown(angle);
+    if (direction === 'down') return camera.rotateUp(angle);
     if (direction === 'left') return camera.rotateLeft(angle);
     if (direction === 'right') return camera.rotateRight(angle);
 
