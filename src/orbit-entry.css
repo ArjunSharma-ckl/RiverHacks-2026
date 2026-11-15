@@ -34,11 +34,12 @@
   top: 72px !important;
   max-height: calc(100vh - 92px) !important;
 }
+/* Widen the canvas instead of sliding it: a transform moved the globe right
+   but left a strip of bare page down the left side, so the starfield stopped
+   at a hard edge. Oversizing keeps the canvas covering the whole viewport
+   while still centring the globe 12% to the right, clear of the headline. */
 .intro-open #cesiumContainer {
-  transform: translateX(12%);
-}
-body.intro-open {
-  background: #030609;
+  width: 124%;
 }
 #orbit-intro {
   position: absolute;
@@ -103,7 +104,8 @@ body.intro-open {
     display: none;
   }
   .intro-open #cesiumContainer {
-    transform: translateY(-14%);
+    height: 128%;
+    margin-top: -28%;
   }
   #orbit-intro {
     background: linear-gradient(transparent, #060b0cec 24%);
