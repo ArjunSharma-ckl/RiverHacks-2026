@@ -55,10 +55,14 @@ const bar = (n) =>
   `<span class="chart"><i style="width:${Math.max(0, Math.min(100, n))}%"></i></span>`;
 const label = (s) => `<span class="eyebrow"><i class="tick"></i>${s}</span>`;
 const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "Unavailable");
-const photo = (s) =>
-  ['atacama','death','haughton','iceland','mauna','mcmurdo'].includes(s.id)
-    ? `<img alt="Satellite view of ${s.name}" src="/assets/mission/${s.id}.jpg">`
-    : `<div class="site-image-fallback" role="img" aria-label="No site photograph available"><span>${esc(s.type||'Field site')}</span></div>`;
+const SITE_PHOTO_FALLBACK = {
+  snake: '/analogs/lava-beds-earth.webp',
+  kilauea: '/analogs/kilauea-earth.webp'
+};
+const photo = (s) => {
+  const fallback = SITE_PHOTO_FALLBACK[s.id] || '/analogs/atacama-earth.webp';
+  return `<img alt="Satellite view of ${s.name}" loading="lazy" src="/assets/mission/${s.id}.jpg" onerror="this.onerror=null;this.src='${fallback}'">`;
+};
 const cache = {},
   obs = new Map();
 let sortBy = "Suitability",

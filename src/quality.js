@@ -8,7 +8,18 @@ export const QUALITY_LEVELS = [
   { id: 'superb', label: 'Superb', resolution: 1.5, msaa: 4, globeError: 1, fxaa: true }
 ];
 
-export function createQuality(viewer, initial = 1) {
+const STORAGE_KEY = 'mf-render-quality';
+
+// The Earth Viewer slider and the mission globe share one saved setting.
+export function savedQualityIndex() {
+  try {
+    const saved = Number(localStorage.getItem(STORAGE_KEY));
+    if (Number.isInteger(saved) && saved >= 0 && saved < QUALITY_LEVELS.length) return saved;
+  } catch {}
+  return 1;
+}
+
+export function createQuality(viewer, initial = savedQualityIndex()) {
   const scene = viewer.scene;
   let index = initial;
   function apply(value) {
@@ -18,6 +29,7 @@ export function createQuality(viewer, initial = 1) {
     scene.msaaSamples = level.msaa;
     scene.globe.maximumScreenSpaceError = level.globeError;
     if (scene.postProcessStages?.fxaa) scene.postProcessStages.fxaa.enabled = level.fxaa;
+    try { localStorage.setItem(STORAGE_KEY, String(index)); } catch {}
     return level;
   }
   apply(index);

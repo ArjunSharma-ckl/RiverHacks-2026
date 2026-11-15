@@ -1,4 +1,4 @@
-import { answerQuestion, research } from './analog-api.js';
+import { answerQuestion, overviewText, research } from './analog-api.js';
 import { sourceLink } from './serp-links.js';
 import { thermalPoints } from './thermal.js';
 import { weatherMap } from './weather-map.js';
@@ -188,27 +188,50 @@ const POWER_PARAMETERS = [
   ['ALLSKY_SFC_SW_DWN', 'Solar irradiance', 'kWh/m²/day']
 ];
 
+// SerpApi snippets arrive HTML-escaped, and Google occasionally answers with
+// an anti-bot page when it does not like a query. Both are cleaned here so the
+// panel never shows raw entities or a robot-check paragraph.
+function plainText(value) {
+  return String(value || '')
+    .replace(/&#(d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .trim();
+}
+
 export function createApi(env = {}, extras = {}) {
   const nasaKey = env.NASA_API_KEY || 'DEMO_KEY';
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
 
   async function pointResearch(q, subject) {
-        async function search(engine) {
-          if (!serpKey) throw new Error('Search unavailable');
-          const params = new URLSearchParams({engine, q, api_key: serpKey});
-          const data = await getJson('https://serpapi.com/search.json?' + params);
-          if (data.error) throw new Error('Search unavailable');
-          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
-            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
-            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
-        }
-        const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
-        const [web, images, nasa] = await Promise.allSettled([
-          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
-        ]);
-        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
-          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+    async function search(engine) {
+      if (!serpKey) throw new Error('Search unavailable');
+      const params = new URLSearchParams({engine, q, api_key: serpKey, num: '8'});
+      const data = await getJson('https://serpapi.com/search.json?' + params);
+      if (data.error) throw new Error('Search unavailable');
+      if (engine === 'google') {
+        const results = (data.organic_results || []).filter(r => r.title && r.title !== 'Untitled' && r.link);
+        const overview = plainText(overviewText(data));
+        const usable = /not a robot|javascript is disabled|unusual traffic/i.test(overview) ? '' : overview;
+        const digest = results.filter(r => r.snippet).slice(0, 2).map(r => plainText(r.snippet)).join(' ');
+        return {
+          links: results.slice(0, 5).map(({title, link, snippet}) => ({title: plainText(title), link, snippet: plainText(snippet)})),
+          explanation: (usable || digest).slice(0, 1600)
+        };
+      }
+      return (data.images_results || []).slice(0, 4)
+        .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+    }
+    const nasaQuery = subject.replace(/[^A-Za-z0-9_ .-]/g, ' ').slice(0,60).trim();
+    const [web, images, nasa] = await Promise.allSettled([
+      search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+    ]);
+    // Google refuses some image queries while the text search still answers, so
+    // only a failed web search makes the research unavailable.
+    return { explanation: web.value?.explanation || '', links: web.value?.links || [],
+      images: images.value || [], nasa: nasa.value?.photos || [],
+      searchUnavailable: web.status === 'rejected' && images.status === 'rejected' };
   }
   const routes = {
     '/cities': async p => {
@@ -467,7 +490,8 @@ export function createApi(env = {}, extras = {}) {
     }
     try {
       res.end(JSON.stringify(await route(url.searchParams)));
-    } catch {
+    } catch (error) {
+      console.error('api error', url.pathname, error);
       res.statusCode = 503;
       const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
       res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));

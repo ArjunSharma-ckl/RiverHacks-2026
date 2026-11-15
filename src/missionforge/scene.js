@@ -10,6 +10,7 @@ import { pointOnRoute } from "./navigation.js";
 import { vitals } from './simulation.js';
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
+import { createQuality } from "../quality.js";
 export function createScene(onPick) {
   const { viewer, scene, camera, lensFlare } = createViewer("atlas");
   enableGlobeSpin(viewer);
@@ -38,8 +39,7 @@ export function createScene(onPick) {
     Math.max(1, devicePixelRatio),
     Math.sqrt(3600000 / Math.max(1, innerWidth * innerHeight)),
   );
-  scene.msaaSamples = 4;
-  scene.postProcessStages.fxaa.enabled = true;
+  createQuality(viewer);
   const pins = new C.CustomDataSource("Analog field sites"),
     base = new C.CustomDataSource("Surface station"),
     itinerary = new C.CustomDataSource("Travel itinerary"),
@@ -62,9 +62,13 @@ export function createScene(onPick) {
       label: {
         text: s.name.toUpperCase(),
         font: "15px sans-serif",
-        horizontalOrigin: C.HorizontalOrigin.LEFT,
-        pixelOffset: new C.Cartesian2(12, 0),
+        horizontalOrigin: C.HorizontalOrigin.CENTER,
+        verticalOrigin: C.VerticalOrigin.BOTTOM,
+        pixelOffset: new C.Cartesian2(0, -14),
         outlineWidth: 3,
+        showBackground: true,
+        backgroundColor: C.Color.fromCssColorString('#101a21').withAlpha(0.72),
+        backgroundPadding: new C.Cartesian2(6, 4),
         style: C.LabelStyle.FILL_AND_OUTLINE,
         heightReference:C.HeightReference.RELATIVE_TO_GROUND,
         disableDepthTestDistance:Number.POSITIVE_INFINITY,
@@ -72,6 +76,28 @@ export function createScene(onPick) {
     });
   }
   sites.forEach(pin);
+  // At world scale the site names crowd each other. Each frame, keep a label
+  // only when its screen box does not collide with one already placed.
+  function declutterLabels() {
+    const boxes = [];
+    const time = viewer.clock.currentTime;
+    for (const entity of pins.entities.values) {
+      if (!entity.label || !entity.position) continue;
+      const position = entity.position.getValue(time);
+      const screen = position && C.SceneTransforms.worldToWindowCoordinates(scene, position);
+      entity.label.show = true;
+      if (!screen) { entity.label.show = false; continue; }
+      const text = String(entity.label.text.getValue(time) ?? '');
+      const width = Math.max(48, text.length * 8.6);
+      const box = { x: screen.x - width / 2 - 6, y: screen.y - 36, w: width + 12, h: 22 };
+      const collides = boxes.some(other =>
+        box.x < other.x + other.w && box.x + box.w > other.x &&
+        box.y < other.y + other.h && box.y + box.h > other.y);
+      if (collides) entity.label.show = false;
+      else boxes.push(box);
+    }
+  }
+  viewer.scene.preRender.addEventListener(declutterLabels);
   let groundClick = null,
     site,
     placed = false;
@@ -108,7 +134,19 @@ export function createScene(onPick) {
   viewer.screenSpaceEventHandler.setInputAction(({endPosition})=>{
     const picked=scene.pick(endPosition)?.id;
     const id=typeof picked==='string'?picked:picked?.id;
-    if(!placed||!id||!base.entities.getById(id)){tooltip.hidden=true;return;}
+    const siteHit = id && sites.find(item => item.id === id);
+    if ((!placed || !base.entities.getById(id)) && !siteHit) { tooltip.hidden = true; return; }
+    if (siteHit) {
+      tooltip.replaceChildren();
+      const heading = document.createElement('strong'), body = document.createElement('span');
+      heading.textContent = siteHit.name;
+      body.textContent = siteHit.country + ' · ' + siteHit.type + '. ' + siteHit.surface + '. ' + siteHit.hazard + '.';
+      tooltip.append(heading, body);
+      tooltip.style.left = (endPosition.x + 18) + 'px';
+      tooltip.style.top = (endPosition.y - 54) + 'px';
+      tooltip.hidden = false;
+      return;
+    }
     const m=roverMission;
     let title=id,detail='Settlement asset · operational';
     if(/^crew\d+$/.test(id)){

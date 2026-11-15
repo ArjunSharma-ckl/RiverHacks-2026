@@ -45,6 +45,21 @@ export async function research(params, key) {
   return { results, summary: results.slice(0, 3).map(r => ({text:r.snippet, link:r.link, source:r.source})) };
 }
 
+// SerpApi's Google engine returns its AI overview as nested text blocks. Flatten
+// them into plain paragraphs that any client can render.
+export function overviewText(data) {
+  // Paragraph breaks are easier to reason about as a named character here.
+  const NL = String.fromCharCode(10);
+  const flatten = block => {
+    if (typeof block === 'string') return block;
+    if (!block || typeof block !== 'object') return '';
+    const lead = [block.title, block.snippet || block.text].filter(Boolean).join(' ');
+    const nested = [...(block.text_blocks || []), ...(block.list || [])].map(flatten).filter(Boolean);
+    return [lead, ...nested].filter(Boolean).join(block.type === 'list' ? NL : NL + NL);
+  };
+  return (data.ai_overview?.text_blocks || []).map(flatten).filter(Boolean).join(NL + NL).trim();
+}
+
 // One SerpAPI request per uncached question. An available Google AI Overview is
 // used verbatim; otherwise the response is an attributed digest of result text.
 export async function answerQuestion(params, key) {
