@@ -98,13 +98,10 @@ z_touch = w(lander).z
 s.frame_set(800)
 z_hold = w(lander).z
 chk('lander descends', z_high - z_low > 50, '%.1f -> %.1f m' % (z_high, z_low))
-chk('lander stops at surface', abs(z_touch - 1.12) < 0.2 and abs(z_hold - z_touch) < 0.01, 'z=%.2f' % z_touch)
-leg = bpy.data.objects['LANDING_LEG_1_HINGE']
-s.frame_set(640)
-leg_a = math.degrees(leg.rotation_euler.y)
-s.frame_set(690)
-leg_b = math.degrees(leg.rotation_euler.y)
-chk('landing gear deploys', abs(leg_a) > 30 and 45 < abs(leg_b) < 60, '%.1f -> %.1f deg' % (leg_a, leg_b))
+chk('lander stops at surface', abs(z_touch) < 0.15 and abs(z_hold - z_touch) < 0.01, 'z=%.2f' % z_touch)
+ins = bpy.data.objects.get('INSIGHT_LANDER_BODY')
+chk('NASA InSight lander model present', bool(ins and len([c for c in ins.children_recursive if c.type == 'MESH']) > 20),
+    '%d meshes' % len([c for c in ins.children_recursive if c.type == 'MESH']) if ins else 'missing')
 hatch = bpy.data.objects['LANDER_HATCH_HINGE']
 s.frame_set(720)
 h_a = abs(hatch.rotation_euler.x)
@@ -130,9 +127,10 @@ q_start = w(a2)
 s.frame_set(870)
 q_end = w(a2)
 chk('second astronaut walks', (q_end - q_start).length > 2, '%.1f m' % (q_end - q_start).length)
-legs = bpy.data.objects.get('ASTRONAUT_1_L_HIP')
-chk('astronaut limbs are keyframed', bool(legs and legs.animation_data and legs.animation_data.action
-                                          and len(legs.animation_data.action.fcurves) > 0))
+limb = next((o for o in bpy.data.objects if o.name.startswith('ArmL') and o.animation_data
+             and o.animation_data.action), None)
+chk('field-suit limbs are keyframed', bool(limb),
+    limb.name if limb else 'no animated ArmL')
 
 flag = bpy.data.objects['SPACE_INVADERS_FLAG']
 s.frame_set(850)
@@ -141,8 +139,9 @@ s.frame_set(880)
 f_b = flag.rotation_euler.x
 chk('flag is planted upright', abs(f_a) > 0.5 and abs(f_b) < 0.02,
     '%.0f -> %.0f deg' % (math.degrees(f_a), math.degrees(f_b)))
-chk('flag reads SPACE INVADERS',
-    any(o.type == 'FONT' and hasattr(o.data, 'body') and 'SPACE' in o.data.body for o in bpy.data.objects))
+chk('flag carries the USA flag texture',
+    any(m and m.use_nodes and any(n.type == 'TEX_IMAGE' and n.image and 'usa-flag' in n.image.name
+        for n in m.node_tree.nodes) for m in bpy.data.materials))
 
 s.frame_set(100)
 cam100 = s.camera.name

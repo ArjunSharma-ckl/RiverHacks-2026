@@ -1,378 +1,1040 @@
-"""Build the MF-X1 flight, its field lander and the seven shot camera edit in Blender."""
-import math
-import random
-from pathlib import Path
-import bpy
-from mathutils import Vector, noise
+"""MissionForge: native 30 s SLS/Orion/Mars animation built from NASA geometry.
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "cinematic-source"
-bpy.ops.wm.read_factory_settings(use_empty=True)
-scene = bpy.context.scene
-random.seed(41)
-def material(name, rgb, metal=0, rough=.42, glow=0):
-    m = bpy.data.materials.new(name)
-    m.diffuse_color = (*rgb, 1)
+All motion is object/bone keyframe animation inside this .blend; no video
+textures, no sequencer, no stock footage.  NASA source model:
+  Space Launch System printable model (outer mold line, with Orion and LAS)
+  https://science.nasa.gov/3d-resources/space-launch-system-sls/
+"""
+import bpy
+import json
+import math
+import os
+import random
+import sys
+from mathutils import Vector, Matrix
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+COMP = os.path.join(ROOT, 'nasa-assets', 'sls_components.blend')
+if not os.path.isfile(COMP):
+    sys.exit('Run extract_sls.py first: %s missing' % COMP)
+PIVOT_JSON = os.path.join(ROOT, 'nasa-assets', 'sls_components.json')
+PIV = json.load(open(PIVOT_JSON)) if os.path.isfile(PIVOT_JSON) else {}
+PIV.setdefault('CORE_STAGE', [0.45, 0.45, 0.0])
+PIV.setdefault('SRB_LEFT', [-6.3, 0.45, 0.0])
+PIV.setdefault('SRB_RIGHT', [6.3, 0.45, 0.0])
+PIV.setdefault('UPPER_STAGE', [0.45, 0.45, 63.0])
+PIV.setdefault('ORION', [0.45, 0.45, 77.5])
+PIV.setdefault('LAS', [0.45, 0.45, 86.5])
+ASSETS = os.path.join(HERE, 'assets')
+SUIT_GLB = os.path.join(ASSETS, 'field-suit.glb')
+INSIGHT_GLB = os.path.join(ASSETS, 'insight_deployed.glb')
+FLAG_TEX = os.path.join(ASSETS, 'usa-flag.png')
+REPO = os.path.join(ROOT, 'RiverHacks-2026')
+if os.path.basename(HERE) == 'cinematic-source':
+    OUT = os.path.join(HERE, 'missionforge-launch.blend')
+else:
+    OUT = os.path.join(REPO if os.path.isdir(REPO) else HERE, 'cinematic-source', 'missionforge-launch.blend')
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
+
+FPS, END = 30, 900
+TAU = math.tau
+D = math.radians
+
+bpy.ops.wm.open_mainfile(filepath=COMP)
+s = bpy.context.scene
+s.name = 'MissionForge_Launch_to_Mars'
+for o in list(bpy.data.objects):
+    if o.type in {'CAMERA', 'LIGHT'}:
+        bpy.data.objects.remove(o, do_unlink=True)
+s.render.fps = FPS
+s.frame_start = 1
+s.frame_end = END
+s.render.resolution_x = 1920
+s.render.resolution_y = 1080
+s.render.resolution_percentage = 50
+s.render.image_settings.file_format = 'PNG'
+s.render.use_sequencer = False
+try:
+    s.render.engine = 'BLENDER_EEVEE_NEXT'
+except Exception:
+    s.render.engine = 'BLENDER_EEVEE'
+for attr, val in (('use_gtao', True), ('use_bloom', True), ('motion_blur_shutter', 0.45)):
+    try:
+        setattr(s.eevee, attr, val)
+    except Exception:
+        pass
+try:
+    s.render.use_motion_blur = True
+except Exception:
+    pass
+s.view_settings.look = 'AgX - Medium High Contrast'
+
+# ---------------------------------------------------------------- collections
+def col(name, parent=None):
+    c = bpy.data.collections.new(name)
+    (parent or s.collection).children.link(c)
+    return c
+
+SLS = bpy.data.collections.get('NASA_SLS_COMPONENTS') or col('NASA_SLS_COMPONENTS')
+SLS.name = 'SLS_VEHICLE'
+FX = col('FLIGHT_EFFECTS')
+ENV = col('LAUNCH_ENVIRONMENT')
+MARS = col('MARS_MISSION')
+CAMS = col('CAMERAS_LIGHTS')
+EVA = col('EVA_CREW')
+
+
+def move(o, c):
+    for q in list(o.users_collection):
+        q.objects.unlink(o)
+    c.objects.link(o)
+    return o
+
+
+# ------------------------------------------------------------------ materials
+def pr(n, color, metallic=0.0, rough=0.45, emission=None, strength=0.0):
+    m = bpy.data.materials.get(n)
+    if m:
+        return m
+    m = bpy.data.materials.new(n)
     m.use_nodes = True
-    shader = m.node_tree.nodes.get("Principled BSDF")
-    shader.inputs["Base Color"].default_value = (*rgb, 1)
-    shader.inputs["Metallic"].default_value = metal
-    shader.inputs["Roughness"].default_value = rough
-    shader.inputs["Emission Color"].default_value = (*rgb, 1)
-    shader.inputs["Emission Strength"].default_value = glow
+    b = m.node_tree.nodes.get('Principled BSDF')
+    b.inputs['Base Color'].default_value = (*color, 1)
+    b.inputs['Metallic'].default_value = metallic
+    b.inputs['Roughness'].default_value = rough
+    if emission and b.inputs.get('Emission Color'):
+        b.inputs['Emission Color'].default_value = (*emission, 1)
+        b.inputs['Emission Strength'].default_value = strength
     return m
 
-ivory = material("Thermal ceramic", (.82,.83,.77), .28)
-steel = material("Titanium", (.26,.31,.33), .78)
-black = material("Carbon composite", (.035,.048,.057), .45)
-copper = material("Anodized copper", (.75,.22,.055), .63)
-glass = material("Cockpit glazing", (.024,.11,.17), .83,.13)
-lamp = material("Navigation lights", (.32,.84,1), glow=4)
-flame = material("Exhaust mantle", (1,.21,.025), glow=4)
-core = material("Exhaust core", (1,.83,.48), glow=8)
-def group(name, xyz=(0,0,0), parent=None):
-    o = bpy.data.objects.new(name,None)
-    scene.collection.objects.link(o)
-    o.parent = parent
-    o.location = xyz
+
+def foam_material():
+    """Orange SLS core insulation with subtle spray-foam bump."""
+    m = bpy.data.materials.get('SLS_core_orange_foam') or bpy.data.materials.new('SLS_core_orange_foam')
+    m.use_nodes = True
+    if m.get('_built'):
+        return m
+    m.use_nodes = True
+    t = m.node_tree
+    b = t.nodes['Principled BSDF']
+    b.inputs['Base Color'].default_value = (0.58, 0.19, 0.045, 1)
+    b.inputs['Roughness'].default_value = 0.66
+    noise = t.nodes.new('ShaderNodeTexNoise')
+    noise.inputs['Scale'].default_value = 55
+    noise.inputs['Detail'].default_value = 6
+    bump = t.nodes.new('ShaderNodeBump')
+    bump.inputs['Strength'].default_value = 0.22
+    t.links.new(noise.outputs['Fac'], bump.inputs['Height'])
+    t.links.new(bump.outputs['Normal'], b.inputs['Normal'])
+    m['_built'] = True
+    return m
+
+
+def srb_material():
+    m = bpy.data.materials.new('SLS_booster_white_paint')
+    m.use_nodes = True
+    t = m.node_tree
+    b = t.nodes['Principled BSDF']
+    b.inputs['Base Color'].default_value = (0.84, 0.84, 0.81, 1)
+    b.inputs['Roughness'].default_value = 0.4
+    noise = t.nodes.new('ShaderNodeTexNoise')
+    noise.inputs['Scale'].default_value = 180
+    rough = t.nodes.new('ShaderNodeMapRange')
+    rough.inputs['To Min'].default_value = 0.3
+    rough.inputs['To Max'].default_value = 0.55
+    t.links.new(noise.outputs['Fac'], rough.inputs['Value'])
+    t.links.new(rough.outputs['Result'], b.inputs['Roughness'])
+    return m
+
+
+CORE = foam_material()
+SRB = srb_material()
+WHITE = pr('Aerospace white', (0.82, 0.82, 0.79), 0.05, 0.38)
+METAL = pr('Aerospace alloy', (0.32, 0.34, 0.36), 0.9, 0.3)
+DARK = pr('Engine bell', (0.07, 0.075, 0.08), 0.9, 0.32)
+GOLD = pr('MLI gold foil', (0.72, 0.42, 0.08), 0.95, 0.28)
+BLACK = pr('Thermal blanket', (0.012, 0.014, 0.018), 0.2, 0.55)
+SOLAR = pr('Solar cell blue', (0.008, 0.02, 0.075), 0.45, 0.16)
+RED_FABRIC = pr('Flag fabric', (0.36, 0.02, 0.035), 0.0, 0.65)
+FLAG_TEXT = pr('Flag lettering', (0.98, 0.93, 0.82), 0.0, 0.4, (1.0, 0.95, 0.85), 1.2)
+SUIT = pr('EVA suit white', (0.86, 0.86, 0.84), 0.02, 0.42)
+VISOR = pr('Gold visor', (0.55, 0.32, 0.04), 1.0, 0.12)
+REGOLITH = pr('Mars regolith', (0.34, 0.115, 0.045), 0.0, 0.95)
+DUST_MAT = None
+
+# ------------------------------------------------------------------- helpers
+def add_empty(name, world, parent=None, coll=None):
+    o = bpy.data.objects.new(name, None)
+    (coll or SLS).objects.link(o)
+    o.empty_display_size = 1.5
+    bpy.context.view_layer.update()
+    if parent:
+        # When parented, `world` is interpreted in the parent's local space.
+        o.parent = parent
+        o.matrix_parent_inverse = Matrix.Identity(4)
+    o.location = Vector(world)
+    bpy.context.view_layer.update()
     return o
-def finish(name, xyz, mat, parent):
+
+
+def prim(kind, name, coll, mat=None, **kw):
+    getattr(bpy.ops.mesh, kind)(**kw)
     o = bpy.context.object
     o.name = name
-    o.parent = parent
-    o.location = xyz
+    move(o, coll)
+    if mat:
+        o.data.materials.append(mat)
+    return o
+
+
+def box(name, coll, centre, size, mat, parent=None, local=False):
+    o = prim('primitive_cube_add', name, coll, mat, size=1, location=(0, 0, 0))
+    o.scale = Vector(size) / 2
+    if parent:
+        o.parent = parent
+        o.location = Vector(centre)
+    else:
+        o.location = Vector(centre)
+    return o
+
+
+def cyl(name, coll, centre, radius, depth, mat, verts=32, parent=None):
+    o = prim('primitive_cylinder_add', name, coll, mat, vertices=verts, radius=radius, depth=depth, location=centre)
+    if parent:
+        o.parent = parent
+        o.location = Vector(centre)
+    for p in o.data.polygons:
+        p.use_smooth = True
+    return o
+
+
+def sphere(name, coll, centre, radius, mat, seg=32, parent=None):
+    o = prim('primitive_uv_sphere_add', name, coll, mat, segments=seg, ring_count=max(8, seg // 2), radius=radius, location=centre)
+    if parent:
+        o.parent = parent
+        o.location = Vector(centre)
+    for p in o.data.polygons:
+        p.use_smooth = True
+    return o
+
+
+def cone(name, coll, centre, r1, r2, depth, mat, verts=32, parent=None):
+    o = prim('primitive_cone_add', name, coll, mat, vertices=verts, radius1=r1, radius2=r2, depth=depth, location=centre)
+    if parent:
+        o.parent = parent
+        o.location = Vector(centre)
+    for p in o.data.polygons:
+        p.use_smooth = True
+    return o
+
+
+def key(o, path, frame, value):
+    setattr(o, path, value)
+    o.keyframe_insert(data_path=path, frame=frame)
+
+
+def key_loc(o, frame, loc):
+    key(o, 'location', frame, Vector(loc))
+
+
+def key_rot(o, frame, rot):
+    o.rotation_mode = 'XYZ'
+    key(o, 'rotation_euler', frame, Vector(rot))
+
+
+def key_scale(o, frame, v):
+    key(o, 'scale', frame, Vector((v, v, v)) if isinstance(v, (int, float)) else Vector(v))
+
+
+def world_of(o):
+    return o.matrix_world.translation.copy()
+
+
+# ------------------------------------------------------------- vehicle mount
+def rel(pivot, parent_pivot):
+    return tuple(pivot[i] - parent_pivot[i] for i in range(3))
+
+
+ROOT_AT = (0, 0, -0.6)
+ROOT_EMPTY = add_empty('SLS_ROOT', ROOT_AT)
+CORE_E = add_empty('CORE_STAGE', rel(PIV['CORE_STAGE'], ROOT_AT), ROOT_EMPTY)
+ENG_E = add_empty('RS25_ENGINES', (0, 0, 0), CORE_E)
+LEFT_E = add_empty('SRB_LEFT', rel(PIV['SRB_LEFT'], ROOT_AT), ROOT_EMPTY)
+RIGHT_E = add_empty('SRB_RIGHT', rel(PIV['SRB_RIGHT'], ROOT_AT), ROOT_EMPTY)
+UPPER_E = add_empty('UPPER_STAGE', rel(PIV['UPPER_STAGE'], ROOT_AT), ROOT_EMPTY)
+ORION_E = add_empty('ORION', rel(PIV['ORION'], PIV['UPPER_STAGE']), UPPER_E)
+CREW_E = add_empty('CREW_MODULE', (0, 0, 3.9), ORION_E)
+SERVICE_E = add_empty('SERVICE_MODULE', (0, 0, 0), ORION_E)
+ARRAY_E = add_empty('SOLAR_ARRAYS', (0, 0, 1.9), ORION_E)
+LAS_E = add_empty('LAUNCH_ABORT_SYSTEM', rel(PIV['LAS'], PIV['ORION']), ORION_E)
+
+MESH_MAP = {
+    'CORE_STAGE_MESH': (CORE_E, PIV['CORE_STAGE']),
+    'SRB_LEFT_MESH': (LEFT_E, PIV['SRB_LEFT']),
+    'SRB_RIGHT_MESH': (RIGHT_E, PIV['SRB_RIGHT']),
+    'UPPER_STAGE_MESH': (UPPER_E, PIV['UPPER_STAGE']),
+    'ORION_MESH': (SERVICE_E, PIV['ORION']),
+    'LAS_MESH': (LAS_E, PIV['LAS']),
+}
+for name, (host, pivot) in MESH_MAP.items():
+    o = bpy.data.objects.get(name)
+    if not o:
+        print('MISSING COMPONENT', name, flush=True)
+        continue
+    bpy.context.view_layer.update()
+    o.parent = host
+    o.matrix_parent_inverse = host.matrix_world.inverted()
+    o.location = Vector(pivot)
+    mat = {'CORE_STAGE_MESH': CORE, 'SRB_LEFT_MESH': SRB, 'SRB_RIGHT_MESH': SRB,
+           'UPPER_STAGE_MESH': WHITE, 'ORION_MESH': WHITE, 'LAS_MESH': WHITE}[name]
+    o.data.materials.clear()
     o.data.materials.append(mat)
-    return o
-def box(name, xyz, dims, mat, p=None):
-    bpy.ops.mesh.primitive_cube_add(size=1)
-    o = finish(name, xyz, mat, p)
-    for v in o.data.vertices:
-        for i in range(3): v.co[i] *= dims[i]
-    return o
-def cylinder(name, xyz, low, high, h, mat, p=None, sides=48):
-    bpy.ops.mesh.primitive_cone_add(vertices=sides,radius1=low,radius2=high,depth=h)
-    o = finish(name,xyz,mat,p)
-    for face in o.data.polygons: face.use_smooth = len(face.vertices)<=4
-    return o
-def rod(name,a,b,r,mat,p=None):
-    a,b = Vector(a),Vector(b)
-    o = cylinder(name,(a+b)/2,r,r,(a-b).length,mat,p,12)
-    o.rotation_euler = (b-a).to_track_quat("Z","Y").to_euler()
-    return o
-def key(o,attr,f,value):
-    setattr(o,attr,value)
-    o.keyframe_insert(data_path=attr,frame=f)
-def move(o,keys):
-    for f,v in keys: key(o,"location",f,v)
-def mark(name,body,xyz,size,mat,p):
-    curve=bpy.data.curves.new(name,"FONT")
-    curve.body=body
-    curve.align_x="CENTER"
-    curve.size=size
-    o=bpy.data.objects.new(name,curve)
-    scene.collection.objects.link(o)
-    o.parent=p
-    o.location=xyz
-    o.rotation_euler.x=math.pi/2
-    curve.materials.append(mat)
-    return o
+    if name == 'ORION_MESH':
+        # the capsule top gets ceramic white, the service module gold MLI
+        o.data.materials.append(GOLD)
+        for poly in o.data.polygons:
+            if poly.center.z < 4.9:      # local coords: service module below the capsule
+                poly.material_index = 1
+    print('MOUNTED', name, 'polys', len(o.data.polygons), flush=True)
 
-rocket=group("MF-X1 launch assembly")
-booster=group("Recoverable first stage",parent=rocket)
-upper=group("Orbital transfer stage",parent=rocket)
-for z,lo,hi,h,mat in [(5.3,1.33,1.33,8.8,ivory),(1.3,1.39,1.33,.9,black),(9.9,1.35,1.35,.5,black)]:
-    cylinder("Booster hull",(0,0,z),lo,hi,h,mat,booster)
-for z in [1.45,2.6,4.2,6,8.4,9.4,9.75,10]:
-    cylinder("Tank seam",(0,0,z),1.35,1.35,.064,steel,booster)
-for i in range(8):
-    a=i*math.tau/8
-    x,y=math.cos(a),math.sin(a)
-    cylinder("Rocket engine bell",(.83*x,.83*y,.65),.39,.19,.7,steel,booster)
-    rod("Feed line",(1.33*x,1.33*y,1.5),(1.33*x,1.33*y,8.9),.05,steel,booster)
-for x in [-1.72,1.72]:
-    cylinder("Auxiliary booster",(x,0,4.6),.53,.53,7.1,ivory,booster)
-    cylinder("Booster ogive",(x,0,8.68),.54,.09,1.1,copper,booster)
-    cylinder("Auxiliary skirt",(x,0,1.22),.56,.52,.45,black,booster)
-for z,lo,hi,h,mat in [(10.45,.8,.53,.75,steel),(12.9,1.31,1.31,4.2,ivory),(15.25,1.31,1.48,.5,copper),(16.65,1.48,1.48,2.3,ivory),(18.55,1.48,.74,1.5,ivory),(19.7,.74,.04,.8,ivory)]:
-    cylinder("Transfer hull",(0,0,z),lo,hi,h,mat,upper)
-for z in [11.1,11.25,14.75,15.5,17.75]:
-    cylinder("Interstage band",(0,0,z),1.5 if z>=15.5 else 1.33,1.5 if z>=15.5 else 1.33,.07,black,upper)
-mark("Flight number","X1",(0,-1.33,6.4),.88,black,booster)
-mark("Mission livery","MF",(0,-1.32,13),.75,black,upper)
 
-def engine(p,z,r,h):
-    jet=group("Throttle envelope",(0,0,z),p)
-    # Transparent turbulent exhaust sheets with an axial temperature gradient.
-    for layer in range(2):
-        m=bpy.data.materials.new("Turbulent exhaust")
-        m.use_nodes=True
-        nt=m.node_tree
-        nt.nodes.clear()
-        def node(kind): return nt.nodes.new(kind)
-        def connect(a,b): nt.links.new(a,b)
-        uv=node("ShaderNodeTexCoord")
-        split=node("ShaderNodeSeparateXYZ")
-        connect(uv.outputs["Generated"],split.inputs[0])
-        turb=node("ShaderNodeTexNoise")
-        turb.noise_dimensions="4D"
-        turb.inputs["Scale"].default_value=5
-        turb.inputs["Detail"].default_value=4
-        turb.inputs["W"].driver_add("default_value").driver.expression="frame * 0.09"
-        opacity=node("ShaderNodeMath"); opacity.operation="MULTIPLY"
-        connect(split.outputs["Z"],opacity.inputs[0]); connect(turb.outputs[0],opacity.inputs[1])
-        emit=node("ShaderNodeEmission")
-        emit.inputs[0].default_value=(1,.29,.055,1) if layer==0 else (1,.79,.45,1)
-        emit.inputs[1].default_value=6 if layer==0 else 16
-        mix=node("ShaderNodeMixShader")
-        connect(opacity.outputs[0],mix.inputs[0]); connect(node("ShaderNodeBsdfTransparent").outputs[0],mix.inputs[1])
-        connect(emit.outputs[0],mix.inputs[2]);connect(mix.outputs[0],node("ShaderNodeOutputMaterial").inputs["Surface"])
-        verts=[]; faces=[]
-        for j in range(25):
-            t=j/24
-            for i in range(32):
-                a=math.tau*i/32
-                ripple=noise.noise_vector(Vector((math.cos(a)*2,math.sin(a)*2,t*9))).x
-                radius=r*(.68+.46*t+.45*t*ripple)*(.63 if layer else 1)
-                verts.append((radius*math.cos(a)+t*t*r*.38,radius*math.sin(a),-h*t*(.69 if layer else 1)))
-                if j: faces.append(((j-1)*32+i,(j-1)*32+(i+1)%32,j*32+(i+1)%32,j*32+i))
-        mesh=bpy.data.meshes.new("Shear layer"); mesh.from_pydata(verts,[],faces)
-        o=bpy.data.objects.new("Exhaust mixing layer",mesh);scene.collection.objects.link(o);o.parent=jet;mesh.materials.append(m)
-    light=bpy.data.lights.new("Engine bounce","POINT");light.color=(1,.39,.105);light.shadow_soft_size=r
-    o=bpy.data.objects.new("Engine illumination",light);scene.collection.objects.link(o);o.parent=jet
-    driver=light.driver_add("energy").driver
-    v=driver.variables.new();v.name="throttle";v.type="SINGLE_PROP";v.targets[0].id=jet;v.targets[0].data_path="scale[2]"
-    driver.expression=f"{int(3100*r)} * throttle**2"
-    return jet
-jet=engine(booster,.55,1.08,8)
-for f,s in [(1,.001),(62,.001),(72,.65),(100,1.1),(151,.85),(154,.001)]:
-    key(jet,"scale",f,(s,s,s))
-upperJet=engine(upper,10.2,.66,4)
-for f,s in [(1,.001),(158,.001),(167,1),(205,.7),(214,.001)]:
-    key(upperJet,"scale",f,(s,s,s))
+def mount_copy(src_name, host, new_name, pivot=(0.45, 0.45, 76.4)):
+    src = bpy.data.objects.get(src_name)
+    if not src:
+        return None
+    c = src.copy()          # shares mesh data
+    move(c, SLS)
+    c.name = new_name
+    c.animation_data_clear()
+    c.constraints.clear()
+    c.delta_location = (0, 0, 0)
+    c.delta_rotation_euler = (0, 0, 0)
+    c.delta_scale = (1, 1, 1)
+    bpy.context.view_layer.update()
+    c.parent = host
+    c.matrix_parent_inverse = host.matrix_world.inverted()
+    c.location = Vector(pivot)
+    return c
 
-lander=group("Kestrel field lander")
-for z,lo,hi,h,mat in [(1.18,1.4,2.02,.7,black),(1.82,2.03,1.95,.6,copper),(2.8,1.96,1.75,1.4,ivory),(3.82,1.76,1.12,.65,glass),(4.21,1.13,.92,.16,ivory)]:
-    cylinder("Descent cabin",(0,0,z),lo,hi,h,ivory if mat==glass else mat,lander,48)
+# ------------------------------------------------------------------- exhaust
+def plume_material(name, color, strength, density, smooth=False):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    t = m.node_tree
+    t.nodes.clear()
+    out = t.nodes.new('ShaderNodeOutputMaterial')
+    vol = t.nodes.new('ShaderNodeVolumePrincipled')
+    vol.inputs['Color'].default_value = (*color, 1)
+    vol.inputs['Density'].default_value = density
+    vol.inputs['Emission Color'].default_value = (*color, 1)
+    vol.inputs['Emission Strength'].default_value = strength
+    if smooth:
+        t.links.new(vol.outputs[0], out.inputs['Volume'])
+        return m
+    noise = t.nodes.new('ShaderNodeTexNoise')
+    noise.noise_dimensions = '4D'
+    noise.inputs['Scale'].default_value = 5.5
+    noise.inputs['Detail'].default_value = 8
+    noise.inputs['Roughness'].default_value = 0.65
+    fcurve = noise.inputs['W'].driver_add('default_value')
+    fcurve.driver.expression = 'frame*0.11'
+    ramp = t.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position = 0.32
+    ramp.color_ramp.elements[1].position = 0.68
+    mul = t.nodes.new('ShaderNodeMath')
+    mul.operation = 'MULTIPLY'
+    mul.inputs[1].default_value = density * 2.6
+    t.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    t.links.new(ramp.outputs['Color'], mul.inputs[0])
+    t.links.new(mul.outputs[0], vol.inputs['Density'])
+    t.links.new(vol.outputs[0], out.inputs['Volume'])
+    return m
+
+
+SRB_PLUME = plume_material('SRB_aluminized_exhaust', (1.0, 0.62, 0.22), 12, 0.5, smooth=True)
+RS25_PLUME = plume_material('RS25_hydrogen_exhaust', (0.66, 0.82, 1.0), 16, 0.4, smooth=True)
+UPPER_PLUME = plume_material('ICPS_vacuum_exhaust', (0.55, 0.72, 1.0), 12, 0.3, smooth=True)
+def glow_material(name, color, strength=4.0, alpha=0.45):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    t = m.node_tree
+    t.nodes.clear()
+    out = t.nodes.new('ShaderNodeOutputMaterial')
+    em = t.nodes.new('ShaderNodeEmission')
+    em.inputs['Color'].default_value = (*color, 1)
+    em.inputs['Strength'].default_value = strength
+    tr = t.nodes.new('ShaderNodeBsdfTransparent')
+    mix = t.nodes.new('ShaderNodeMixShader')
+    mix.inputs[0].default_value = alpha
+    t.links.new(tr.outputs[0], mix.inputs[1])
+    t.links.new(em.outputs[0], mix.inputs[2])
+    t.links.new(mix.outputs[0], out.inputs['Surface'])
+    for attr, val in (('blend_method', 'BLEND'), ('surface_render_method', 'BLENDED')):
+        try:
+            setattr(m, attr, val)
+        except Exception:
+            pass
+    return m
+
+
+LANDER_PLUME = glow_material('Lander_methalox_exhaust', (1.0, 0.55, 0.22), 1.4, 0.2)
+
+
+def exhaust(name, host, local, radius, length, mat, keys, light_energy, light_color):
+    host_e = add_empty(name + '_HOST', (0, 0, 0), host)
+    host_e.location = Vector(local)
+    body = cone(name + '_VOLUME', FX, (0, 0, -length * 0.5), radius, radius * 0.22, length, mat)
+    body.parent = host_e
+    body.location = (0, 0, -length * 0.5)
+    body.rotation_euler = (math.pi, 0, 0)
+    core = cone(name + '_CORE', FX, (0, 0, -length * 0.32), radius * 0.45, radius * 0.1, length * 0.62, mat)
+    core.parent = host_e
+    core.location = (0, 0, -length * 0.32)
+    core.rotation_euler = (math.pi, 0, 0)
+    lamp = bpy.data.lights.new(name + '_LIGHT', 'POINT')
+    lamp.color = light_color
+    lamp.shadow_soft_size = radius * 1.2
+    lo = bpy.data.objects.new(name + '_LIGHT', lamp)
+    FX.objects.link(lo)
+    lo.parent = host_e
+    lo.location = (0, 0, -length * 0.2)
+    for f, v in keys:
+        key_scale(host_e, f, max(0.001, v))
+        lamp.energy = light_energy * max(0.0, v) ** 2
+        lamp.keyframe_insert('energy', frame=f)
+    host_e['attached_to'] = host.name
+    host_e['effect'] = 'volumetric exhaust driven by animated 4D noise'
+    return host_e
+
+
+SRB_BURN = [(1, 0.001), (38, 0.001), (52, 0.35), (66, 1.0), (240, 0.95), (244, 0.55), (247, 0.001)]
+for e in (LEFT_E, RIGHT_E):
+    exhaust(e.name + '_EXHAUST', e, (0, 0, 0.4), 3.1, 46, SRB_PLUME, SRB_BURN, 4200, (1.0, 0.55, 0.2))
+
+for i, (x, y) in enumerate(((-1.35, -1.35), (-1.35, 1.35), (1.35, -1.35), (1.35, 1.35)), 1):
+    exhaust('RS25_%d_EXHAUST' % i, ENG_E, (x, y, 0.2), 1.05, 22, RS25_PLUME,
+            [(1, 0.001), (40, 0.001), (56, 0.3), (72, 1), (414, 1), (420, 0.25), (424, 0.001)],
+            1500, (0.6, 0.78, 1.0))
+
+exhaust('UPPER_STAGE_EXHAUST', UPPER_E, (0, 0, 0.1), 0.9, 16, UPPER_PLUME,
+        [(1, 0.001), (432, 0.001), (440, 0.4), (452, 1), (520, 0.75), (536, 0.001)],
+        1200, (0.55, 0.72, 1.0))
+
+# ------------------------------------------------------------------- launchpad
+pad = cyl('Launch pad 39B apron', ENV, (0, 0, -0.55), 32, 1.1, pr('Concrete', (0.30, 0.29, 0.27), 0, 0.9), 96)
+cyl('Flame trench', ENV, (0, 0, -1.3), 11, 1.6, BLACK, 48)
+for a in range(0, 360, 30):
+    q = D(a)
+    box('Pad hardstand', ENV, (16 * math.cos(q), 16 * math.sin(q), -0.02), (5, 5, 0.12),
+        pr('Concrete', (0.30, 0.29, 0.27), 0, 0.9))
+
+TOWER = add_empty('Mobile_Launcher_Tower', (-17, 6, 0), None, ENV)
+for x in (-2.2, 2.2):
+    for y in (-2.2, 2.2):
+        box('Tower column', ENV, (x, y, 40), (0.65, 0.65, 80), METAL, TOWER)
+for z in range(6, 80, 8):
+    box('Tower deck', ENV, (0, 0, z), (5.2, 5.2, 0.25), METAL, TOWER)
+    for a in range(0, 4):
+        q = D(90 * a)
+        box('Tower rail', ENV, (2.2 * math.cos(q), 2.2 * math.sin(q), z + 4), (0.12, 0.12, 8.0), METAL, TOWER)
+for z in (22, 38, 54, 68):
+    box('Service arm', ENV, (4.5, 0, z), (13, 1.1, 1.1), WHITE, TOWER)
+    box('Umbilical', ENV, (0.5, 0, z), (0.6, 0.6, 1.2), BLACK, TOWER)
+box('Lightning mast', ENV, (0, 0, 88), (0.5, 0.5, 18), METAL, TOWER)
+
+# Ground, sky and the distant Earth.
+ground = prim('primitive_plane_add', 'Coastal Florida ground', ENV,
+              pr('Scrub ground', (0.055, 0.075, 0.035), 0, 0.95), size=4800, location=(0, 0, -1.11))
+bpy.ops.object.shade_smooth() if False else None
+earth = sphere('Earth from orbit', ENV, (0, 0, -6371002.2), 6371000, pr('Earth oceans', (0.02, 0.09, 0.22), 0.1, 0.45), 192)
+earth.data.materials.clear()
+EM = bpy.data.materials.new('Earth map')
+EM.use_nodes = True
+nt = EM.node_tree
+img = bpy.data.images.load(os.path.join(ROOT, 'repo-src', 'earth.jpg'), check_existing=True)
+tex = nt.nodes.new('ShaderNodeTexImage')
+tex.image = img
+nt.links.new(tex.outputs['Color'], nt.nodes['Principled BSDF'].inputs['Base Color'])
+earth.data.materials.append(EM)
+earth.scale = (0.001, 0.001, 0.001)   # starfield carries the launch/orbit sky
+
+# ------------------------------------------------------------------- flight
+key_loc(ROOT_EMPTY, 1, (0, 0, -1))
+key_loc(ROOT_EMPTY, 64, (0, 0, -1))
+key_loc(ROOT_EMPTY, 74, (0, 0, 0.4))
+key_loc(ROOT_EMPTY, 92, (0, 0, 9))
+key_loc(ROOT_EMPTY, 150, (0, 0, 120))
+key_loc(ROOT_EMPTY, 240, (9, 0, 900))
+key_loc(ROOT_EMPTY, 330, (46, 0, 1880))
+key_loc(ROOT_EMPTY, 420, (104, 0, 3050))
+key_rot(ROOT_EMPTY, 1, (0, 0, 0))
+key_rot(ROOT_EMPTY, 120, (0, 0, 0))
+key_rot(ROOT_EMPTY, 210, (0, D(9), 0))
+key_rot(ROOT_EMPTY, 300, (0, D(27), 0))
+key_rot(ROOT_EMPTY, 420, (0, D(46), 0))
+# Thrust build-up vibration before release.
+for f, dx in ((60, 0.02), (66, -0.03), (72, 0.015), (78, -0.01)):
+    key_loc(ROOT_EMPTY, f, (dx, 0, -1))
+    key_loc(ROOT_EMPTY, f, (dx, 0, -1))
+
+# Boosters ride the stack exactly, then detach into world-space ballistic arcs.
+# (Local-space offsets would mix with the pitch and swing into the core.)
+UPPER_BASE = rel(PIV['UPPER_STAGE'], ROOT_AT)
+UPPER_ASCENT = [(1, (0, 0, 0)), (420, (0, 0, 0)), (462, (0, 0, 95)), (520, (0, 0, 330)),
+                (575, (0, 0, 610)), (640, (0, 0, 980)), (900, (0, 0, 1500))]
+for f, off in UPPER_ASCENT:
+    key_loc(UPPER_E, f, (UPPER_BASE[0] + off[0], UPPER_BASE[1] + off[1], UPPER_BASE[2] + off[2]))
+
+for side, sgn in ((LEFT_E, -1), (RIGHT_E, 1)):
+    samples = []
+    for f in list(range(1, 246, 6)) + [246]:
+        s.frame_set(f)
+        samples.append((f, side.matrix_world.copy()))
+    side.parent = None
+    side.rotation_mode = 'XYZ'
+    for f, m in samples:
+        side.matrix_world = m
+        side.keyframe_insert('location', frame=f)
+        side.keyframe_insert('rotation_euler', frame=f)
+    m246 = samples[-1][1]
+    P = m246.translation.copy()
+    R = m246.to_3x3()
+    lat = (R @ Vector((sgn, 0, 0))).normalized()
+    aft = (R @ Vector((0, 0, -1))).normalized()
+    down = Vector((0, 0, -1))
+    base = m246.to_euler('XYZ')
+    for f, out, back, drop, tumble in [
+        (246, 0.0, 0.0, 0.0, 0.0),
+        (252, 2.2, 0.6, 1.0, 3.0),
+        (266, 8.0, 6.0, 5.0, 12.0),
+        (300, 24.0, 34.0, 30.0, 34.0),
+        (380, 50.0, 112.0, 145.0, 78.0),
+        (480, 82.0, 245.0, 405.0, 140.0),
+        (560, 112.0, 415.0, 745.0, 205.0),
+    ]:
+        p = P + lat * out + aft * back + down * drop
+        key_loc(side, f, p)
+        key_rot(side, f, (base.x + D(tumble * 0.55), base.y + D(sgn * tumble * 1.2),
+                          base.z + D(sgn * tumble * 0.4)))
+    side['separation_frame'] = 246
+    side['path'] = 'world-space ballistic arc after tether release'
+
+for f, loc, rot in [
+    (1, (0, 0, 0), (0, 0, 0)), (420, (0, 0, 0), (0, 0, 0)),
+    (426, (0, 0, -3), (D(1), 0, 0)),
+    (448, (0, 2, -22), (D(4), 0, D(2))),
+    (500, (0, 8, -140), (D(9), 0, D(5))),
+    (570, (0, 18, -430), (D(16), 0, D(9))),
+]:
+    key_loc(CORE_E, f, loc)
+    key_rot(CORE_E, f, rot)
+
+key_rot(UPPER_E, 1, (0, 0, 0))
+key_rot(UPPER_E, 520, (0, 0, 0))
+key_rot(UPPER_E, 600, (D(-4), 0, D(6)))
+
+# LAS jettison shortly after booster separation.
+LAS_BASE = rel(PIV['LAS'], PIV['ORION'])
+for f, loc, rot in [(1, (0, 0, 0), (0, 0, 0)), (196, (0, 0, 0), (0, 0, 0)),
+                    (206, (0, -1, 6), (D(8), 0, D(4))),
+                    (240, (0, -9, 42), (D(30), 0, D(16)))]:
+    key_loc(LAS_E, f, tuple(LAS_BASE[i] + loc[i] for i in range(3)))
+    key_rot(LAS_E, f, rot)
+
+
+def orion_assembly(label, parent, base_world, deploy_from=None):
+    ore = add_empty(label, base_world, parent)
+    service = add_empty(label + '_SERVICE_MODULE', (0, 0, 1.0), ore)
+    crew = add_empty(label + '_CREW_MODULE', (0, 0, 5.0), ore)
+    arrays = add_empty(label + '_SOLAR_ARRAYS', (0, 0, 3.0), ore)
+    body = mount_copy('ORION_MESH', service, label + '_BODY', PIV['ORION'])
+    if body:
+        body.data = body.data.copy()
+        body.data.materials.clear()
+        body.data.materials.append(WHITE)
+        body.data.materials.append(GOLD)
+        for poly in body.data.polygons:
+            poly.material_index = 1 if poly.center.z < 4.9 else 0
+    wings = []
+    for i in range(4):
+        az = D(45 + 90 * i)
+        hinge = add_empty('%s_SOLAR_WING_%d_HINGE' % (label, i + 1), (0, 0, 0), arrays)
+        hinge.rotation_euler = (0, 0, az)
+        fold = add_empty('%s_SOLAR_WING_%d_FOLD' % (label, i + 1), (0, 0, 0), hinge)
+        fold.rotation_mode = 'XYZ'
+        for j, (x0, ln) in enumerate(((2.9, 5.4), (8.5, 5.4))):
+            p = box('%s_SOLAR_PANEL_%d_%d' % (label, i + 1, j + 1), SLS,
+                    (x0, 0, 0), (ln, 0.06, 2.35), SOLAR, fold)
+            box('%s_SOLAR_FRAME_%d_%d' % (label, i + 1, j + 1), SLS,
+                (x0, 0, 0), (ln, 0.1, 0.07), GOLD, fold)
+            box('%s_SOLAR_FRAME_%d_%db' % (label, i + 1, j + 1), SLS,
+                (x0, 0, 2.3), (ln, 0.1, 0.07), GOLD, fold)
+            box('%s_SOLAR_FRAME_%d_%dc' % (label, i + 1, j + 1), SLS,
+                (x0, 0, -2.3), (ln, 0.1, 0.07), GOLD, fold)
+        if deploy_from is None:
+            fold.rotation_euler = (0, 0, 0)
+        else:
+            key_rot(fold, deploy_from, (0, D(88), 0))
+            key_rot(fold, deploy_from + 22, (0, D(-6), 0))
+            key_rot(fold, deploy_from + 32, (0, 0, 0))
+        wings.append(fold)
+    return {'root': ore, 'service': service, 'crew': crew, 'arrays': arrays, 'wings': wings}
+
+
+ORION_A = orion_assembly('ORION_LAUNCH_STACK', ORION_E, (0, 0, 0), deploy_from=530)
+key_rot(ORION_E, 1, (0, 0, 0))
+ORION_BASE = rel(PIV['ORION'], PIV['UPPER_STAGE'])
+for f, loc, rot in [
+    (1, (0, 0, 0), (0, 0, 0)), (516, (0, 0, 0), (0, 0, 0)),
+    (524, (0, 0, 1.6), (D(1), 0, D(1))),
+    (548, (0, -2.5, 12), (D(5), D(3), D(4))),
+    (590, (0, -9, 46), (D(16), D(9), D(12))),
+    (650, (0, -22, 120), (D(34), D(24), D(28))),
+]:
+    key_loc(ORION_E, f, tuple(ORION_BASE[i] + loc[i] for i in range(3)))
+    key_rot(ORION_E, f, rot)
+
+# ------------------------------------------------------------------ Mars set
+SITE = add_empty('MARS_LANDING_SITE', (0, -2600, 0), None, MARS)
+N = 90
+W = 420
+verts, faces = [], []
+for j in range(N):
+    for i in range(N):
+        x = -W / 2 + W * i / (N - 1)
+        y = -W / 2 + W * j / (N - 1)
+        r = math.hypot(x, y)
+        z = 1.4 * math.sin(x * 0.035) * math.cos(y * 0.041) + 0.7 * math.sin((x + y) * 0.09)
+        z *= min(1.0, max(0.0, (r - 8) / 26))     # flat pad for touchdown
+        verts.append((x, y, z))
+for j in range(N - 1):
+    for i in range(N - 1):
+        a = j * N + i
+        faces.append((a, a + 1, a + N + 1, a + N))
+me = bpy.data.meshes.new('Mars terrain mesh')
+me.from_pydata(verts, [], faces)
+me.update()
+terrain = bpy.data.objects.new('Rocky Martian terrain', me)
+MARS.objects.link(terrain)
+terrain.parent = SITE
+MREG = bpy.data.materials.new('Mars regolith from NASA texture')
+MREG.use_nodes = True
+mt = MREG.node_tree
+mimg = bpy.data.images.load(os.path.join(ROOT, 'repo-src', 'mars.jpg'), check_existing=True)
+mtex = mt.nodes.new('ShaderNodeTexImage')
+mtex.image = mimg
+mmix = mt.nodes.new('ShaderNodeMixRGB')
+mmix.blend_type = 'MULTIPLY'
+mmix.inputs['Fac'].default_value = 0.55
+mmix.inputs['Color2'].default_value = (0.30, 0.13, 0.07, 1)
+mt.links.new(mtex.outputs['Color'], mmix.inputs['Color1'])
+mt.links.new(mmix.outputs['Color'], mt.nodes['Principled BSDF'].inputs['Base Color'])
+mt.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.95
+terrain.data.materials.append(MREG)
+for p in me.polygons:
+    p.use_smooth = True
+
+rng = random.Random(2026)
+for i in range(90):
+    q = rng.uniform(0, TAU)
+    d = rng.uniform(24, 190)      # keep the landing / EVA zone clear
+    sphere('Martian boulder %d' % i, MARS,
+           (d * math.cos(q), d * math.sin(q), rng.uniform(-0.2, 0.6)),
+           rng.uniform(0.25, 1.6), REGOLITH, 12, SITE)
+
+mars_planet = sphere('Mars (planet)', MARS, (0, -30000, 1400), 2400, REGOLITH, 96)
+mars_planet.data.materials.clear()
+MP = bpy.data.materials.new('Mars map')
+MP.use_nodes = True
+mpt = MP.node_tree
+mptex = mpt.nodes.new('ShaderNodeTexImage')
+mptex.image = mimg
+mpt.links.new(mptex.outputs['Color'], mpt.nodes['Principled BSDF'].inputs['Base Color'])
+mars_planet.data.materials.append(MP)
+key_scale(mars_planet, 1, 1)
+key_scale(mars_planet, 636, 1)
+key_scale(mars_planet, 642, 0.001)   # landing sky is haze only
+
+# Orion arriving at Mars (same NASA mesh, deployed arrays, separate path).
+MARS_ORION_E = add_empty('ORION_MARS_APPROACH', (0, -4850, 210), None, MARS)
+MARS_ORION = orion_assembly('ORION_MARS', MARS_ORION_E, (0, 0, 0))
+for f, loc, rot in [
+    (1, (-130, 420, -40), (D(-18), D(6), D(-30))),
+    (600, (-110, 380, -60), (D(-18), D(8), D(-30))),
+    (650, (-30, 110, -10), (D(-6), D(4), D(-10))),
+    (700, (0, 20, 0), (0, D(2), 0)),
+]:
+    key_loc(MARS_ORION_E, f, loc)
+    key_rot(MARS_ORION_E, f, rot)
+
+# -------------------------------------------------------------------- lander
+LAND = add_empty('MARS_LANDER', (0, 0, 165), SITE, MARS)
+LAND['note'] = 'Dedicated Mars lander; Orion never transforms into it'
+# NASA InSight lander (real NASA model, solar panels deployed)
+_ins_before = set(bpy.data.objects)
+bpy.ops.import_scene.gltf(filepath=INSIGHT_GLB)
+_ins_new = [o for o in bpy.data.objects if o not in _ins_before]
+for o in _ins_new:
+    move(o, MARS)
+_ins_roots = [o for o in _ins_new if o.parent is None]
+INSIGHT = add_empty('INSIGHT_LANDER_BODY', (0, 0, 0.64), LAND, MARS)
+for o in _ins_roots:
+    o.parent = INSIGHT
+    o.matrix_parent_inverse = Matrix.Identity(4)
+box('Lander airlock', MARS, (0, -1.45, 1.62), (1.5, 1.0, 1.5), WHITE, LAND)
+box('Lander airlock frame', MARS, (0, -1.97, 1.62), (1.62, 0.08, 1.62), METAL, LAND)
+HATCH = add_empty('LANDER_HATCH_HINGE', (0, -1.98, 1.55), LAND, MARS)
+box('Lander hatch', MARS, (0, -0.03, -0.62), (1.2, 0.14, 1.24), GOLD, HATCH)
+key_rot(HATCH, 1, (0, 0, 0))
+key_rot(HATCH, 724, (0, 0, 0))
+key_rot(HATCH, 748, (D(-78), 0, 0))
+RAMP = add_empty('LANDER_RAMP_HINGE', (0, -2.0, 0.7), LAND, MARS)
+box('Landing ramp', MARS, (0, -1.5, 0), (1.3, 3.0, 0.12), METAL, RAMP)
+key_rot(RAMP, 1, (D(70), 0, 0))
+key_rot(RAMP, 746, (D(70), 0, 0))
+key_rot(RAMP, 770, (D(13), 0, 0))   # tip rests on the surface
+
+for i, (x, y) in enumerate(((-1.2, -1.2), (-1.2, 1.2), (1.2, -1.2), (1.2, 1.2)), 1):
+    exhaust('LANDER_THRUSTER_%d' % i, LAND, (x, y, 0.15), 0.22, 2.4, LANDER_PLUME,
+            [(1, 0.001), (612, 0.001), (626, 0.45), (640, 1), (712, 0.8), (722, 0.35), (728, 0.001)],
+            700, (1.0, 0.6, 0.3))
+
+for f, z in [(1, 165), (606, 165), (626, 132), (652, 78), (676, 34), (700, 9), (716, 1.0), (722, 0.0), (900, 0.0)]:
+    key_loc(LAND, f, (0, 0, z))
+
+DUST_ROOT = add_empty('MARS_DUST', (0, 0, 0.3), SITE, MARS)
+DUST_BASE = plume_material('Mars dust volume', (0.34, 0.17, 0.08), 0, 0.5, smooth=True)
 for i in range(12):
-    a=i*math.tau/12
-    x,y=math.sin(a),-math.cos(a)
-    panel=box("Recessed avionics panel",(1.93*x,1.93*y,2.05),(.52,.085,.3),steel,lander)
-    panel.rotation_euler.z=a
-    frame=box("Window seal",(1.51*x,1.51*y,3.76),(.67,.12,.43),black,lander)
-    frame.rotation_euler=(math.radians(-43),0,a)
-    pane=box("Laminated window",(1.55*x,1.55*y,3.79),(.56,.12,.31),glass,lander)
-    pane.rotation_euler=frame.rotation_euler
-    rod("Cabin seam",(1.93*x,1.93*y,2.16),(1.76*x,1.76*y,3.48),.018,steel,lander)
-for i in range(4):
-    a=math.pi*.25+i*math.pi/2
-    x,y=math.cos(a),math.sin(a)
-    rod("Shock absorber",(1.52*x,1.52*y,2.15),(2.75*x,2.75*y,.2),.11,steel,lander)
-    rod("Compression strut",(1.36*x,1.36*y,1.05),(2.67*x,2.67*y,.32),.075,ivory,lander)
-    cylinder("Landing shoe",(2.75*x,2.75*y,.12),.46,.29,.22,black,lander)
-    cylinder("Vernier",(1.38*x,1.38*y,.92),.3,.16,.48,steel,lander)
-box("Airlock recess",(0,-1.83,2.21),(1.15,.15,1.86),black,lander)
-hinge=group("Airlock hinge",(0,-1.93,1.27),lander)
-box("Boarding ramp",(0,0,1.12),(1.06,.13,2.24),steel,hinge)
-for i in range(9): box("Traction tread",(0,.085,.14+i*.24),(.92,.09,.075),black,hinge)
-for x in [-.72,.72]: box("Entry lamp",(x,-1.79,2.8),(.12,.08,.31),lamp,lander)
-mark("Vehicle call sign","K E S T R E L",(0,-1.82,3.19),.18,black,lander)
-hinge.rotation_euler.x=2.16
-bpy.ops.object.select_all(action="DESELECT")
-for o in [lander,*lander.children_recursive]: o.select_set(True)
-bpy.ops.export_scene.gltf(filepath=str(ROOT/"public/models/mission/kestrel.glb"),use_selection=True,export_animations=False)
-key(hinge,"rotation_euler",396,(0,0,0))
-key(hinge,"rotation_euler",414,(2.16,0,0))
-descentJet=engine(lander,.98,.89,3.7)
-for f,s in [(1,.001),(262,.9),(325,1.1),(369,.65),(381,.001)]:
-    key(descentJet,"scale",f,(s,s,s))
+    a = TAU * i / 12
+    mat = DUST_BASE.copy()
+    mat.name = 'Dust billow %d' % i
+    vol = mat.node_tree.nodes['Principled Volume']
+    vol.inputs['Emission Strength'].default_value = 0.0
+    vol.inputs['Color'].default_value = (0.34, 0.17, 0.08, 1)
+    for f, d in ((1, 0.001), (690, 0.001), (702, 0.35), (716, 0.9), (740, 0.8), (780, 0.05)):
+        vol.inputs['Density'].default_value = d
+        vol.inputs['Density'].keyframe_insert('default_value', frame=f)
+    o = sphere('Dust billow %d' % i, MARS, (9.5 * math.cos(a), 9.5 * math.sin(a), 0.8), 1, mat, 16, DUST_ROOT)
+    key_scale(o, 1, 0.001)
+    key_scale(o, 690, 0.3)
+    key_scale(o, 706, 1.2)
+    key_scale(o, 730, 1.8)
+    key_scale(o, 790, 2.0)
 
-# Three sets are staged kilometres apart so they can share a single edit timeline.
-field=3000
-space=6000
-move(rocket,[(1,(0,0,1)),(67,(0,0,1)),(90,(0,0,2.5)),(135,(0,0,21)),(136,(space,0,8)),(195,(space+3,0,13)),(261,(space+9,0,17))])
-for f,ang in [(135,0),(136,.8),(195,1.12),(261,1.43)]: key(rocket,"rotation_euler",f,(0,ang,0))
-move(booster,[(150,(0,0,0)),(195,(-2,0,-9)),(261,(-8,0,-30))])
-key(booster,"rotation_euler",150,(0,0,0))
-key(booster,"rotation_euler",228,(.11,-.42,.12))
-move(lander,[(1,(field,0,60)),(195,(space+21,0,22)),(196,(space+22,0,23)),(261,(space+30,-4,24)),(262,(field,0,38)),(302,(field,0,19)),(339,(field,0,5.8)),(365,(field,0,1.1)),(376,(field,0,.02)),(379,(field,0,-.06)),(384,(field,0,0)),(450,(field,0,0))])
+# -------------------------------------------------------------------- EVA crew
+def sim_astronaut(name, start, egress_frame, walk_start, walk_end, walk_from, walk_to):
+    """Use the same field-suit glTF as the MissionForge simulation."""
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=SUIT_GLB)
+    new = [o for o in bpy.data.objects if o not in before]
+    for o in new:
+        move(o, EVA)
+    roots = [o for o in new if o.parent is None]
+    rig = add_empty(name, start, SITE, EVA)
+    holder = bpy.data.objects.new(name + '_SUIT', None)
+    EVA.objects.link(holder)
+    holder.parent = rig
+    for o in roots:
+        o.parent = holder
+        o.matrix_parent_inverse = Matrix.Identity(4)
+    limbs = {}
+    for o in new:
+        short = o.name.split('.')[0]
+        if o.type == 'EMPTY' and short in ('ArmL', 'ArmR', 'LegL', 'LegR'):
+            limbs[short] = o
+    key_scale(rig, 1, 0.001)          # stays inside until the hatch opens
+    key_scale(rig, egress_frame - 1, 0.001)
+    key_scale(rig, egress_frame, 1)
+    key_loc(rig, 1, start)
+    key_loc(rig, egress_frame, start)
+    key_loc(rig, walk_from, walk_start)
+    a, b = Vector(walk_start), Vector(walk_end)
+    heading = math.atan2(-(b.x - a.x), -(b.y - a.y))
+    rig.rotation_mode = 'XYZ'
+    key_rot(rig, walk_from - 1, (0, 0, heading))
+    key_rot(rig, walk_to, (0, 0, heading))
+    phase = 0.0
+    for f in range(walk_from, walk_to + 1, 5):
+        t = (f - walk_from) / max(1, walk_to - walk_from)
+        p = a.lerp(b, t)
+        p.z += 0.035 * abs(math.sin(phase * 2.9))
+        key_loc(rig, f, tuple(p))
+        s = math.sin(phase * 1.5)
+        for key, ang in (('LegL', 0.55 * s), ('LegR', -0.55 * s),
+                         ('ArmL', -0.45 * s), ('ArmR', 0.45 * s)):
+            if key in limbs:
+                key_rot(limbs[key], f, (ang, 0, 0))
+        phase += 1.0
+    for o in limbs.values():
+        key_rot(o, walk_to, (0, 0, 0))
+    return rig, {'r_arm': limbs.get('ArmR'), 'legs': limbs}
 
-def ground(origin):
-    width=520
-    count=75
-    verts=[]
-    for j in range(count):
-        for i in range(count):
-            x=(i/(count-1)-.5)*width
-            y=(j/(count-1)-.5)*width
-            edge=min(1,max(0,(math.hypot(x,y)-21)/60))
-            z=edge*(2+10*noise.fractal(Vector((x*.027,y*.027,2)),1.1,2,4))
-            verts.append((x+origin,y,z-.07))
-    mesh=bpy.data.meshes.new("Basin relief")
-    mesh.from_pydata(verts,[],[(j*count+i,j*count+i+1,(j+1)*count+i+1,(j+1)*count+i) for j in range(count-1) for i in range(count-1)])
-    o=bpy.data.objects.new("Analog basin",mesh)
-    scene.collection.objects.link(o)
-    m=material("Basalt and alluvium",(.47,.29,.18),rough=.93)
-    nt=m.node_tree
-    tex=nt.nodes.new("ShaderNodeTexImage")
-    tex.image=bpy.data.images.load(str(ROOT/"public/assets/mission/atacama-ground.jpg"),check_existing=True)
-    uv=nt.nodes.new("ShaderNodeTexCoord")
-    nt.links.new(uv.outputs["Generated"],tex.inputs["Vector"])
-    nt.links.new(tex.outputs["Color"],nt.nodes.get("Principled BSDF").inputs["Base Color"])
-    mesh.materials.append(m)
-    for poly in mesh.polygons: poly.use_smooth=True
-ground(0)
-ground(field)
-rock=material("Weathered basalt",(.15,.10,.075),rough=.91)
-bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1)
-stone=finish("Talus",(field+8,0,0),rock,None)
-for i in range(220):
-    o=stone.copy();scene.collection.objects.link(o)
-    a=random.uniform(0,math.tau);d=random.uniform(3.5,34);r=random.uniform(.07,.43)
-    o.location=(field+d*math.cos(a),d*math.sin(a),-.035)
-    o.rotation_euler.z=a
-    o.scale=(r*1.7,r,r*random.uniform(.45,.95))
-stone.scale=(.5,.4,.18)
-box("Flame trench",(0,0,.25),(10,10,.62),black)
-for j in range(12):
-    z=j*1.6
-    box("Access deck",(-4,1,z+.6),(2.4,2.4,.13),steel)
-    for x in [-5,-3]:
-        for y in [0,2]: rod("Gantry column",(x,y,z),(x,y,z+1.6),.095,steel)
-    rod("Lattice brace",(-5,0,z),(-3,0,z+1.6),.075,copper)
-    rod("Lattice brace",(-3,0,z),(-5,0,z+1.6),.07,steel)
-    if j in [4,8,11]:
-        box("Umbilical",(-2.48,1,z+.7),(2.8,.8,.23),copper)
-    if j%3==0: box("Tower beacon",(-5,0,z+.78),(.13,.13,.18),lamp)
-for x,y in [(11,10),(15,10),(-14,14)]:
-    cylinder("Cryogenic storage",(x,y,2.5),1.6,1.6,5,ivory)
-    cylinder("Tank dome",(x,y,5.22),1.6,.64,.44,steel)
 
-def import_model(name,xyz,height):
-    bpy.ops.import_scene.gltf(filepath=str(ROOT/f"public/models/mission/{name}.glb"))
-    objects=list(bpy.context.selected_objects)
-    roots=[o for o in objects if not o.parent]
-    points=[o.matrix_world@Vector(v) for o in objects if o.type=="MESH" for v in o.bound_box]
-    low=[min(v[i] for v in points) for i in range(3)]
-    high=[max(v[i] for v in points) for i in range(3)]
-    scale=height/(high[2]-low[2])
-    p=group(name,xyz)
-    center=group("Asset datum",(-scale*(low[0]+high[0])/2,-scale*(low[1]+high[1])/2,-scale*low[2]),p)
-    center.scale=(scale,)*3
-    for o in roots:o.parent=center
-    return p
-import_model("habitat",(field-10,8,0),4)
-import_model("laboratory",(field-2,10,0),3.4)
-import_model("rover",(field+7,4,0),2.1)
-for x in [-8,-7,-6,-5]: box("Pressure connector",(field+x,9,1.1),(1.1,1.45,1.9),ivory)
-for i in range(3):
-    box("Array mast",(field+3+i*2.5,11,.72),(.15,.15,1.44),steel)
-    box("Photovoltaic wing",(field+3+i*2.5,11,1.44),(2.35,3,.13),glass).rotation_euler.x=.24
-crew=import_model("field-suit",(field,-1.88,1.24),1.74)
-crew.rotation_euler.z=math.pi
-move(crew,[(1,(field,0,1.1)),(408,(field,-1.74,1.24)),(430,(field,-3.53,.17)),(450,(field+.22,-4.5,0))])
-for o in crew.children_recursive:
-    if o.name in ["LegL","LegR","ArmL","ArmR"]:
-        base=o.rotation_euler.copy()
-        o.rotation_mode="XYZ"
-        for f in range(408,451,3):
-            v=base.copy()
-            v.x+=.38*math.sin((f-408)*.29)*(1 if o.name in ["LegL","ArmR"] else -1)
-            if o.name=="ArmR" and f>435:v.y+=(f-435)*.055
-            key(o,"rotation_euler",f,v)
+A1, J1 = sim_astronaut('ASTRONAUT_1', (0.2, -2.6, 0.05), 752,
+                        (0.8, -4.9, 0.05), (8.4, -10.8, 0.05), 790, 854)
+A2, J2 = sim_astronaut('ASTRONAUT_2', (0.95, -2.7, 0.05), 770,
+                        (1.6, -4.9, 0.05), (5.4, -8.4, 0.05), 806, 868)
 
-# Soft edged dust volumes use a radial extinction profile and turbulent density.
-dust=bpy.data.materials.new("Windborne exhaust")
-dust.use_nodes=True
-nt=dust.node_tree
-nt.nodes.remove(nt.nodes.get("Principled BSDF"))
-vol=nt.nodes.new("ShaderNodeVolumePrincipled")
-vol.inputs["Color"].default_value=(.64,.54,.41,1)
-nt.links.new(vol.outputs[0],nt.nodes.get("Material Output").inputs["Volume"])
-coord=nt.nodes.new("ShaderNodeTexCoord")
-distance=nt.nodes.new("ShaderNodeVectorMath"); distance.operation="DISTANCE"
-distance.inputs[1].default_value=(.5,.5,.5)
-nt.links.new(coord.outputs["Generated"],distance.inputs[0])
-ramp=nt.nodes.new("ShaderNodeValToRGB")
-ramp.color_ramp.elements[0].color=(.62,.62,.62,1)
-ramp.color_ramp.elements[1].position=.51
-ramp.color_ramp.elements[1].color=(0,0,0,1)
-nt.links.new(distance.outputs["Value"],ramp.inputs[0])
-texture=nt.nodes.new("ShaderNodeTexNoise")
-texture.inputs["Scale"].default_value=4
-product=nt.nodes.new("ShaderNodeMath"); product.operation="MULTIPLY"
-nt.links.new(ramp.outputs[0],product.inputs[0]); nt.links.new(texture.outputs[0],product.inputs[1]); nt.links.new(product.outputs[0],vol.inputs["Density"])
-for origin,first,last in [(0,60,135),(field,328,450)]:
-    for i in range(14):
-        a=random.uniform(0,math.tau)
-        o=box("Dust billow",(origin,0,.5),(1,1,1),dust)
-        start=first+i%7*3
-        key(o,"scale",start,(.001,)*3)
-        key(o,"scale",int((start+last)/2),(8+i%4,7+i%4,1.8+i%2))
-        key(o,"scale",last,(12+i%4,9+i%4,1.5+i%3))
-        move(o,[(start,(origin,0,.55)),(last,(origin+(5+i%7)*math.cos(a),(5+i%7)*math.sin(a),.65))])
+FLAG = add_empty('SPACE_INVADERS_FLAG', (10.4, -12.0, 0), SITE, EVA)
+cyl('Flag support pole', EVA, (0, 0, 1.55), 0.05, 3.1, METAL, 12, FLAG)
+box('Flag cross rod', EVA, (1.3, 0, 2.45), (2.6, 0.05, 0.05), METAL, FLAG)
+fabric = prim('primitive_plane_add', 'Flag fabric', EVA, None, size=1, location=(1.3, 0, 1.85))
+fabric.scale = (2.6, 1.3, 1.0)
+fabric.rotation_euler = (D(90), 0, 0)
+fabric.parent = FLAG
+USAM = bpy.data.materials.new('USA flag print')
+USAM.use_nodes = True
+ut = USAM.node_tree
+uimg = bpy.data.images.load(FLAG_TEX, check_existing=True)
+utex = ut.nodes.new('ShaderNodeTexImage')
+utex.image = uimg
+ut.links.new(utex.outputs['Color'], ut.nodes['Principled BSDF'].inputs['Base Color'])
+ut.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.8
+fabric.data.materials.clear()
+fabric.data.materials.append(USAM)
+key_scale(fabric, 1, (0.06, 1, 1))
+key_scale(fabric, 852, (0.06, 1, 1))
+key_scale(fabric, 868, (1, 1, 1))    # unfurls as the pole goes up
+key_rot(FLAG, 1, (D(72), 0, D(-25)))
+key_rot(FLAG, 852, (D(72), 0, D(-25)))
+key_rot(FLAG, 868, (D(-6), 0, D(3)))
+key_rot(FLAG, 880, (0, 0, 0))
+# Astronaut 1 steadies the pole as it is raised.
+for f, rot in ((846, (0, 0, 0)), (856, (D(20), 0, 0)), (868, (D(4), 0, 0)), (880, (0, 0, 0))):
+    if J1.get('r_arm'):
+        key_rot(J1['r_arm'], f, rot)
 
-earth=material("Blue Marble",(.1,.2,.4),rough=.85)
-tex=earth.node_tree.nodes.new("ShaderNodeTexImage")
-tex.image=bpy.data.images.load(str(ROOT/"public/textures/earth.jpg"))
-earth.node_tree.links.new(tex.outputs[0],earth.node_tree.nodes.get("Principled BSDF").inputs["Base Color"])
-bpy.ops.mesh.primitive_uv_sphere_add(segments=160,ring_count=96,radius=97)
-planet=finish("Earth • survey orbit",(space,44,-83),earth,None)
-for face in planet.data.polygons: face.use_smooth=True
-world=bpy.data.worlds.new("Dawn atmosphere")
-scene.world=world
-world.use_nodes=True
-nt=world.node_tree
-sky=nt.nodes.new("ShaderNodeTexSky")
-sky.sky_type="NISHITA"; sky.sun_elevation=.19; sky.sun_rotation=2.6
-bg=nt.nodes.get("Background")
-nt.links.new(sky.outputs[0],bg.inputs["Color"])
-for f,v in [(1,.27),(135,.27),(136,.00009),(261,.00009),(262,.27)]:
-    bg.inputs["Strength"].default_value=v
-    bg.inputs["Strength"].keyframe_insert(data_path="default_value",frame=f)
-bpy.ops.object.light_add(type="SUN")
-sun=bpy.context.object
-sun.rotation_euler=(1.18,-.46,-.5)
-sun.data.energy=2.8
-sun.data.angle=.045
-def shot(name,f1,f2,p1,p2,t1,t2,lens):
-    bpy.ops.object.camera_add()
-    cam=bpy.context.object
-    cam.name=name
-    cam.data.lens=lens
-    cam.data.clip_end=1000
-    for f,pos,aim in [(f1,p1,t1),(f2,p2,t2)]:
-        key(cam,"location",f,pos)
-        key(cam,"rotation_euler",f,(Vector(aim)-Vector(pos)).to_track_quat("-Z","Y").to_euler())
-    marker=scene.timeline_markers.new(name,frame=f1)
-    marker.camera=cam
-    return cam
-scene.camera=shot("01 · Countdown",1,66,(16,-39,6),(13,-36,5),(0,0,10),(0,0,10),34)
-shot("02 · Tower clear",67,135,(10,-24,2),(15,-38,20),(0,0,7),(0,0,30),31)
-shot("03 · Stage separation",136,195,(space+11,-28,18),(space+8,-35,21),(space+8,0,15),(space+13,0,20),36)
-shot("04 · Payload deployment",196,261,(space+24,-30,27),(space+31,-24,30),(space+17,0,20),(space+26,0,22),43)
-descent_cam=shot("05 · Terminal descent",262,339,(field+10,-18,46),(field+11,-20,14),(field,0,39),(field,0,8),37)
-# Track the cabin through the braking curve.
-target=group("Descent tracking point",(0,0,2),lander)
-track=descent_cam.constraints.new("TRACK_TO");track.target=target;track.track_axis="TRACK_NEGATIVE_Z";track.up_axis="UP_Y"
-shot("06 · Touchdown",340,396,(field+9,-17,2),(field+8,-15,1.4),(field,0,5.6),(field,0,2.1),37)
-shot("07 · Field deployment",397,450,(field+4,-9,2.5),(field+7,-14,3.4),(field,-1.4,2),(field-2,.5,2),36)
-scene.frame_end=450
-scene.render.fps=30
-scene.render.engine="CYCLES"
-scene.cycles.samples=3
-scene.cycles.use_denoising=True
-scene.cycles.max_bounces=3
-scene.cycles.volume_bounces=0
-scene.render.resolution_x=1920
-scene.render.resolution_y=1080
-scene.render.resolution_percentage=100
-scene.render.image_settings.file_format="JPEG"
-scene.render.image_settings.quality=94
-scene.view_settings.exposure=-.85
-scene.view_settings.look="AgX - Medium High Contrast"
-scene.render.filepath="//frames/frame-"
-scene.frame_set(1)
-bpy.ops.file.pack_all()
-bpy.context.preferences.filepaths.save_version=0
-bpy.ops.wm.save_as_mainfile(filepath=str(OUT/"missionforge-launch.blend"),compress=True)
+# -------------------------------------------------------------- cameras
+def follow_target(name, target, offset):
+    """Aim point that follows an animated object, independent of bind pose."""
+    o = bpy.data.objects.new(name, None)
+    CAMS.objects.link(o)
+    o.empty_display_size = 2
+    c = o.constraints.new('COPY_LOCATION')
+    c.name = name + ' follows ' + target.name
+    c.target = target
+    c.use_offset = True
+    c.target_space = 'WORLD'
+    c.owner_space = 'WORLD'
+    o.location = Vector(offset)
+    return o
 
+
+LAUNCH_TARGET = follow_target('TARGET_LAUNCH_STACK', ROOT_EMPTY, (0, 0, 50))
+BOOSTER_TARGET = follow_target('TARGET_BOOSTER_SEPARATION', LEFT_E, (0, 0, 26))
+ORION_TARGET = follow_target('TARGET_ORION', ORION_E, (0, 0, 4))
+UPPER_TARGET = follow_target('TARGET_UPPER_STAGE', UPPER_E, (0, 0, 10))
+MARS_ORION_TARGET = follow_target('TARGET_MARS_ORION', MARS_ORION_E, (0, 0, 3))
+LAND_TARGET = follow_target('TARGET_LANDER', LAND, (0, 0, 1.0))
+EVA_TARGET = add_empty('TARGET_EVA', (5.5, -11.0, 1.2), SITE, CAMS)
+MARS_TARGET = follow_target('TARGET_MARS_APPROACH', MARS_ORION_E, (0, 0, 1))
+
+
+def camera(name, lens, target, frames, fstop=2.8, clip=60000):
+    data = bpy.data.cameras.new(name)
+    data.lens = lens
+    data.sensor_width = 36
+    data.clip_start = 0.1
+    data.clip_end = clip
+    o = bpy.data.objects.new(name, data)
+    CAMS.objects.link(o)
+    for f, loc in frames:
+        o.location = Vector(loc)
+        o.keyframe_insert('location', frame=f)
+    c = o.constraints.new('TRACK_TO')
+    c.name = name + ' aim'
+    c.target = target
+    c.track_axis = 'TRACK_NEGATIVE_Z'
+    c.up_axis = 'UP_Y'
+    o['focal_length_mm'] = lens
+    return o
+
+
+def rocket_at(frame):
+    s.frame_set(frame)
+    bpy.context.view_layer.update()
+    return world_of(ROOT_EMPTY)
+
+
+def at_frame(o, frame):
+    s.frame_set(frame)
+    bpy.context.view_layer.update()
+    return o.matrix_world.translation.copy()
+
+
+CAM_LAUNCH = camera('CAM_LAUNCHPAD', 45, LAUNCH_TARGET,
+                    [(1, (96, -172, 20)), (60, (82, -150, 17)), (96, (70, -128, 14))])
+CAM_ASCENT = camera('CAM_ASCENT', 42, LAUNCH_TARGET,
+                    [(f, rocket_at(f) + Vector((104, -182, -26))) for f in (96, 126, 156, 186, 216, 246, 258)])
+P246 = at_frame(LEFT_E, 246)
+P276 = at_frame(LEFT_E, 276)
+P305 = at_frame(LEFT_E, 305)
+CAM_SEP = camera('CAM_BOOSTER_SEPARATION', 35, LEFT_E,
+                 [(246, P246 + Vector((52, -96, 24))),
+                  (276, P276 + Vector((62, -112, 30))),
+                  (305, P305 + Vector((74, -132, 36)))])
+CAM_ORBIT = camera('CAM_ORBIT', 50, UPPER_TARGET,
+                   [(398, rocket_at(398) + Vector((85, -150, 45))),
+                    (440, rocket_at(440) + Vector((105, -185, 55))),
+                    (500, rocket_at(500) + Vector((130, -230, 70)))])
+O516 = at_frame(ORION_E, 516)
+O560 = at_frame(ORION_E, 560)
+O610 = at_frame(ORION_E, 610)
+CAM_ORION = camera('CAM_ORION', 65, ORION_TARGET,
+                   [(516, O516 + Vector((26, -42, 14))),
+                    (560, O560 + Vector((32, -52, 18))),
+                    (610, O610 + Vector((40, -66, 22)))])
+CAM_MARS = camera('CAM_MARS_APPROACH', 60, MARS_TARGET,
+                  [(614, (-360, -5650, 240)), (660, (-260, -5250, 190)), (706, (-170, -4980, 140))])
+CAM_LAND = camera('CAM_LANDING', 50, LAND_TARGET,
+                  [(612, (34, -2660, 96)), (660, (26, -2640, 40)), (700, (16, -2624, 12)),
+                   (726, (10.0, -2614, 3.4)), (760, (9.0, -2613, 3.0))])
+CAM_EVA = camera('CAM_ASTRONAUTS', 42, EVA_TARGET,
+                 [(700, (0.5, -2588, 3.4)), (760, (1.5, -2589, 3.2)),
+                  (800, (2.5, -2590, 3.0)), (852, (2.5, -2590, 3.0)),
+                  (900, (3.0, -2590, 2.9))])
+
+MARKERS = [
+    (1, 'COUNTDOWN / PAD', CAM_LAUNCH),
+    (40, 'ENGINE STARTUP', CAM_LAUNCH),
+    (66, 'SRB IGNITION / LIFTOFF', CAM_ASCENT),
+    (196, 'LAS JETTISON', CAM_ASCENT),
+    (246, 'SRB SEPARATION', CAM_SEP),
+    (300, 'BOOSTERS FALLING AWAY', CAM_SEP),
+    (420, 'CORE STAGE SEPARATION', CAM_ORBIT),
+    (440, 'UPPER STAGE IGNITION', CAM_ORBIT),
+    (500, 'ORION SEPARATION', CAM_ORION),
+    (532, 'SOLAR ARRAY DEPLOYMENT', CAM_ORION),
+    (612, 'MARS APPROACH', CAM_MARS),
+    (646, 'LANDING GEAR DEPLOY', CAM_LAND),
+    (700, 'POWERED DESCENT', CAM_LAND),
+    (722, 'MARS TOUCHDOWN', CAM_LAND),
+    (728, 'ENGINE SHUTDOWN', CAM_LAND),
+    (748, 'HATCH OPEN / RAMP', CAM_EVA),
+    (780, 'CREW EGRESS', CAM_EVA),
+    (856, 'USA FLAG RAISED', CAM_EVA),
+]
+for frame, label, cam in MARKERS:
+    m = s.timeline_markers.new(label, frame=frame)
+    m.camera = cam
+s.camera = CAM_LAUNCH
+
+# ---------------------------------------------------------------- lighting
+sun_data = bpy.data.lights.new('Sun', 'SUN')
+sun_data.energy = 4.1
+sun_data.color = (1.0, 0.93, 0.84)
+sun_data.angle = D(0.6)
+sun = bpy.data.objects.new('Sun', sun_data)
+CAMS.objects.link(sun)
+sun.rotation_euler = (D(52), 0, D(28))
+
+fill = bpy.data.lights.new('Pad fill', 'AREA')
+fill.energy = 2200
+fill.size = 30
+fo = bpy.data.objects.new('Pad fill', fill)
+CAMS.objects.link(fo)
+fo.location = (40, -40, 22)
+
+mars_fill = bpy.data.lights.new('Mars bounce', 'AREA')
+mars_fill.energy = 3200
+mars_fill.size = 26
+mars_fill.color = (1.0, 0.78, 0.6)
+mo = bpy.data.objects.new('Mars bounce', mars_fill)
+CAMS.objects.link(mo)
+mo.location = (4, -2622, 9)
+mo.rotation_euler = (D(90), 0, 0)   # faces the landing site and crew
+
+# World: night launch starfield mixed into a Mars sky at the landing scene.
+world = bpy.data.worlds.new('Mission sky')
+s.world = world
+world.use_nodes = True
+wnt = world.node_tree
+wnt.nodes.clear()
+out = wnt.nodes.new('ShaderNodeOutputWorld')
+star_bg = wnt.nodes.new('ShaderNodeBackground')
+star_env = wnt.nodes.new('ShaderNodeTexEnvironment')
+star_env.image = bpy.data.images.load(os.path.join(ASSETS, 'starfield.png'), check_existing=True)
+wnt.links.new(star_env.outputs['Color'], star_bg.inputs['Color'])
+star_bg.inputs['Strength'].default_value = 0.55
+mars_bg = wnt.nodes.new('ShaderNodeBackground')
+mars_env = wnt.nodes.new('ShaderNodeTexEnvironment')
+mars_env.image = bpy.data.images.load(os.path.join(ASSETS, 'mars-sky.png'), check_existing=True)
+wnt.links.new(mars_env.outputs['Color'], mars_bg.inputs['Color'])
+mars_bg.inputs['Strength'].default_value = 0.85
+mix = wnt.nodes.new('ShaderNodeMixShader')
+mix.inputs[0].default_value = 0.0
+wnt.links.new(star_bg.outputs[0], mix.inputs[1])
+wnt.links.new(mars_bg.outputs[0], mix.inputs[2])
+wnt.links.new(mix.outputs[0], out.inputs['Surface'])
+for f, v in ((1, 0.0), (600, 0.0), (606, 1.0), (900, 1.0)):
+    mix.inputs[0].default_value = v
+    mix.inputs[0].keyframe_insert('default_value', frame=f)
+
+# ------------------------------------------------------------------- polish
+for o in bpy.data.objects:
+    if not o.animation_data or not o.animation_data.action:
+        continue
+    for fc in o.animation_data.action.fcurves:
+        for kp in fc.keyframe_points:
+            kp.interpolation = 'BEZIER'
+            kp.handle_left_type = 'AUTO_CLAMPED'
+            kp.handle_right_type = 'AUTO_CLAMPED'
+
+s.frame_set(1)
+notes = bpy.data.texts.new('MISSIONFORGE_ANIMATION')
+notes.write("""MISSIONFORGE - SLS / ORION / MARS  (30 fps, 900 frames, 30 s)
+
+NASA geometry (real models, imported and split):
+  Space Launch System printable model - core, SRBs, upper stage, Orion, LAS
+  https://science.nasa.gov/3d-resources/space-launch-system-sls/
+  InSight Cruise Lander (NASA/Brian E. Kumanchik) - Mars lander
+  https://science.nasa.gov/3d-resources/insight-cruise-lander/
+Crew: the MissionForge field-suit glTF from the simulation.
+
+Hierarchy: SLS_ROOT > CORE_STAGE > RS25_ENGINES, SRB_LEFT, SRB_RIGHT,
+UPPER_STAGE > ORION > CREW_MODULE / SERVICE_MODULE / SOLAR_ARRAYS / LAS.
+
+Every visible action is an object or material keyframe on this timeline.
+No video textures, no sequencer strips, no imported footage.
+""")
+s['source_models'] = 'NASA SLS printable model + InSight Cruise Lander (NASA 3D Resources); MissionForge field-suit crew'
+s['native_keyframe_animation'] = True
+
+print('STAGE: saving', flush=True)
+bpy.context.preferences.filepaths.save_version = 0
+bpy.ops.wm.save_as_mainfile(filepath=OUT, compress=True)
+print('SAVED', OUT, flush=True)
+
+# ----------------------------------------------------------------- verification
+def report(label, obj, frame):
+    s.frame_set(frame)
+    print('  %-34s f%03d world=%s' % (label, frame, tuple(round(v, 1) for v in world_of(obj))), flush=True)
+
+
+print('VERIFY', flush=True)
+for fr in (1, 90, 150, 246, 262, 300, 420, 440, 524, 548, 600, 650, 676, 700, 722, 750, 790, 870):
+    report('rocket', ROOT_EMPTY, fr)
+for fr in (246, 262, 300, 380, 480):
+    report('left booster', LEFT_E, fr)
+    report('right booster', RIGHT_E, fr)
+    report('core', CORE_E, fr)
+    print('    clearance L=%.1f m R=%.1f m' % (
+        (world_of(LEFT_E) - world_of(CORE_E)).length, (world_of(RIGHT_E) - world_of(CORE_E)).length), flush=True)
+for fr in (420, 462, 520, 575, 640):
+    report('upper stage', UPPER_E, fr)
+    report('orion', ORION_E, fr)
+for fr in (1, 530, 548, 575):
+    s.frame_set(fr)
+    print('  solar fold angle f%03d = %.1f deg' % (fr, math.degrees(ORION_A['wings'][0].rotation_euler.y)), flush=True)
+for fr in (1, 646, 676, 700, 722):
+    s.frame_set(fr)
+    print('  lander z f%03d = %.2f' % (fr, LAND.matrix_world.translation.z), flush=True)
+for fr in (1, 760, 800, 860):
+    s.frame_set(fr)
+    print('  astronaut 1 f%03d = %s' % (fr, tuple(round(v, 1) for v in world_of(A1))), flush=True)
+s.frame_set(880)
+print('  flag rot =', tuple(round(math.degrees(v), 1) for v in FLAG.rotation_euler), flush=True)
+print('  cameras:', [o.name for o in bpy.data.objects if o.type == 'CAMERA'], flush=True)
+print('  markers:', len(s.timeline_markers), 'fps', s.render.fps, 'end', s.frame_end, flush=True)
+print('DONE', flush=True)
