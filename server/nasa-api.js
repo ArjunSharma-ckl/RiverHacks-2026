@@ -199,15 +199,38 @@ export function createApi(env = {}, extras = {}) {
           const params = new URLSearchParams({engine, q, api_key: serpKey});
           const data = await getJson('https://serpapi.com/search.json?' + params);
           if (data.error) throw new Error('Search unavailable');
-          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
-            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
+          if (engine === 'google') {
+            return (data.organic_results || []).slice(0, 5).map(({title,link}) => ({title,link}));
+          }
+          if (engine === 'google_news') {
+            // Google News groups related coverage under `stories`; flatten so a
+            // grouped result still yields individual headlines.
+            const flat = [];
+            for (const item of data.news_results || []) {
+              for (const story of (item.stories?.length ? item.stories : [item])) {
+                if (story?.title && story?.link) {
+                  flat.push({
+                    title: story.title,
+                    link: story.link,
+                    source: story.source?.name || story.source || '',
+                    date: story.date || '',
+                    thumbnail: story.thumbnail || ''
+                  });
+                }
+              }
+            }
+            return flat.slice(0, 5);
+          }
+          return (data.images_results || []).slice(0, 4)
             .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
         }
         const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
-        const [web, images, nasa] = await Promise.allSettled([
-          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+        const [web, images, news, nasa] = await Promise.allSettled([
+          search('google'), search('google_images'), search('google_news'),
+          routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
         ]);
-        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
+        return { links: web.value || [], images: images.value || [], news: news.value || [],
+          nasa: nasa.value?.photos || [],
           searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
   }
   const routes = {

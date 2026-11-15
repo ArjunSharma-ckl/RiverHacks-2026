@@ -1,4 +1,5 @@
 import { describe } from './catalog.js';
+import { serpBadge } from './serp-badge.js';
 import { surfaceWeather, spaceWeather } from './weather.js';
 
 function element(tag, className, text) {
@@ -89,13 +90,21 @@ export function createPanel(root) {
       if (!response.ok) return;
       const { articles, photos } = await response.json();
       if (current !== token) return;
-      if (articles.length) extra.append(element('h3',undefined,'Further reading'));
+      if (articles.length) {
+        const heading = element('h3', undefined, 'Further reading');
+        heading.append(serpBadge('Web search'));
+        extra.append(heading);
+      }
       for (const item of articles) {
         const card = element('section','source-card');
         card.append(element('small',undefined,new URL(item.link).hostname), externalLink(item.link,item.title), element('p',undefined,item.snippet));
         extra.append(card);
       }
-      if (photos.length) gallery.append(element('h3',undefined,'Image archive'));
+      if (photos.length) {
+        const heading = element('h3', undefined, 'Image archive');
+        heading.append(serpBadge('Image search'));
+        gallery.append(heading);
+      }
       const grid = element('div','grid');
       for (const photo of photos) {
         const link = externalLink(photo.link,'');
