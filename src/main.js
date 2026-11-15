@@ -211,3 +211,64 @@ document.addEventListener('orbit:enter', () => {
     easingFunction: C.EasingFunction.QUADRATIC_IN_OUT,
   });
 }, { once: true });
+
+// Scroll tour. Each chapter of the landing page has a camera keyframe, and the
+// scroll position blends between them. The camera eases toward the blend every
+// frame instead of being set on the scroll event, so it glides, and picks up
+// smoothly from wherever the idle drift left it.
+const story = document.getElementById('orbit-story');
+if (story) {
+  const KEYFRAMES = [
+    { lon: HOME.longitude, lat: HOME.latitude, height: HOME.height },
+    { lon: -96, lat: 31, height: 1.25e7 },   // weather over North America
+    { lon: -38, lat: 6, height: 3.5e7 },     // pulled back to the satellite shells
+    { lon: -19, lat: 58, height: 7.5e6 },    // Iceland, a classic Mars analog
+    { lon: -68, lat: -20, height: 1.5e7 },   // the Atacama
+  ];
+  let tourTarget = null;
+  story.addEventListener('scroll', () => {
+    const span = story.scrollHeight - story.clientHeight;
+    const progress = span > 0 ? story.scrollTop / span : 0;
+    const scaled = progress * (KEYFRAMES.length - 1);
+    const index = Math.min(KEYFRAMES.length - 2, Math.floor(scaled));
+    const t = scaled - index;
+    const blend = t * t * (3 - 2 * t);
+    const from = KEYFRAMES[index], to = KEYFRAMES[index + 1];
+    tourTarget = {
+      lon: from.lon + (to.lon - from.lon) * blend,
+      lat: from.lat + (to.lat - from.lat) * blend,
+      height: from.height + (to.height - from.height) * blend,
+    };
+    stopDrift();
+  }, { passive: true });
+
+  let tourFrame = performance.now();
+  scene.preUpdate.addEventListener(() => {
+    const now = performance.now();
+    const elapsed = Math.min((now - tourFrame) / 1000, 0.1);
+    tourFrame = now;
+    if (!tourTarget || !document.body.classList.contains('intro-open')) return;
+    const here = camera.positionCartographic;
+    const ease = 1 - Math.exp(-elapsed * 4.5);
+    const lon = C.Math.toDegrees(here.longitude);
+    const lat = C.Math.toDegrees(here.latitude);
+    const turn = ((tourTarget.lon - lon + 540) % 360) - 180;
+    camera.setView({
+      destination: C.Cartesian3.fromDegrees(
+        lon + turn * ease,
+        lat + (tourTarget.lat - lat) * ease,
+        here.height + (tourTarget.height - here.height) * ease,
+      ),
+      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    });
+  });
+
+  if ('IntersectionObserver' in window) {
+    const reveal = new IntersectionObserver((entries) => {
+      for (const entry of entries) entry.target.classList.toggle('in', entry.isIntersecting);
+    }, { root: story, threshold: 0.45 });
+    for (const panel of story.querySelectorAll('.story-panel:not(.story-hero)')) reveal.observe(panel);
+  } else {
+    for (const panel of story.querySelectorAll('.story-panel')) panel.classList.add('in');
+  }
+}

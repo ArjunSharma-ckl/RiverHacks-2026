@@ -18,25 +18,32 @@
     </div>
 
 <header class="orbit-mast"><a href="/orbit.html"><img src="/forge.svg" alt="">MISSIONFORGE</a><span>Earth Viewer</span><a class="atlas-link" href="/#discover">Open workspace ↗</a></header>
-<section id="orbit-intro"><div class="frame-label"><i></i>Earth observation</div><h2>Explore Earth.<br><em>Prepare beyond it.</em></h2><p>Find analog terrain, plan a field mission and test your crew and equipment against real Earth conditions.</p><button id="explore-orbit">Explore the globe　↗</button></section>
+<div id="orbit-story">
+<div class="story-panel story-hero in"><section id="orbit-intro"><div class="frame-label"><i></i>Earth observation</div><h2>Explore Earth.<br><em>Prepare beyond it.</em></h2><p>Find analog terrain, plan a field mission and test your crew and equipment against real Earth conditions.</p><button id="explore-orbit">Explore the globe　↗</button></section><p class="story-cue">Scroll to tour the planet</p></div>
+<section class="story-panel"><div class="story-copy"><div class="frame-label"><i></i>Live Earth</div><h3>The planet, as it is this hour.</h3><p>NASA GIBS imagery draped over real terrain: GOES cloud cover every ten minutes, IMERG rainfall, sea-surface temperature and VIIRS fire detections, each requested at the newest timestamp that exists.</p></div></section>
+<section class="story-panel"><div class="story-copy"><div class="frame-label"><i></i>Orbit</div><h3>Ten thousand satellites, each one findable.</h3><p>The full active catalogue propagated from orbital elements, coloured by mission. Search a name, follow a spacecraft, and watch its path draw around the Earth.</p></div></section>
+<section class="story-panel"><div class="story-copy"><div class="frame-label"><i></i>Analog sites</div><h3>Find the places on Earth that stand in for Mars.</h3><p>Volcanic deserts, salt flats and impact craters ranked against your mission, with NASA POWER climate records and sourced research from SerpApi behind every candidate.</p></div></section>
+<section class="story-panel"><div class="story-copy"><div class="frame-label"><i></i>Mission</div><h3>Then run the expedition before you fly it.</h3><p>Place a habitat on real terrain, staff it, and watch crew vitals, rover range and life support respond as conditions change.</p><button class="enter-globe" type="button">Explore the globe　↗</button><a class="story-link" href="/#discover">Open the mission workspace</a></div></section>
+</div>
 <script>
 document.body.classList.add('intro-open');
-document.getElementById('explore-orbit').onclick = () => {
-  const intro = document.getElementById('orbit-intro');
-  if (!intro || intro.classList.contains('leaving')) return;
-  intro.classList.add('leaving');
+function enterGlobe() {
+  const story = document.getElementById('orbit-story');
+  if (!story || story.classList.contains('leaving')) return;
+  story.classList.add('leaving');
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // The copy clears first, then the globe takes the frame: the camera push-in
-  // and the canvas resettling to centre happen together, so neither reads as a
-  // jump.
+  // and the canvas resettling to centre happen together, so neither jumps.
   const enter = () => {
     document.body.classList.remove('intro-open');
-    intro.remove();
+    story.remove();
     document.dispatchEvent(new CustomEvent('orbit:enter'));
     document.getElementById('hud-toggle')?.focus();
   };
   calm ? enter() : setTimeout(enter, 560);
-};
+}
+document.getElementById('explore-orbit').onclick = enterGlobe;
+for (const button of document.querySelectorAll('.enter-globe')) button.onclick = enterGlobe;
 </script>
 <link rel="stylesheet" href="/src/orbit-entry.css">
 <aside id="details" hidden></aside>

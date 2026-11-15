@@ -161,7 +161,7 @@
 
   /* Opacity and blur only, so this works in both the centred desktop layout
      and the bottom-anchored mobile one without fighting their transforms. */
-  #orbit-intro.leaving { animation: intro-leave 0.56s ease forwards; pointer-events: none; }
+  #orbit-story.leaving { animation: intro-leave 0.56s ease forwards; pointer-events: none; }
 }
 
 #explore-orbit {
@@ -173,3 +173,83 @@
 #explore-orbit:focus-visible { outline: 2px solid #ff8655; outline-offset: 3px; }
 .orbit-mast .atlas-link { transition: opacity 0.2s ease; }
 .orbit-mast .atlas-link:hover { opacity: 0.72; }
+
+
+/* Scroll tour: chapters travel over the fixed globe while the camera flies
+   between keyframes. The container owns the scroll so the page itself never
+   moves and the canvas stays put behind it. */
+#orbit-story {
+  position: fixed;
+  inset: 60px 0 0;
+  z-index: 4;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+}
+#orbit-story::-webkit-scrollbar { display: none; }
+.story-panel {
+  position: relative;
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  scroll-snap-align: start;
+}
+.story-copy {
+  margin-left: 5vw;
+  max-width: 440px;
+  color: #f4f5ed;
+  font: 16px/1.55 system-ui;
+  text-shadow: 0 2px 16px #030605;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.8s cubic-bezier(0.22, 0.85, 0.2, 1);
+}
+.story-panel.in .story-copy { opacity: 1; transform: none; }
+.story-copy h3 {
+  margin: 18px 0 16px;
+  font-size: clamp(32px, 3.5vw, 54px);
+  line-height: 1.03;
+  letter-spacing: -0.05em;
+  font-weight: 580;
+}
+.story-copy p { max-width: 390px; margin: 0 0 22px; color: #d3d9ce; }
+.enter-globe {
+  display: inline-block;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 3px;
+  background: #ff8755;
+  color: #1d1c18;
+  font: 600 12px system-ui;
+  text-shadow: none;
+  cursor: pointer;
+  transition: transform 0.25s ease, background-color 0.25s ease;
+}
+.enter-globe:hover { background: #ffa07a; transform: translateY(-1px); }
+.enter-globe:focus-visible, .story-link:focus-visible { outline: 2px solid #ff8655; outline-offset: 3px; }
+.story-link { margin-left: 18px; color: #e8ebe2; font: 600 12px system-ui; text-shadow: none; }
+.story-cue {
+  position: absolute;
+  left: 5vw;
+  bottom: 26px;
+  margin: 0;
+  color: #9aa69b;
+  font: 11px monospace;
+  letter-spacing: 0.08em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .story-cue { animation: intro-fade 1s ease 1.4s backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-copy { opacity: 1; transform: none; transition: none; }
+}
+@media (max-width: 700px) {
+  .story-panel:not(.story-hero) { align-items: flex-end; }
+  .story-copy {
+    margin: 0;
+    max-width: none;
+    padding: 55px 5vw 44px;
+    background: linear-gradient(transparent, #060b0cec 26%);
+  }
+  .story-cue { display: none; }
+}
