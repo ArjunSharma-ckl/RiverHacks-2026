@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-11-14T18:15:20Z",
+  "source": {
+    "name": "M3-derived lunar south-polar mineral abundance maps, calibrated using LOLA reflectance",
+    "dataset_id": "10.5281/zenodo.20725024",
+    "publication_doi": "10.1029/2024JE008842",
+    "product_id": "Abcube_Oli_Pla_Opx_Cpx_Smfe.mat",
+    "product_url": "https://zenodo.org/api/records/20725024/files/Abcube_Oli_Pla_Opx_Cpx_Smfe.mat/content",
+    "dataset_url": "https://zenodo.org/records/20725024",
+    "measurement": "source mineral abundance values for olivine, plagioclase, low- and high-calcium pyroxene, and SmFe",
+    "units": "raw source array values; no percent/fraction scale is specified in the dataset description",
+    "spatial_resolution_m_per_pixel": 193.32114121,
+    "coverage_latitude_south_degrees": [
+      83.0,
+      90.0
+    ],
+    "spatial_method": "nearest south-polar stereographic map pixel to each representative candidate point",
+    "limitations": [
+      "Values are source abundance-array values; they have not been rescaled or converted to percentages.",
+      "Each value is a single approximately 193 m map pixel, not a spatial average over the candidate region.",
+      "The map covers lunar polar terrain; it does not provide Mars mineral values.",
+      "Candidate coordinates are representative points, not exact selected landing sites."
+    ]
+  },
+  "records": [
+    {
+      "landing_site_id": "moon-eb0cbb9caa4360e9",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Haworth",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -86.8,
+        "longitude_east": 336.4,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -86.80260454525485,
+        "longitude_east": 336.4119789034725,
+        "distance_from_reference_km": 0.0815
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 5.0,
+          "plagioclase": 85.0,
+          "low_calcium_pyroxene": 10.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.35000000000000003
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 640,
+          "column": 899
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-27f5fc933e31a87a",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Malapert Massif",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -85.9,
+        "longitude_east": 0.3,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.89763926820181,
+        "longitude_east": 0.2899914667919531,
+        "distance_from_reference_km": 0.0748
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 0.0,
+          "plagioclase": 80.0,
+          "low_calcium_pyroxene": 20.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.25
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 456,
+          "column": 1103
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-420b0d35a4597c65",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton",
+      "reference_point": {
+        "point_id": "MMO10",
+        "latitude": -85.461,
+        "longitude_east": 31.49,
+        "coordinate_source_url": "https://doi.org/10.1029/2025JE009434",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.45875367465338,
+        "longitude_east": 31.48859030447951,
+        "distance_from_reference_km": 0.0682
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 5.0,
+          "plagioclase": 80.0,
+          "low_calcium_pyroxene": 15.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.8500000000000001
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 492,
+          "column": 1472
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-586e518e5cb84605",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton Plateau",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -84.1,
+        "longitude_east": 34.7,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -84.09900302322073,
+        "longitude_east": 34.68999206326061,
+        "distance_from_reference_km": 0.0434
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 0.0,
+          "plagioclase": 75.0,
+          "low_calcium_pyroxene": 25.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 1.05
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 338,
+          "column": 1627
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-19fc147c0ee85741",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 1",
+      "reference_point": {
+        "point_id": "NR101",
+        "latitude": -85.295,
+        "longitude_east": 36.917,
+        "coordinate_source_url": "https://doi.org/10.1029/2025JE009434",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -85.29416298241314,
+        "longitude_east": 36.88242530378534,
+        "distance_from_reference_km": 0.0897
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 10.0,
+          "plagioclase": 85.0,
+          "low_calcium_pyroxene": 5.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.9
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 509,
+          "column": 1543
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-af94d3339a8a4fec",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 2",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -84.0,
+        "longitude_east": 58.7,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -83.99681872538034,
+        "longitude_east": 58.692876533185895,
+        "distance_from_reference_km": 0.0991
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 0.0,
+          "plagioclase": 80.0,
+          "low_calcium_pyroxene": 20.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.8500000000000001
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 610,
+          "column": 1905
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-18aeec26e30a3c89",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Peak near Cabeus B",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -83.6,
+        "longitude_east": 291.2,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -83.60019792747141,
+        "longitude_east": 291.22145478839775,
+        "distance_from_reference_km": 0.0728
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 5.0,
+          "plagioclase": 85.0,
+          "low_calcium_pyroxene": 10.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.6000000000000001
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 736,
+          "column": 163
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-657cd16355c8d9d6",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Slater Plain",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -87.1,
+        "longitude_east": 127.2,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -87.1000360478719,
+        "longitude_east": 127.2290155624325,
+        "distance_from_reference_km": 0.0445
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 0.0,
+          "plagioclase": 75.0,
+          "low_calcium_pyroxene": 25.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 1.25
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 1375,
+          "column": 1462
+        }
+      }
+    },
+    {
+      "landing_site_id": "moon-d481c6b41533915c",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "de Gerlache Rim 2",
+      "reference_point": {
+        "point_id": "NASA South Pole Sites figure",
+        "latitude": -88.2,
+        "longitude_east": 295.9,
+        "coordinate_source_url": "https://ntrs.nasa.gov/api/citations/20260010467/downloads/IWLR_ALLR_261102.pdf?attachment=true",
+        "coordinate_type": "representative candidate point; not an exact selected landing site"
+      },
+      "sample_cell": {
+        "latitude": -88.20035327076202,
+        "longitude_east": 295.99701824233483,
+        "distance_from_reference_km": 0.093
+      },
+      "mineral_composition": {
+        "abundance_values": {
+          "olivine": 5.0,
+          "plagioclase": 85.0,
+          "low_calcium_pyroxene": 10.0,
+          "high_calcium_pyroxene": 0.0,
+          "sm_fe": 0.9500000000000001
+        },
+        "units": "raw source values; the dataset description does not specify a fraction or percent scale",
+        "map_pixel": {
+          "row": 976,
+          "column": 846
+        }
+      }
+    }
+  ]
+}

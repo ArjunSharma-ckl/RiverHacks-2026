@@ -1,4 +1,5 @@
 import { WMS_URL } from './gibs.js';
+import { serpBadge } from './serp-badge.js';
 
 function node(tag, text) {
   const item = document.createElement(tag);
@@ -77,18 +78,32 @@ function research(row, event) {
     if (!r.ok) throw new Error();
     const data = await r.json();
     status.remove();
-    if (data.explanation) {
-      const summary = node('p');
-      summary.className = 'point-summary';
-      summary.textContent = data.explanation;
-      row.append(summary);
+    if (data.explanation || data.news?.length) {
+      if (data.explanation) {
+        const summary = node('p');
+        summary.className = 'point-summary';
+        summary.textContent = data.explanation;
+        row.append(summary);
+      }
+      // Dated headlines first: for a storm or a fire burning right now, this is
+      // the part of the record that is actually moving.
+      if (data.news?.length) {
+        const head = node('h3','Live coverage');
+        head.append(serpBadge('Google News'));
+        row.append(head);
+        for (const story of data.news) {
+          row.append(link(story.title, story.link, story.thumbnail));
+          const meta = [story.source, story.date].filter(Boolean).join(' · ');
+          if (meta) row.append(node('small', meta));
+        }
+      }
     }
     for (const [heading, items] of [[event.fire ? 'NASA Image Library · VIIRS background' : 'NASA Image Library',data.nasa],['Web reports · SerpApi',data.links],['Images · SerpApi',data.images]]) {
       if (!items.length) continue;
       row.append(node('h3',heading));
       for (const result of items) row.append(link(result.title,result.link,result.thumbnail));
     }
-    if (!data.links.length && !data.images.length && !data.explanation) row.append(node('p','No additional web results for this point.'));
+    if (!data.links.length && !data.images.length && !data.news?.length && !data.explanation) row.append(node('p','No additional web results for this point.'));
     row.append(form, answer);
   }).catch(() => { status.remove(); row.append(form, answer); });
 }
@@ -120,7 +135,9 @@ export function createEventList() {
   const next = node('button','Next');
   const nav = node('nav');
   nav.append(prev,next);
-  panel.append(fold,heading,select,node('small','Web reports and image search use SerpApi. NASA sources are listed separately.'),search,count,rows,nav);
+  const attribution = node('small','Web, news and image search use SerpApi. NASA sources are listed separately.');
+  attribution.prepend(serpBadge('Search'), document.createElement('br'));
+  panel.append(fold,heading,select,attribution,search,count,rows,nav);
   document.body.append(panel);
   let all = [], matches = [], page = 0;
   const size = 35;

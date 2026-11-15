@@ -356,3 +356,27 @@ button { font: inherit; cursor: pointer; }
 #event-list .ask-form input { flex: 1; min-width: 0; }
 #event-list .ask-form button { padding: 8px 12px; }
 #event-list .ask-answer { margin-top: 8px; }
+
+/* SerpApi attribution. One tag, wherever live search results are shown. */
+.serp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid #ffb25740;
+  border-radius: 999px;
+  background: #ffb2571a;
+  color: var(--dim);
+  font: 500 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.serp-tag img { display: block; border-radius: 3px; }
+.serp-tag a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.serp-tag a:hover { text-decoration: underline; }
+
+#event-list h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+#event-list small { display: block; margin: -2px 0 8px; color: var(--dim); font-size: 11px; }
+#details h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }

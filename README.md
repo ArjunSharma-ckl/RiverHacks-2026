@@ -40,6 +40,22 @@ npm run dev
 Nothing needs an API key to work. Keys only add extras — copy `.env.example` to
 `.env.local` when you have them.
 
+## Planetary analog backend (Python)
+
+The text analog search page opens at `/analog-search.html` and is backed by the
+small standard-library Python API in `backend/`. Start it beside the web app:
+
+```bash
+pip install -r requirements.txt
+python -m backend.server
+npm run dev
+```
+
+The web server proxies `/api/earth-analogs`, `/api/mars-analogs` and
+`/api/earth-analog-attribute` to `MISSION_BACKEND_URL` (`http://127.0.0.1:8000`
+by default). Set that variable to the reachable Python API URL when the web app
+is hosted elsewhere.
+
 ## What is in the view
 
 **Analog simulation planner.** Open `/planner.html`. Use a measured lunar

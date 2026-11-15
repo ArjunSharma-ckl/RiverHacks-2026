@@ -3,12 +3,18 @@ services:
     name: riverhacks-2026
     runtime: node
     plan: free
-    buildCommand: npm ci --include=dev && npm run build
+    buildCommand: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --include=dev && npm run build
     startCommand: npm start
     branch: main
     autoDeployTrigger: commit
     healthCheckPath: /healthz
     envVars:
+      # @huggingface/transformers pulls onnxruntime-node, whose install script
+      # downloads a ~400 MB CUDA GPU runtime from GitHub. Nothing here uses the
+      # GPU build, and on a small instance that download is what fails the
+      # build. Skipping it takes install from "fails" to about ten seconds.
+      - key: ONNXRUNTIME_NODE_INSTALL_CUDA
+        value: skip
       - key: NODE_VERSION
         value: "22"
       # Optional. Without them the app still runs: GIBS imagery, EONET events
@@ -20,4 +26,6 @@ services:
       - key: SERPAPI_KEY             # optional web-search enrichment
         sync: false
       - key: FIRMS_MAP_KEY           # optional FIRMS active-fire detections
+        sync: false
+      - key: MISSION_BACKEND_URL     # Python mission API used by planetary analog search
         sync: false
