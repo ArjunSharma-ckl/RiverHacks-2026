@@ -16,3 +16,11 @@ Crew duty cycles include 0.20 hours of outbound travel, 0.55 hours of work and 0
 
 The pre-launch transfer animation is illustrative. Countdown, ascent and separation do not model launch dynamics or transport to the selected field site.
 The 3D sequence combines a historical launch vehicle with a fictional field lander. Habitat integrity tracks illustrative exposure, falling 0.35 percentage points per simulated hour during a leak and 0.18 during dust.
+
+## Facility exposure and maintenance
+
+Earth, Mars, and Moon modes use separate scenario inputs on the selected Earth analog terrain. Inputs are hypothetical and the pressure readout is a representative scenario constant. Earth humidity drives a provisional corrosion index. Airborne dust and cloud cover reduce relative illumination. On the Moon, local dust can settle on equipment under vacuum without wind or atmospheric extinction.
+
+The engine computes atmospheric transmission using an exponential optical-depth term and separately models deposited dust as a saturating coverage fraction. The separation follows [Mars Exploration Rover power operations](https://ntrs.nasa.gov/citations/20230007029). The scenario-to-optical-depth mapping, deposition and wear rates, thermal-cycle fatigue indices, maintenance efficacy, and failure thresholds are demonstration coefficients. They have not been fitted to mission telemetry or laboratory materials data. The reported damage indices and offline thresholds are deterministic scenario estimates.
+
+The mission integrator updates exposure in steps of at most one hour. Surface contamination persists when suspended dust clears. Cleaning removes most of the deposited dust. Replacement lowers accumulated damage on the serviced assembly, advances the mission clock and consumes generic spares on completion. Historical replay reconstructs the most recent 24 logged event checkpoints recorded by the exposure engine. Earth analog terrain, Earth Viewer observations and user-controlled scenarios retain their separate roles.

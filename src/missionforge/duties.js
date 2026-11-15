@@ -1,3 +1,4 @@
+import { condition, unavailable } from './exposure.js';
 // Coordinates are metres east/north of the habitat. Work happens in simulated hours.
 import { pointOnRoute, walkRoute } from "./navigation.js";
 
@@ -212,6 +213,9 @@ export function advanceDuties(m, dt) {
   prepareDuties(m);
   m.duties.forEach((d, i) => {
     if (m.active.storm || offDuty(m,i) || (i === 0 && m.health)) return;
+    const science = ['lab', 'bio', 'chem'].includes(d.key);
+    if ((science && (m.powerLimited || unavailable(m, 'science'))) ||
+        (d.key === 'stores' && unavailable(m, 'storage'))) return;
     const hours =
       i === 0 ? Math.max(0, dt - Math.max(0, m.recoverAt - m.h)) : dt;
     // Credit each work interval exactly once, including multi-hour manual steps.
@@ -241,7 +245,7 @@ export function advanceDuties(m, dt) {
       m.inventory.components -= completed;
       m.construction += completed;
     }
-    const amount = stations[d.key].yield * completed;
+    const amount = stations[d.key].yield * completed * (science ? 1 - condition(m, 'science').dust : 1);
     m.production[d.key] = (m.production[d.key] ?? 0) + amount;
     if (d.key === "water")
       m.resources.water = Math.min(m.initial.water, m.resources.water + amount);

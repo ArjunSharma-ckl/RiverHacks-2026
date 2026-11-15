@@ -200,3 +200,76 @@ test("mining feeds fabrication and construction without free resources", async (
   assert.equal(m.construction, 4);
   assert.ok(m.inventory.components >= 0);
 });
+
+test('surface dust persists after the storm and cleaning restores some generation', async () => {
+  const { condition, maintain, weather } = await import('../src/missionforge/exposure.js');
+  const { log } = await import('../src/missionforge/simulation.js');
+  const m = start({ ...cfg, mode: 'Mars projection', battery: 1000 });
+  const clear = generation(m);
+  m.environment.dust = 60;
+  m.environment.wind = 20;
+  advance(m, 20);
+  assert.ok(weather(m).transmission < 0.3);
+  assert.ok(condition(m, 'solar').dust > 0.1);
+  m.environment.dust = 0;
+  assert.ok(generation(m) < clear);
+  const before = generation(m);
+  const startHour = m.h;
+  assert.equal(maintain(m, 'solar', advance, log), 'Service completed');
+  assert.ok(generation(m) > before);
+  assert.equal(m.h, startHour + 0.5);
+  assert.equal(m.parts, cfg.parts);
+  assert.ok(m.checkpoints.some(frame => frame.label.includes('Clean exposed surfaces')));
+
+  m.exposure.solar.wear = 0.81;
+  assert.equal(generation(m), 0);
+  m.parts = 0;
+  assert.equal(maintain(m, 'solar', advance, log), 'Insufficient spares');
+  assert.equal(m.h, startHour + 0.5);
+  m.parts = 1;
+  assert.equal(maintain(m, 'solar', advance, log), 'Service completed');
+  assert.equal(m.parts, 0);
+  assert.ok(generation(m) > 0);
+});
+
+test('lunar dust disturbance deposits locally without atmospheric extinction', async () => {
+  const { condition, weather } = await import('../src/missionforge/exposure.js');
+  const m = start({ ...cfg, mode: 'Moon projection' });
+  m.environment.wind = 40;
+  m.environment.dust = 80;
+  advance(m, 2);
+  assert.equal(m.environment.wind, 0);
+  assert.equal(weather(m).pressure, 0);
+  assert.equal(weather(m).tau, 0);
+  assert.equal(weather(m).transmission, 1);
+  assert.ok(condition(m, 'solar').dust > 0);
+});
+
+test('browser steel prediction matches the fitted model and drives rover fatigue', async () => {
+  const { default: artifact } = await import('../src/missionforge/steel-fatigue.json', { with: { type: 'json' } });
+  const { roverSteel } = await import('../src/missionforge/steel-fatigue.js');
+  const { condition } = await import('../src/missionforge/exposure.js');
+  assert.ok(Math.abs(roverSteel.predictedMpa - artifact.profilePredictionMpa) < 1e-8);
+  const m = start({ ...cfg, mode: 'Mars projection' });
+  advance(m, 1);
+  assert.ok(condition(m, 'solar').fatigue > 0);
+  const ratio = condition(m, 'rover').fatigue / condition(m, 'solar').fatigue;
+  assert.ok(Math.abs(ratio - roverSteel.referenceMpa / roverSteel.predictedMpa) < 1e-12);
+});
+
+test('temperature changes modeled rover fatigue and an injected storm changes exposure', async () => {
+  const { condition, exposureRates, weather } = await import('../src/missionforge/exposure.js');
+  const cold = start({ ...cfg, mode: 'Mars projection' });
+  const mild = start(cold.cfg);
+  cold.environment.temperature = -120;
+  assert.ok(exposureRates(cold, 'rover').fatigue > exposureRates(mild, 'rover').fatigue);
+  advance(cold, 1);
+  advance(mild, 1);
+  assert.ok(condition(cold, 'rover').fatigue > condition(mild, 'rover').fatigue);
+  const before = generation(mild);
+  assert.equal(inject(mild, 'storm'), true);
+  assert.ok(weather(mild).tau > 0);
+  assert.ok(generation(mild) < before);
+  advance(mild, 1);
+  assert.ok(condition(mild, 'solar').dust > 0);
+});

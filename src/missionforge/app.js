@@ -1,5 +1,6 @@
+import { roverSteel } from './steel-fatigue.js';
+import { condition, damage, equipment, equipmentForModel, equipmentIds, exposureRates, maintain, maintenancePlan, unavailable, weather, recordCheckpoint } from './exposure.js';
 import { cue, toggleSound } from "./audio.js";
-import { launchSequence } from "./launch.js";
 import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, loadSeason, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
@@ -36,7 +37,7 @@ const esc = (s) =>
       ],
   );
 const btn = (act, label, cls = "") =>
-  `<button class="${cls}" data-act="${act}">${label}</button>`;
+  `<button type="button" class="${cls}" data-act="${act}">${label}</button>`;
 const opts = (values, selected) =>
   values
     .map(
@@ -79,7 +80,7 @@ try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}
 let facilitySearch='';
 const extraFacilities={storage:'Storage depot',comms:'Communications relay',landing:'Descent vehicle',recycler:'Water recycling module',lab:'Research laboratory',habitat:'Habitat module',medical:'Medical module',solar:'Solar array'};
 let gtAnswer = "",
-  quality = "Balanced";
+  quality = "Performance";
 let crewIndex = 0;
 let cameraPreset = "Overview";
 let site = sites[0],
@@ -207,7 +208,7 @@ function lensContent() {
     : "";
 }
 const viewport = () =>
-  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div><aside id="mission-hud" hidden></aside>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button><div class="mission-orbit-controls" hidden><button type="button" data-act="orbit-left" aria-label="Orbit settlement left">↶</button><button type="button" data-act="orbit-right" aria-label="Orbit settlement right">↷</button></div></div><aside id="mission-hud" hidden></aside>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
 function missionHud(m) {
   if (!m) return "";
   prepareDuties(m);
@@ -350,7 +351,7 @@ function inspect() {
     )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a>${select("research-type", "Evidence collection", ["Studies", "Operations", "News", "Logistics"], researchType)}<label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search evidence")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}<br><small>${esc(r.source)} · ${esc(r.category || researchType)} · ${esc(r.date || "Date unavailable")}</small></p>`).join("")}</details>`;
 }
 function design() {
-  return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 12)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
+  return `${btn("inspect", "← Site inspection", "back")}${mission ? btn("control", "Open mission control") : ""}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 12)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
     ["array", "Array rating (kW)", 1, 40],
     ["battery", "Battery capacity (kWh)", 1, 300],
     ["load", "Habitat load (kW)", 0.1, 10],
@@ -403,7 +404,8 @@ function crewControls(m) {
     "Assignment",
     Object.values(stations).map((s) => s.task),
     station.task,
-  )}</div>${line(station.name, dutyPose(m, crewIndex).status)}<div class="actions pills">${btn("helmet", "Helmet view")}${btn("follow", "Follow astronaut")}${m.cfg.rover ? btn("followRover", "Follow rover") : ""}${btn("overviewCamera", "Station overview")}</div></section>`;
+  )}</div><div class="pills crew-locations">${crewNames().map((name, index) =>
+    `<button type="button" data-act="locate-crew:${index}" aria-label="Find ${esc(name)}">${esc(name)}</button>`).join("")}</div>${line(station.name, dutyPose(m, crewIndex).status)}<div class="actions pills">${btn("helmet", "Helmet view")}${btn("follow", "Follow astronaut")}${m.cfg.rover ? btn("followRover", "Follow rover") : ""}${btn("overviewCamera", "Station overview")}</div></section>`;
 }
 function workTotals(m) {
   prepareDuties(m);
@@ -447,13 +449,92 @@ function groundTruth() {
     "</div></details>"
   );
 }
-function environmentControls(){const env=mission?.environment||{temperature:-35,wind:12,dust:0,radiation:0.2},moon=mission?.cfg.mode==='Moon projection';return `<details open><summary>Live environment</summary><p class="note">Changes apply during the running simulation.${moon?' The Moon has no atmospheric wind; dust is a local plume scenario.':''}</p>${[['temperature','Temperature °C',-120,55,1],...(moon?[]:[['wind','Wind m/s',0,60,1]]),['dust',moon?'Dust plume opacity %':'Dust opacity %',0,100,1],['radiation','Radiation mSv/day',0,5,.1]].map(([key,title,min,max,step])=>`<label class="field">${title}<input type="range" data-environment="${key}" min="${min}" max="${max}" step="${step}" value="${env[key]}"><output>${env[key]}</output></label>`).join('')}</details>`;}
+let inspectedEquipment = 'solar';
+let replayFrame = null;
+function updateWeatherLayer() {
+  const layer = app.querySelector('.weather-layer');
+  if (!layer) return;
+  if (page !== 'control' || !mission) {
+    layer.style.opacity = '0';
+    return;
+  }
+  const sample = replayFrame ? { ...mission, environment: replayFrame.environment } : mission;
+  const w = weather(sample);
+  const wind = w.moon ? 0 : Math.max(sample.manualStorm ? 35 : 0, sample.environment.wind ?? 0);
+  layer.style.opacity = String(Math.min(.8, w.dust * (w.moon ? .28 : .7)));
+  layer.style.animationDuration = Math.max(.4, 3 - wind / 20) + 's';
+  layer.style.animationPlayState = w.moon || replayFrame ? 'paused' : 'running';
+}
+function replayControls(m) {
+  const choices = (m.checkpoints ?? []).map((frame, index) =>
+    '<option value="' + index + '"' + (frame === replayFrame ? ' selected' : '') + '>+' +
+    fmt(frame.h, 1) + ' h · ' + esc(frame.label) + '</option>').join('');
+  if (!choices) return '';
+  return '<details><summary>Historical event replay</summary><label class="field">Checkpoint<select id="engineering-replay"><option value="">Live mission</option>' +
+    choices + '</select></label>' + (replayFrame ? line('Replayed battery / spares', fmt(replayFrame.battery, 1) + ' kWh / ' + replayFrame.parts) : '') + '</details>';
+}
+function environmentControls() {
+  const m = mission;
+  const sample = replayFrame ? { ...m, environment: replayFrame.environment } : m;
+  const env = sample.environment;
+  const w = weather(sample);
+  const fields = [
+    ['temperature', 'Temperature °C', -180, 130, 1, env.temperature],
+    ...(!w.moon ? [['wind', 'Wind m/s', 0, 60, 1, env.wind]] : []),
+    ['dust', w.moon ? 'Local dust disturbance %' : 'Suspended dust scenario %', 0, 100, 1, env.dust],
+    ...(!w.moon && !w.mars ? [['humidity', 'Relative humidity %', 0, 100, 1, env.humidity ?? 35], ['cloud', 'Cloud cover %', 0, 100, 1, env.cloud ?? 0]] : []),
+    ['radiation', 'Exposure rate mSv/day', 0, 5, .1, env.radiation],
+  ];
+  return `<details open><summary>Weather and exposure</summary>
+    <p class="note">Editable scenario inputs · ${w.moon ? 'Vacuum and local dust' : 'Representative surface pressure'}</p>
+    ${line('Pressure', w.pressure + ' kPa')}${line('Dust optical depth', fmt(w.tau, 2))}
+    ${line('Relative solar transmission', fmt(w.transmission * 100, 1) + '%')}
+    ${fields.map(([key, title, min, max, step, value]) => `<label class="field">${title}<input type="range" ${replayFrame ? 'disabled' : ''} data-environment="${key}" min="${min}" max="${max}" step="${step}" value="${value}"><output>${value}</output></label>`).join('')}</details>`;
+}
+function engineeringControls(m) {
+  const ids = equipmentIds(m);
+  const id = ids.includes(inspectedEquipment) ? inspectedEquipment : 'solar';
+  const c = condition(m, id);
+  const [name, material] = equipment[id];
+  const plan = maintenancePlan(m, id);
+  const rate = exposureRates(m, id);
+  const possible = plan && m.parts >= plan.parts && m.outcome === 'In progress';
+  const status = unavailable(m, id) ? 'Offline' : c.dust >= .15 || damage(c) >= .15 ? 'Degraded' : 'Operational';
+  return `<details open><summary>Materials and maintenance</summary>
+    <div class="pills">${ids.map(key => btn('inspect-equipment:' + key, equipment[key][0])).join('')}</div>
+    <h3>${name}</h3><p>${material} · ${status}</p>
+    ${line('Condition · starting 100%', fmt(100 * (1 - damage(c)), 1) + '%')}
+    ${line('Surface coverage', fmt(100 * c.dust, 1) + '%')}
+    ${line('Exposure duration', fmt(c.hours, 1) + ' h')}
+    ${line('Damage rate', fmt((rate.wear + rate.fatigue + rate.corrosion) * 100, 4) + ' percentage points/h')}
+    ${id === 'rover' ? line('Steel bearing proxy strength', fmt(roverSteel.predictedMpa, 0) + ' MPa') +
+      line('Laboratory model test R² / RMSE', fmt(roverSteel.testR2, 4) + ' / ' + fmt(roverSteel.testRmseMpa, 1) + ' MPa') +
+      line('Estimated fatigue per 24 h at current temperature', fmt(rate.fatigue * 2400, 4) + ' percentage points') : ''}
+    ${line('Internal fatigue index', fmt(c.fatigue, 4))}
+    ${line('Wear / corrosion indices', fmt(c.wear, 4) + ' / ' + fmt(c.corrosion, 4))}
+    <p class="note">Provisional engineering estimates. Offline threshold is 80% modeled damage.</p>
+    ${line('Available repair spares', m.parts)}
+    ${plan ? line(plan.label, plan.parts + ' spares · ' + plan.hours + ' h') : ''}
+    ${plan?.parts ? line('Repairs possible with current stock', Math.floor(m.parts / plan.parts)) : ''}
+    ${possible ? btn('maintain:' + id, plan.label) : plan && m.parts < plan.parts ? '<p>Service blocked by insufficient spares.</p>' : ''}
+    </details><details><summary>Energy and safety</summary>
+    ${line('Generation / thermal demand', fmt(generation(m), 2) + ' / ' + fmt(thermalDemand(m), 2) + ' kW')}
+    ${line('Battery history', spark(m.history.map(v => v.battery)))}
+    ${line('Airlock seals', unavailable(m, 'oxygen') ? 'Pressure integrity at risk' : 'Available')}
+    ${line('Thermal regulation', unavailable(m, 'thermal') ? 'Modeled failure' : 'Available')}
+    ${line('External exposure', fmt(m.environment.radiation, 2) + ' mSv/day scenario')}
+    ${line('Dust contamination', weather(m).dust >= .45 ? 'Elevated' : 'Low')}
+    ${line('Life support reserve', m.resources.oxygen > 0 && m.resources.battery > 0 ? 'Available' : 'Depleted')}
+    ${line('Research load', m.powerLimited ? 'Shed to protect essential loads' : 'Available')}
+    ${line('Backup energy', fmt(m.backup, 1) + ' kWh')}
+    </details>`;
+}
 function missionOverview(m){
   const crew=crewNames().map((name,i)=>{
     const v=vitals(m,i),safe=v.status==='Nominal';
     return `<div class="status-row"><div><strong>${esc(name)}</strong><small>${esc(v.status)} · ${v.pulse} bpm · SpO₂ ${v.spo2}%</small></div>${bar(Math.min(100,v.spo2))}</div>`;
   }).join('');
-  const equipment=[['Habitat',m.integrity??100,m.active.oxygen?'Oxygen failure':'Operational'],['Solar array',m.active.solar?20:100,m.active.solar?'Array failure':'Operational'],['Rover',m.active.rover?15:Math.round((m.roverEnergy??2.4)/2.4*100),m.active.rover?'Disabled':m.cfg.rover?'Operational':'Not deployed']].filter(([name])=>name!=='Rover'||m.cfg.rover)
+  const equipment=[['Habitat',m.integrity??100,m.active.oxygen?'Oxygen failure':'Operational'],['Solar array',Math.round(100*(1-damage(condition(m,"solar")))),unavailable(m,"solar")?'Array failure':'Operational'],['Rover',Math.round(100*(1-damage(condition(m,"rover")))),unavailable(m,"rover")?'Disabled':m.cfg.rover?'Operational':'Not deployed']].filter(([name])=>name!=='Rover'||m.cfg.rover)
     .map(([name,value,status])=>`<div class="status-row"><div><strong>${name}</strong><small>${status}</small></div>${bar(value)}</div>`).join('');
   const facilities=Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([key,name])=>`<span class="status-chip">${esc(name)}</span>`).join('');
   return `<section class="mission-status"><h2>Mission status</h2><details open><summary>Health and people · ${m.cfg.crew}</summary>${crew}</details><details open><summary>Buildings and equipment</summary>${equipment}</details><details open><summary>Active facilities</summary><div class="status-chips">${facilities}</div></details></section>`;
@@ -461,7 +542,7 @@ function missionOverview(m){
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${missionOverview(m)}${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${btn("mission-back", "← Back")}${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${missionOverview(m)}${environmentControls()}${engineeringControls(replayFrame ? { ...m, ...replayFrame, outcome: "Replay" } : m)}${replayControls(m)}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -493,7 +574,7 @@ function timeline(m) {
 }
 function report() {
   const m = mission;
-  return `<article class="sheet">${label("MF-001 / After-action report")}<h1>${site.name} expedition</h1><p>${esc(m.cfg.objective)} · ${m.cfg.mode} · ${m.cfg.crew} crew</p>${line("Mission outcome", m.outcome)}${line("Elapsed / planned duration", fmt(m.h / SOL, 2) + " / " + m.cfg.days + " sols")}${line("Rover operations", fmt(m.km, 2) + " km")}${line("Energy generated / demanded", fmt(m.generated) + " / " + fmt(m.used) + " kWh")}${line("Objective status", m.outcome === "Planned duration reached" && (!/rover|geolog/i.test(m.cfg.objective) || m.km > 0) ? "Achieved" : "Open")}${workTotals(m)}<h2>Resource balance</h2><table><thead><tr><th>Reserve</th><th>Initial</th><th>Final</th><th>Net change</th></tr></thead><tbody>${Object.entries(
+  return `<article class="sheet">${label("MF-001 / After-action report")}<h1>${site.name} expedition</h1><p>${esc(m.cfg.objective)} · ${m.cfg.mode} · ${m.cfg.crew} crew</p>${line("Mission outcome", m.outcome)}${line("Elapsed / planned duration", fmt(m.h / SOL, 2) + " / " + m.cfg.days + " sols")}${line("Rover operations", fmt(m.km, 2) + " km")}${line("Energy generated / used", fmt(m.generated) + " / " + fmt(m.used) + " kWh")}${line("Objective status", m.outcome === "Planned duration reached" && (!/rover|geolog/i.test(m.cfg.objective) || m.km > 0) ? "Achieved" : "Open")}${workTotals(m)}<h2>Resource balance</h2><table><thead><tr><th>Reserve</th><th>Initial</th><th>Final</th><th>Net change</th></tr></thead><tbody>${Object.entries(
     m.resources,
   )
     .map(
@@ -502,7 +583,7 @@ function report() {
     )
     .join(
       "",
-    )}</tbody></table>${line("Battery trend", spark(m.history.map((v) => v.battery)))}${timeline(m)}${astra(m)}<p>Deterministic training model. Mean daily irradiance, constant crew demand and simplified health relationships. Mars gravity, radiation and atmospheric exposure are outside this model.</p><div class="actions">${btn("export", "Export report", "primary")}${btn("control", "Return to mission")}${btn("retry", "Retry mission")}${btn("design", "Revise configuration")}${btn("discover", "Compare another site")}</div></article>`;
+    )}</tbody></table>${line("Battery trend", spark(m.history.map((v) => v.battery)))}${timeline(m)}${astra(m)}<p>Deterministic training model. Mean daily irradiance, constant crew demand and simplified health relationships. Planetary exposure and equipment failure coefficients are provisional scenario estimates.</p><div class="actions">${btn("export", "Export report", "primary")}${btn("control", "Return to mission")}${btn("retry", "Retry mission")}${btn("design", "Revise configuration")}${btn("discover", "Compare another site")}</div></article>`;
 }
 function render() {
   const mode = page === "control";
@@ -544,8 +625,10 @@ function update() {
   });
   const lens = app.querySelector(".crew-lens");
   if (lens) lens.innerHTML = lensContent();
-  const weather=app.querySelector('.weather-layer');if(weather){const env=mission?.environment;weather.style.opacity=page==='control'&&env?String(Math.min(.8,Math.max(0,(env.dust||0)/160+(env.wind||0)/180))):'0';weather.style.animationDuration=env?Math.max(.4,3-(env.wind||0)/20)+'s':'2s';}
+  updateWeatherLayer();
   const hud = app.querySelector("#mission-hud");
+  const orbitControls = app.querySelector(".mission-orbit-controls");
+  if (orbitControls) orbitControls.hidden = page !== "control";
   if (hud) {
     hud.hidden = page !== "control" || !mission;
     if (!hud.hidden) hud.innerHTML = missionHud(mission);
@@ -558,26 +641,28 @@ function update() {
     app.querySelector(".viewport").append(el);
   }
 }
+let missionReturnPage = "design";
 function go(name) {
-  if (location.hash === "#" + name) route();
-  else location.hash = name;
+  if (name === "mission") name = "design";
+  if (name === "control" && !["control", "report"].includes(page)) missionReturnPage = page;
+  replayFrame = null;
+  const hash = "#" + name;
+  if (location.hash !== hash) history.pushState(null, "", hash);
+  route();
 }
 function displayScene() {
   if (!scene) return;
-  const loading=app.querySelector('.mission-loading');if(loading)loading.remove();
-  let overlay;
-  if(['design','control'].includes(page)){overlay=document.createElement('div');overlay.className='mission-loading';overlay.innerHTML='<div class="mission-loading-card"><span class="mission-loading-kicker">MISSIONFORGE / EARTH ANALOG</span><div class="mission-loading-orbit" aria-hidden="true"><span></span></div><strong>Preparing the field site</strong><p>Loading terrain, imagery and settlement models…</p><div class="mission-loading-track"><span></span></div></div>';app.querySelector('.workspace').append(overlay);}
   if (["past", "discover", "research"].includes(page)) scene.overview();
   else if (page === 'travel') { scene.overview(); if(trip.stops.length)scene.showRoute(routePoints()); }
   else if (page === "inspect") scene.inspect(site);
   else if(page==='design')scene.preview(site);
-  else if(page==='control'){
+  else if (page === "control") {
     scene.place(site, cfg);
-    scene.setFacilities(cfg.facilities||{});
+    scene.setFacilities(cfg.facilities || {});
     scene.sync(mission, playing ? speed : 0);
   }
-  if(overlay)scene.waitForTiles().then(ready=>{if(!overlay.isConnected)return;if(ready)overlay.remove();else{overlay.querySelector('p').textContent='Some map detail is still loading. You can continue now.';overlay.querySelector('.mission-loading-track').innerHTML='<button type="button" class="mission-loading-continue">Continue to mission</button>';overlay.querySelector('button').onclick=()=>overlay.remove();}});
 }
+
 function route() {
   const target = location.hash.slice(1);
   page = target==='explorer'?'discover':[
@@ -606,6 +691,7 @@ function route() {
   }
   if(page==='travel'){ensureScoutedSite(site);loadSeason(site,cache[site.id]).then(()=>{if(page==='travel')update()});}
   equip = "";
+  replayFrame = null;
   render();
   app.querySelector('.panel').scrollTop=0;
   displayScene();
@@ -689,9 +775,7 @@ async function loadObs() {
   if (page === "inspect" && site.id === key && version === observationVersion)
     scene?.fire(o.fires?.detections ?? []);
 }
-async function launch() {
-  if (document.querySelector(".launch-screen")) return;
-  const playback = launchSequence();
+function launch() {
   gtAnswer = "";
   groundQuestion = "";
   incident = "solar";
@@ -708,17 +792,13 @@ async function launch() {
   playing = true;
   tab = "Systems";
   save();
-  scene?.setRendering(false);
-  try { await playback; }
-  finally { scene?.setRendering(true); }
-  scene?.place(site, cfg);
   go("control");
 }
 function tick(h) {
   if(!mission)return;
   advance(mission, h);
   if (mission.outcome !== "In progress") playing = false;
-  if(page==='control')scene?.sync(mission, playing ? speed : 0);
+  if(page==='control' && !replayFrame)scene?.sync(mission, playing ? speed : 0);
   save();
   if(['control','past'].includes(page))update();
 }
@@ -731,7 +811,13 @@ app.addEventListener("submit", (e) => {
 app.addEventListener("input", (e) => {
   if(e.target.id==='facility-search'){facilitySearch=e.target.value;const box=e.target.closest('details');const results=box.querySelector('.facility-search-results');if(results)results.remove();const matches=Object.entries(extraFacilities).filter(([key,name])=>!(cfg.addedFacilities||[]).includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));if(matches.length)e.target.closest('label').insertAdjacentHTML('afterend',`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`);return;}
   if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query')){changeTrip(e.target);return;}
-  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(e.target.value);e.target.nextElementSibling.textContent=e.target.value;scene?.sync(mission,playing?speed:0);const weather=app.querySelector('.weather-layer');if(weather){weather.style.opacity=String(Math.min(.8,(mission.environment.dust||0)/160+(mission.environment.wind||0)/180));weather.style.animationDuration=Math.max(.4,3-(mission.environment.wind||0)/20)+'s'}return;}
+  if (e.target.dataset.environment && mission && !replayFrame) {
+    mission.environment[e.target.dataset.environment] = Number(e.target.value);
+    e.target.nextElementSibling.textContent = e.target.value;
+    scene?.sync(mission, playing ? speed : 0);
+    updateWeatherLayer();
+    return;
+  }
   if (e.target.id === "gt-question") groundQuestion = e.target.value;
   if (e.target.id === "query") {
     query = e.target.value;
@@ -760,7 +846,21 @@ app.addEventListener("change", (e) => {
   if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));update();return;}
   if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
   if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
-  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(value);scene?.sync(mission,playing?speed:0);save();update();return;}
+  if (e.target.id === 'engineering-replay' && mission) {
+    replayFrame = value === '' ? null : mission.checkpoints?.[Number(value)] ?? null;
+    if (replayFrame) { playing = false; save(); }
+    scene?.sync(replayFrame ? { ...mission, ...replayFrame } : mission, replayFrame ? 0 : playing ? speed : 0);
+    update();
+    return;
+  }
+  if (e.target.dataset.environment && mission && !replayFrame) {
+    mission.environment[e.target.dataset.environment] = Number(value);
+    recordCheckpoint(mission, 'Scenario adjusted · ' + e.target.dataset.environment);
+    scene?.sync(mission, playing ? speed : 0);
+    save();
+    update();
+    return;
+  }
   if(id==='temperature-filter'){filterTemp=value;update();return;}
   if(id==='mineral-filter'){filterMineral=value;update();return;}
   if (page === "design") {
@@ -836,7 +936,12 @@ app.addEventListener("change", (e) => {
   update();
 });
 app.addEventListener("click", async (e) => {
-  const workspace=e.target.closest('[data-workspace]');if(workspace){go(workspace.dataset.workspace);return;}
+  const workspace = e.target.closest('[data-workspace]');
+  if (workspace) {
+    e.preventDefault();
+    go(workspace.dataset.workspace);
+    return;
+  }
   const drawer=e.target.closest('[data-drawer]');if(drawer){setDrawerOpen(!drawerOpen);return;}
   const prompt=e.target.closest('[data-research-prompt]');if(prompt){researchQuestion=prompt.dataset.researchPrompt+' at '+site.name;update();app.querySelector('#research-question')?.focus();return;}
   const travel=e.target.closest('[data-travel]');if(travel){await travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();if(page==='travel'&&/^(select|remove)/.test(travel.dataset.travel))scene?.showRoute(routePoints());return;}
@@ -844,6 +949,33 @@ app.addEventListener("click", async (e) => {
   if (!button) return;
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
+  if (act === "mission-back") return go(missionReturnPage);
+  if (act === "orbit-left" || act === "orbit-right") {
+    cameraPreset = "Overview";
+    scene?.orbit(act === "orbit-left" ? -1 : 1);
+    update();
+    return;
+  }
+  if (act === "locate-crew" && mission) {
+    crewIndex = Number(id);
+    cameraPreset = "Follow crew";
+    scene?.view(cameraPreset, crewIndex);
+    update();
+    return;
+  }
+  if (act === 'inspect-equipment') {
+    inspectedEquipment = id;
+    update();
+    return;
+  }
+  if (act === 'maintain' && mission && !replayFrame) {
+    toast(maintain(mission, id, advance, log));
+    if (mission.outcome !== 'In progress') playing = false;
+    scene?.sync(mission, playing ? speed : 0);
+    save();
+    update();
+    return;
+  }
   if(act==='resume-mission'){const entry=missionHistory.find(x=>x.id===id);if(!entry?.snapshot)return;mission=entry.snapshot;playing=entry.playing&&mission.outcome==='In progress';speed=entry.speed||1;site=mission.cfg.site;cfg=structuredClone(mission.cfg);save();go('control');return;}
   if(act==='end-mission'){
     const entry=missionHistory.find(x=>x.id===id);
@@ -1008,6 +1140,10 @@ app.addEventListener("click", async (e) => {
   }
   if (!mission) return;
   if (act === "retry") return launch();
+  if (replayFrame && ['play', 'hour', 'sol', 'inject', 'response', 'traverse'].includes(act)) {
+    toast('Return to the live mission to change operations');
+    return;
+  }
   if (act === "play") playing = !playing && mission.outcome === "In progress";
   if (act === "hour" || act === "sol") return tick(act === "hour" ? 1 : SOL);
   if (act === "tab") tab = id;
@@ -1028,8 +1164,12 @@ app.addEventListener("click", async (e) => {
   }
   if (act === "inject") {
     gtAnswer = "";
+    if (incident === "storm" && weather(mission).moon)
+      return toast("Atmospheric dust storms are unavailable on the Moon. Use local dust disturbance.");
+
     if (!inject(mission, incident, medical))
       return toast("Incident unavailable or already active");
+    toast(failures[incident][0] + " triggered");
     cue(incident === "medical" ? 740 : 320, 0.35);
     if (incident === "medical") tab = "ASTRA";
   }
@@ -1104,6 +1244,7 @@ try {
       if (["Helmet", "Follow crew"].includes(cameraPreset))
         scene?.view(cameraPreset, crewIndex);
     }
+    inspectedEquipment = equipmentForModel(id) ?? inspectedEquipment;
     equip = id.startsWith("crew")
       ? crewName(Number(id.slice(4))) + " · " + cfg.roles[Number(id.slice(4))]
       : id.startsWith("Solar")

@@ -25,7 +25,7 @@ export function enableGlobeSpin(viewer) {
     const dy = event.clientY-gesture.y;
     const elapsed = Math.max(120, performance.now()-gesture.time);
     if (outer() && Math.abs(dx)>12 && Math.abs(dx)>Math.abs(dy)*0.6)
-      angularRate = C.Math.clamp(-dx / Math.max(canvas.clientWidth,1) * 3.1 * 1000 / elapsed,-0.5,0.5);
+      angularRate = C.Math.clamp(dx / Math.max(canvas.clientWidth,1) * 3.1 * 1000 / elapsed,-0.5,0.5);
     gesture = null;
   });
   canvas.addEventListener('pointercancel',()=>{gesture=null;stop()});

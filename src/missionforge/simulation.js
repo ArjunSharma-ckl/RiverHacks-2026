@@ -1,3 +1,4 @@
+import { accumulateExposure, condition, damage, unavailable, weather, recordCheckpoint } from './exposure.js';
 import { advanceDuties, dutyPose, prepareDuties } from "./duties.js";
 import { habitatThermalFactor } from './material-model.js';
 export const SOL = 24.6597;
@@ -98,16 +99,21 @@ export function start(cfg) {
     outcome: "In progress",
   };
 }
-export const log = (s, msg) => s.logs.push({ h: s.h, msg });
+export function log(s, msg) {
+  s.logs.push({ h: s.h, msg });
+  recordCheckpoint(s, msg);
+}
 export const surfaceGravity = mode => mode==='Moon projection'?1.62:mode==='Mars projection'?3.71:9.81;
-export function thermalDemand(s){const target=s.cfg.mode==='Moon projection'?-20:s.cfg.mode==='Mars projection'?-15:15;return s.cfg.load*s.load*(1+Math.max(0,Math.abs((s.environment?.temperature??target)-target)-15)*0.012)*habitatThermalFactor(s)}
+export function thermalDemand(s){const target=s.cfg.mode==='Moon projection'?-20:s.cfg.mode==='Mars projection'?-15:15;return s.cfg.load*s.load*(1+Math.max(0,Math.abs((s.environment?.temperature??target)-target)-15)*0.012)*habitatThermalFactor(s)*(1+0.4*condition(s,"thermal").dust+damage(condition(s,"thermal")))}
 export function generation(s) {
+  const panel = condition(s, "solar");
+  if (damage(panel) >= 0.8) return 0;
   return (
     ((s.cfg.array * s.cfg.sun) / 24) *
     (s.cfg.mode === "Mars projection" ? 0.43 : s.cfg.mode === 'Moon projection' ? 0.6 : 1) *
     (s.active.solar ? 0.15 : 1) *
     (s.active.storm ? 0.35 : 1) *
-    (1-Math.min(1,Math.max(0,s.environment?.dust||0)/100)*0.7)
+    weather(s).transmission * (1 - 0.9 * panel.dust) * (1 - panel.wear - panel.corrosion)
   );
 }
 export function vitals(s, i) {
@@ -153,12 +159,13 @@ export function advance(s, hours) {
     const weatherStorm=!moon&&wind>=25&&dust>=45;
     if(weatherStorm&&!s.active.storm){s.active.storm=true;log(s,'High wind and dust · surface operations suspended')}
     if(!weatherStorm&&s.active.storm&&!s.manualStorm){delete s.active.storm;log(s,'Wind and dust dropped · surface operations may resume')}
+    accumulateExposure(s, dt, log);
     const moving =
       s.traverse &&
-      !s.active.rover &&
+      !unavailable(s, "rover") &&
       !s.active.storm &&
       (s.environment?.wind ?? 0) < 25 &&
-      (!s.active.comms || s.mitigated.autonomy) &&
+      (!unavailable(s, "comms") || s.mitigated.autonomy) &&
       s.cfg.rover &&
       (s.roverEnergy ?? 2.4) > 0;
     const available = s.roverEnergy ?? 2.4;
@@ -170,24 +177,27 @@ export function advance(s, hours) {
       s.traverse = false;
       log(s, "Rover battery depleted · traverse paused");
     }
-    const supply = generation(s) * dt,
-      demand = thermalDemand(s) * dt + charge;
+    const supply = generation(s) * dt;
+    const demand = thermalDemand(s) * dt + charge;
+    const essentialDemand = demand * 0.65;
+    s.powerLimited = r.battery + supply + (s.mitigated.solar ? s.backup : 0) < demand;
+    const servedDemand = s.powerLimited ? essentialDemand : demand;
     const backup = s.mitigated.solar
-      ? Math.min(s.backup, Math.max(0, demand - supply))
+      ? Math.min(s.backup, Math.max(0, servedDemand - supply))
       : 0;
     s.backup -= backup;
     s.generated += supply;
-    s.used += demand;
+    s.used += servedDemand;
     s.crewDose += Math.max(0,s.environment?.radiation??0.2)*dt/24;
     r.battery = Math.max(
       0,
-      Math.min(s.cfg.battery, r.battery + supply + backup - demand),
+      Math.min(s.cfg.battery, r.battery + supply + backup - servedDemand),
     );
     r.oxygen = Math.max(
       0,
       r.oxygen -
         ((n * 0.84) / 24 +
-          (s.active.oxygen ? (s.mitigated.oxygen ? 0.09 : 0.38) : 0)) *
+          (unavailable(s, "oxygen") ? (s.mitigated.oxygen ? 0.09 : 0.38) : 0)) *
           dt,
     );
     r.water = Math.max(0, r.water - ((n * 1.6) / 24) * dt);
@@ -197,7 +207,7 @@ export function advance(s, hours) {
     s.integrity = Math.max(
       0,
       (s.integrity ?? 100) -
-        dt * ((s.active.oxygen ? 0.35 : 0) + (s.active.storm ? 0.18 : 0) + (dust>65 ? (dust-65)*0.002 : 0)),
+        dt * (unavailable(s, "oxygen") ? 0.35 : 0),
     );
     s.h += dt;
     if(s.integrity<75&&!s.integrityWarning){s.integrityWarning=true;log(s,'Habitat integrity below 75% · inspect seals and external surfaces')}
@@ -275,6 +285,12 @@ export function respond(s, id, index) {
   } else if (id === "comms" && index === 3) {
     s.mitigated.autonomy = true;
     consequence = "Local operations only";
+  }
+  if (index === 1 && ["solar", "oxygen", "rover", "comms"].includes(id) && s.exposure?.[id]) {
+    const c = s.exposure[id];
+    c.wear *= 0.15;
+    c.fatigue *= 0.15;
+    c.corrosion *= 0.15;
   }
   const persists =
     (["solar", "oxygen"].includes(id) && index !== 1) ||
