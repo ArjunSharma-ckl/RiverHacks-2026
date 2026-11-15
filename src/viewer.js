@@ -83,7 +83,9 @@ export function createViewer(container) {
 
   clock.currentTime = C.JulianDate.now();
   clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
-  clock.multiplier = 1;
+  // A third of real time, so the terminator drifts across the globe at a
+  // readable pace instead of racing the clock.
+  clock.multiplier = 1 / 3;
   clock.clockRange = C.ClockRange.UNBOUNDED;
 
   camera.setView({

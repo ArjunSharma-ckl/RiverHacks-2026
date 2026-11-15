@@ -21,7 +21,10 @@
 <section id="orbit-intro"><div class="frame-label"><i></i>Earth observation</div><h2>Earth is our<br><em>proving ground.</em></h2><p>Discover Earth analog sites, establish field habitats and prepare your crew for Mars.</p><a class="enter-atlas" href="/#discover">OPEN WORKSPACE　→</a><button id="explore-orbit">Explore Earth Viewer　↗</button></section>
 <script>document.body.classList.add('intro-open');document.getElementById('explore-orbit').onclick=()=>{document.body.classList.remove('intro-open');document.getElementById('orbit-intro').remove();document.getElementById('hud-toggle').focus()};</script>
 <link rel="stylesheet" href="/src/orbit-entry.css">
-<aside id="details" hidden></aside>
+<aside id="rail" aria-label="Earth observation panels">
+  <aside id="details" hidden></aside>
+</aside>
+<div id="map-tip" role="status" hidden></div>
 
     <p id="credits">
       Imagery: NASA EOSDIS GIBS &middot; Events: NASA EONET &middot; Surface data: NASA POWER
