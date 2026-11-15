@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 
 import { createViewer, addBaseImagery } from './viewer.js';
+import { enableGlobeSpin } from './globe-spin.js';
 import { CLOUD_KEYS } from './cloud-loop.js';
 import { initLayers } from './layers.js';
 import { createSky } from './sky.js';
@@ -19,6 +20,7 @@ import { STARS, PLANET_NAMES } from './ephemeris.js';
 import { SUBJECTS, describe } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
+enableGlobeSpin(viewer);
 
 initLayers(viewer, [
   'bluemarble',
@@ -27,7 +29,7 @@ initLayers(viewer, [
   ...CLOUD_KEYS,
   ...WEATHER_LAYERS.filter(spec => !['clouds', 'truecolor'].includes(spec.id)).map((spec) => `w:${spec.id}`)
 ]);
-addBaseImagery({ blueMarble: false });
+addBaseImagery({ blueMarble: true });
 
 
 paintGalaxy(scene);

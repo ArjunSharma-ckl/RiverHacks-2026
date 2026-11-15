@@ -33,7 +33,7 @@ export function createViewer(container) {
   scene.globe.atmosphereLightIntensity = 14;
   scene.globe.baseColor = C.Color.fromCssColorString('#04070d');
   scene.globe.depthTestAgainstTerrain = true;
-  scene.globe.maximumScreenSpaceError = 3;
+  scene.globe.maximumScreenSpaceError = 2.5;
   scene.globe.tileCacheSize = 220;
 
   scene.skyAtmosphere.perFragmentAtmosphere = true;
@@ -74,7 +74,7 @@ export function createViewer(container) {
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
   viewer.targetFrameRate = 30;
-  viewer.resolutionScale = 1;
+  viewer.resolutionScale = Math.min(devicePixelRatio || 1, 1.4, Math.sqrt(3000000 / Math.max(1, innerWidth * innerHeight)));
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.

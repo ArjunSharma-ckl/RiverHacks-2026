@@ -1,4 +1,5 @@
 import { SATELLITE_NAMES, SUBJECTS, describe } from '../src/catalog.js';
+import { displayedHost, sourceLink, trustedHost } from './serp-links.js';
 
 // Keep the report cache in memory so the same module runs on Node and on
 // Cloudflare Workers, where the filesystem and sharp are unavailable.
@@ -14,7 +15,6 @@ const missions = {
   'Landsat 9':['Landsat 9','https://science.nasa.gov/mission/landsat-9/']
 };
 const domains = ['nasa.gov','esa.int','noaa.gov','usgs.gov','stsci.edu','eso.org','jaxa.jp','spaceforce.mil','spacex.com','starlink.com','eumetsat.int'];
-const siteFilter = '(' + domains.map(domain => 'site:' + domain).join(' OR ') + ')';
 const catalog = new Set(SATELLITE_NAMES);
 
 // One report per constellation. Thousands of Starlinks or Flocks asking
@@ -41,24 +41,26 @@ async function generate(name, key, craft) {
   const subject = missions[name]?.[0] || family(name) || name;
   const matches = text => String(text).toLowerCase().includes(subject.toLowerCase());
   async function search(engine, terms) {
-    const params = new URLSearchParams({engine, api_key:key, q:subject+' '+terms+' '+(subject === 'Starlink' ? 'site:starlink.com' : siteFilter)});
+    const params = new URLSearchParams({engine, api_key:key, q:subject+' '+terms, num:'12'});
     const response = await fetch('https://serpapi.com/search.json?'+params,{signal:AbortSignal.timeout(40000)});
     const result = await response.json();
     if (response.ok && /returned any results/i.test(result.error || '')) return {};
     if (!response.ok || result.error) throw new Error('Search unavailable');
     return result;
   }
-  const [web,images,technical] = await Promise.all([
+  const [web,images] = await Promise.all([
     search('google',craft?'spacecraft mission instruments launch orbit':'astronomy physical characteristics exploration'),
-    search('google_images',craft?'spacecraft hardware cleanroom assembly artist illustration -captured -observed -wildfires':'astronomy portrait').catch(()=>({})),
-    search('google',craft?'spacecraft design payload operator propulsion specifications':'measurements composition observations research').catch(()=>({}))
+    search('google_images',craft?'spacecraft hardware cleanroom assembly artist illustration -captured -observed -wildfires':'astronomy portrait').catch(()=>({}))
   ]);
-  const articles = [...(web.organic_results || []),...(technical.organic_results || [])].filter((r,i,all)=>all.findIndex(x=>x.link===r.link)===i).filter(r => trusted(r.link) && r.snippet && matches(r.title+' '+r.snippet)).slice(0,7)
-    .map(({title,link,snippet}) => ({title,link,snippet}));
-  const photos = (images.images_results || []).filter(r => trusted(r.link) && trusted(r.original) && matches(r.title) &&
+  const shortlist=(web.organic_results||[]).filter(r=>trustedHost(displayedHost(r),domains)&&r.snippet&&matches(r.title+' '+r.snippet)).slice(0,7);
+  const articles=(await Promise.all(shortlist.map(async r=>({title:r.title,link:await sourceLink(r),snippet:r.snippet}))))
+    .filter(r=>r.link&&trusted(r.link));
+  const photoCandidates = (images.images_results || []).filter(r => trustedHost(displayedHost(r),domains) && trusted(r.original) && matches(r.title) &&
     (!craft || (!/captur|spacecraft images|observes|image from|as seen by|observed by|satellite image of|wildfire|hurricane/i.test(r.title) &&
     /spacecraft|space station|observatory|satellite|telescope|clean room|assembly|artist|space shuttle/i.test(r.title))))
-    .slice(0,4).map(({title,link,original}) => ({title,link,thumbnail:original}));
+    .slice(0,4);
+  const photos=(await Promise.all(photoCandidates.map(async r=>({title:r.title,link:await sourceLink(r),thumbnail:r.original}))))
+    .filter(r=>r.link&&trusted(r.link));
   if (subject === 'Starlink') articles.unshift({title:'Starlink satellite technology',link:'https://www.starlink.com/technology',snippet:'SpaceX describes the constellation’s antennas, optical links, solar arrays and propulsion.'});
   if (missions[name]) {
     const link = missions[name][1];
