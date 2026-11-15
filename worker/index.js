@@ -52,10 +52,49 @@ async function apiResponse(request, env) {
   return new Response(body, { status: res.statusCode || status, headers });
 }
 
+// Edge-cache lifetimes for the shared API routes. NASA and SerpApi responses
+// change on their own cadence, so the Worker caches them per colo instead of
+// asking upstream for every visitor.
+const API_TTL = [
+  [/^\/(events|event)$/, 300],
+  [/^\/thermal$/, 600],
+  [/^\/hotspot$/, 1800],
+  [/^\/satellite$/, 1800],
+  [/^\/place$/, 1800],
+  [/^\/nasa\/images$/, 86400],
+  [/^\/nasa\/power$/, 3600],
+  [/^\/nasa\/spaceweather$/, 900],
+  [/^\/nasa\/(fires|apod)$/, 900],
+  [/^\/object$/, 1800]
+];
+
+function ttlFor(pathname) {
+  const path = pathname.replace(/^\/api/, '');
+  for (const [pattern, ttl] of API_TTL) if (pattern.test(path)) return ttl;
+  return 600;
+}
+
+async function apiCached(request, env, ctx) {
+  if (request.method !== 'GET') return apiResponse(request, env);
+  const cache = caches.default;
+  const key = new Request(request.url, { method: 'GET' });
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const response = await apiResponse(request, env);
+  if (response.status === 200 && ctx?.waitUntil) {
+    const headers = new Headers(response.headers);
+    const ttl = ttlFor(new URL(request.url).pathname);
+    headers.set('Cache-Control', `public, max-age=${ttl}`);
+    headers.delete('Set-Cookie');
+    ctx.waitUntil(cache.put(key, new Response(response.clone().body, { status: 200, headers })));
+  }
+  return response;
+}
+
 function cached(response, pathname) {
   if (!response.ok || response.status === 206) return response;
   const headers = new Headers(response.headers);
-  if (/^\/(assets|models|textures)\//.test(pathname)) {
+  if (/^\/(assets|models|textures|data|cinematics)\//.test(pathname)) {
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
   } else if (pathname.startsWith('/cesium/')) {
     headers.set('Cache-Control', 'public, max-age=604800');
@@ -70,12 +109,12 @@ function cached(response, pathname) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === '/healthz') {
       return new Response('ok', { headers: { 'Content-Type': 'text/plain' } });
     }
-    if (url.pathname.startsWith('/api/')) return apiResponse(request, env);
+    if (url.pathname.startsWith('/api/')) return apiCached(request, env, ctx);
     const response = await env.ASSETS.fetch(request);
     return cached(response, url.pathname);
   }

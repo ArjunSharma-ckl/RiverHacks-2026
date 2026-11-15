@@ -73,6 +73,8 @@ export function addCatalog(viewer, fleet, onCatalog) {
   viewer.scene.preUpdate.addEventListener(() => {
     cloud.show = fleet.visible;
     if (!cloud.show && nearby.size) { for (const entity of nearby.values()) viewer.entities.remove(entity); nearby.clear(); }
+    // A hidden tab does not need fifteen thousand propagated positions.
+    if (document.hidden) return;
     if (!ready || !cloud.show || performance.now()-last < 2200) return;
     ready = false; last = performance.now();
     worker.postMessage({time:C.JulianDate.toDate(viewer.clock.currentTime).getTime()});

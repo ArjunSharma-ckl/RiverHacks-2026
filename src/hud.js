@@ -1,4 +1,3 @@
-import { catalogControls } from './catalog-search.js';
 import * as C from 'cesium';
 
 function element(tag, className, text) {
@@ -64,20 +63,6 @@ export function createHud(root, context) {
   nav.append(pad, element('p', 'control-hint',
     'W A S D or arrow keys \u00b7 + / \u2212 zoom \u00b7 hold Shift for faster \u00b7 Esc to centre'));
 
-  const fleet = section('Satellite tracking');
-  const selector = element('select');
-  selector.setAttribute('aria-label', 'Track a satellite');
-  selector.add(new Option('Earth overview', ''));
-  for (const entity of satellites.entities) selector.add(new Option(entity.name, entity.id));
-  selector.onchange = () => {
-    const target = viewer.entities.getById(selector.value);
-    if (target) target.show = true;
-    satellites.track(target);
-  };
-  viewer.trackedEntityChanged.addEventListener(entity => { selector.value = entity?.id || ''; });
-  fleet.append(selector);
-  catalogControls(fleet,satellites,context.chooseContact);
-  sections.prepend(fleet);
   // Weather
   const weatherSection = section('Weather');
   const status = element('p', 'status');
@@ -108,6 +93,8 @@ export function createHud(root, context) {
     weatherSection.append(row);
     layerInputs.set(spec.id, { input: control.input, row });
   }
+  weatherSection.append(toggle('Animate clouds · 10-minute loop', true, (on) => weather.setAnimation(on),
+    'Loops the newest GOES frames so the cloud deck moves instead of sitting still').wrapper);
   weatherSection.append(status);
 
   function syncLayerInputs() {
@@ -131,11 +118,13 @@ export function createHud(root, context) {
     }
   });
 
-  // Events
+  // Events. The markers are on the globe from the start and the right-hand
+  // panel lists the same events, so a dot is never unpickable.
   const eventsSection = section('Active events');
-  eventsSection.append(toggle('Natural events (NASA EONET)', false, (on) => {
+  eventsSection.append(toggle('Natural events (NASA EONET)', true, (on) => {
     weather.setEvents(on);
   }, 'Open storms, wildfires, floods, volcanoes and ice events').wrapper);
+  weather.setEvents(true);
 
   // Scene
   const sceneSection = section('Scene');
