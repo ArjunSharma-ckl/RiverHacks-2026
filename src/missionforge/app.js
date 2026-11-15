@@ -3,6 +3,7 @@ import { launchSequence } from "./launch.js";
 import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, loadSeason, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
+import { SITE_FEATURES, parseSiteRankings, siteAiRequest } from './site-ai.js';
 import morphdom from "morphdom";
 import "./design.css";
 import './workspace.css';
@@ -54,9 +55,9 @@ const bar = (n) =>
 const label = (s) => `<span class="eyebrow"><i class="tick"></i>${s}</span>`;
 const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "Unavailable");
 const photo = (s) =>
-  sites.some((x) => x.id === s.id)
+  ['atacama','death','haughton','iceland','mauna','mcmurdo'].includes(s.id)
     ? `<img alt="Satellite view of ${s.name}" src="/assets/mission/${s.id}.jpg">`
-    : "";
+    : `<div class="site-image-fallback" role="img" aria-label="No site photograph available"><span>${esc(s.type||'Field site')}</span></div>`;
 const cache = {},
   obs = new Map();
 let sortBy = "Suitability",
@@ -64,13 +65,19 @@ let sortBy = "Suitability",
   searchTimer,
   groundQuestion = "";
 let drawerOpen = true, drawerWidth = Number(localStorage.getItem('mf-drawer-width')) || 390, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
-const explorerFields=[['olivine','Olivine'],['plagioclase','Plagioclase'],['lowCalciumPyroxene','Low calcium pyroxene'],['highCalciumPyroxene','High calcium pyroxene'],['smfe','SMFe'],['roughness','Terrain roughness'],['surfaceTemperature','Average surface temperature (°C)']];
+const explorerFields=SITE_FEATURES;
 let explorerValues={};
 try{explorerValues=JSON.parse(localStorage.getItem('mf-explorer-inputs')||'{}')}catch{}
+let aiRankings=new Map(),aiRankingStatus='AI rankings not connected';
+async function refreshAiRankings(){
+  try{const target=encodeURIComponent(JSON.stringify(siteAiRequest(explorerValues)));const response=await fetch('/api/analog/site-rankings?target='+target,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error();aiRankings=parseSiteRankings(await response.json(),new Set(sites.map(s=>s.id)));aiRankingStatus=aiRankings.size?`${aiRankings.size} AI-ranked sites loaded`:'AI rankings not connected';}
+  catch{aiRankingStatus='AI rankings not connected';}
+  if(['discover','explorer'].includes(page))update();
+}
 let missionHistory=[];
 try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}catch{}
 let facilitySearch='';
-const extraFacilities={greenhouse:'Food greenhouse',observatory:'Geology observatory',power:'Auxiliary power module',storage:'Cold storage depot',comms:'Communications relay',airlock:'Secondary airlock',drilling:'Subsurface drilling bay',landing:'Landing support pad'};
+const extraFacilities={storage:'Storage depot',comms:'Communications relay',landing:'Descent vehicle',recycler:'Water recycling module',lab:'Research laboratory',habitat:'Habitat module',medical:'Medical module',solar:'Solar array'};
 let gtAnswer = "",
   quality = "Balanced";
 let crewIndex = 0;
@@ -98,6 +105,7 @@ let site = sites[0],
   observationVersion = 0;
 let cfg = {
   crew: 4,
+  crewMembers: roster.map(name=>({name,age:'',heightCm:'',weightKg:'',baselinePulse:66,sleepHours:7.5,notes:''})),
   days: 7,
   array: 8,
   battery: 48,
@@ -124,14 +132,26 @@ try {
     mission = saved.mission;
   }
 } catch {}
+function ensureCrew(){
+  cfg.crew=Math.max(1,Math.min(12,Number(cfg.crew)||4));
+  cfg.crewMembers??=[];
+  for(let i=0;i<cfg.crew;i++){
+    cfg.crewMembers[i]??={name:roster[i]||`Crew ${i+1}`,age:'',heightCm:'',weightKg:'',baselinePulse:66,sleepHours:7.5,notes:''};
+    cfg.roles[i]??=roles[i%roles.length];
+  }
+}
+ensureCrew();
+const crewName=i=>cfg.crewMembers?.[i]?.name||roster[i]||`Crew ${i+1}`;
+const crewNames=()=>Array.from({length:cfg.crew},(_,i)=>crewName(i));
 try{const session=JSON.parse(localStorage.getItem('mf-sim-session')||'{}');playing=Boolean(mission&&mission.outcome==='In progress'&&session.playing);speed=[1,2,3,4,10,50].includes(session.speed)?session.speed:1;const elapsed=Math.max(0,Date.now()-(session.savedAt||Date.now()))/3000*.1;if(playing&&elapsed)advance(mission,Math.min(elapsed*speed,mission.cfg.days*SOL-mission.h));for(const entry of missionHistory){if(entry.id===mission?.id||!entry.playing||entry.snapshot?.outcome!=='In progress')continue;advance(entry.snapshot,Math.min(elapsed*(entry.speed||1),entry.snapshot.cfg.days*SOL-entry.snapshot.h));entry.h=entry.snapshot.h;entry.outcome=entry.snapshot.outcome;entry.resources=entry.snapshot.resources;entry.logs=entry.snapshot.logs;entry.parts=entry.snapshot.parts;entry.medkits=entry.snapshot.medkits;entry.playing=entry.outcome==='In progress'} }catch{}
 function save() {
   try {
-    if(mission?.cfg?.site){mission.id??=String(Date.now());const entry={id:mission.id,site:mission.cfg.site,mode:mission.cfg.mode,crew:mission.cfg.crew,h:mission.h,outcome:mission.outcome,playing,speed,logs:mission.logs.slice(-80),parts:mission.parts,medkits:mission.medkits,resources:mission.resources,snapshot:mission};missionHistory=[entry,...missionHistory.filter(x=>x.id!==entry.id)].slice(0,30);localStorage.setItem('mf-mission-history',JSON.stringify(missionHistory));}
+    if(mission?.cfg?.site){mission.id??=String(Date.now());const snapshot={...mission,logs:mission.logs.slice(-80),history:mission.history.slice(-160)};const entry={id:mission.id,site:mission.cfg.site,mode:mission.cfg.mode,crew:mission.cfg.crew,h:mission.h,outcome:mission.outcome,playing,speed,logs:snapshot.logs,parts:mission.parts,medkits:mission.medkits,resources:mission.resources,snapshot};missionHistory=[entry,...missionHistory.filter(x=>x.id!==entry.id)].slice(0,16);}
+    localStorage.setItem('mf-mission-history',JSON.stringify(missionHistory));
     localStorage.setItem('mf-sim-session',JSON.stringify({playing,speed,savedAt:Date.now()}));
     localStorage.setItem(
       "missionforge-v1",
-      JSON.stringify({ cfg, site, mission, profile }),
+      JSON.stringify({ cfg, site, mission:mission?{...mission,logs:mission.logs.slice(-80),history:mission.history.slice(-160)}:null, profile }),
     );
   } catch {}
 }
@@ -153,6 +173,8 @@ await Promise.all(
   }),
 );
 const ranking = (s) => rank(s, cache[s.id], profile, query, priority);
+const displayScore=s=>aiRankings.get(s.id)?.score??ranking(s).score;
+const featureValue=(s,key)=>key==='surfaceTemperature'?aiRankings.get(s.id)?.features[key]??annual(s,'T2M'):aiRankings.get(s.id)?.features[key];
 const ranked = () =>
   [...sites].sort((a, b) =>
     sortBy === "Site name"
@@ -160,7 +182,9 @@ const ranked = () =>
       : sortBy === "Solar resource"
         ? (annual(b, "ALLSKY_SFC_SW_DWN") ?? -1) -
           (annual(a, "ALLSKY_SFC_SW_DWN") ?? -1)
-        : (ranking(b).score ?? -1) - (ranking(a).score ?? -1),
+        : SITE_FEATURES.some(([key,label])=>label===sortBy)
+          ? (featureValue(b,SITE_FEATURES.find(([,label])=>label===sortBy)[0])??-Infinity)-(featureValue(a,SITE_FEATURES.find(([,label])=>label===sortBy)[0])??-Infinity)
+          : (displayScore(b) ?? -1) - (displayScore(a) ?? -1),
   );
 const annual = (s, k) => {
   const n = cache[s.id]?.properties?.parameter?.[k]?.ANN;
@@ -179,7 +203,7 @@ function lensContent() {
   if (cameraPreset === "Rover")
     return `<div><b>ROVER CHASE CAM　/　MF-001</b><span>${mission?.traverse ? "Survey traverse active" : "Parked at the survey loop"} · ${fmt(mission?.km ?? 0, 1)} km</span></div>${btn("overviewCamera", "Exit camera")}`;
   return ["Helmet", "Follow crew"].includes(cameraPreset)
-    ? `<div><b>${cameraPreset === "Helmet" ? "HELMET CAM" : "CHASE CAM"}　/　${roster[crewIndex]}</b><span>${dutyPose(mission, crewIndex).status} · ${vitals(mission, crewIndex).pulse} BPM</span></div>${btn("overviewCamera", "Exit camera")}`
+    ? `<div><b>${cameraPreset === "Helmet" ? "HELMET CAM" : "CHASE CAM"}　/　${esc(crewName(crewIndex))}</b><span>${dutyPose(mission, crewIndex).status} · ${vitals(mission, crewIndex).pulse} BPM</span></div>${btn("overviewCamera", "Exit camera")}`
     : "";
 }
 const viewport = () =>
@@ -262,18 +286,26 @@ function rows() {
   return ranked().filter(s => (filterTemp==='Any' || (filterTemp==='Below 0°C' ? (annual(s,'T2M')??100)<0 : filterTemp==='0–15°C' ? (annual(s,'T2M')??100)>=0 && (annual(s,'T2M')??100)<=15 : (annual(s,'T2M')??-100)>15)) && (filterMineral==='Any' || minerals[s.id]===filterMineral))
     .map(
       (s) =>
-        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(reasoning(s))}</span></span><b class="site-card-score">${ranking(s).score ?? "—"}<small>/100</small></b></button>`,
+        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(aiRankings.has(s.id)?`AI model ${aiRankings.get(s.id).modelVersion}`:reasoning(s))}</span>${SITE_FEATURES.some(([,name])=>name===sortBy)?`<span class="score-reason">${esc(sortBy)}: ${featureValue(s,SITE_FEATURES.find(([,name])=>name===sortBy)[0])??'Awaiting measurement'}</span>`:''}</span><b class="site-card-score">${displayScore(s)??"—"}<small>/100</small></b></button>`,
     )
     .join("");
 }
 function discover() {
-  return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Surface material is a broad site classification, not a verified mineral assay.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${siteExplorer()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<small>${esc(aiRankingStatus)} · ${aiRankings.size?'Scores from the connected model':'Current scores are editorial estimates'}</small>${btn('refresh-ai','Refresh AI rankings')}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
-function pastMissions(){const entries=missionHistory;const card=x=>`<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${x.snapshot?btn('resume-mission:'+esc(x.id),'Open mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Mission log and supplies</summary><p>Repair spares: ${esc(x.parts??'—')} · Medical kits: ${esc(x.medkits??'—')}</p>${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value))).join('')}${Object.entries(x.snapshot?.inventory||{}).map(([key,value])=>line(esc(key),fmt(value,0))).join('')}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')||'<p>No detailed log was saved for this older mission.</p>'}</details></div></article>`;const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card to inspect logs and remaining supplies.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;}
-function siteExplorer(){return `${label('Site explorer / Input staging')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements. This form saves a structured input record for the matching AI planned next.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(explorerValues,null,2))}</pre></details><p class="note">No matching score is calculated yet. Mineral values and roughness retain the units of your source data.</p>`;}
-function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div>`;}
+function pastMissions(){
+  const entries=missionHistory;
+  const card=x=>{
+    const m=x.snapshot, alerts=Object.keys(m?.active||{});
+    return `<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${m?btn('resume-mission:'+esc(x.id),'Open mission'):''}${x.outcome==='In progress'?btn('end-mission:'+esc(x.id),'End mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Full mission summary</summary>${m?`${line('Objective',esc(m.cfg.objective))}${line('Duration',`${fmt(m.h,1)} / ${fmt(m.cfg.days*SOL,1)} h`)}${line('Active failures',alerts.length?alerts.map(k=>esc(failures[k]?.[0]||k)).join(', '):'None')}${line('Crew',m.cfg.crewMembers?.slice(0,m.cfg.crew).map(p=>esc(p.name)).join(', ')||`${m.cfg.crew} members`)}${line('Facilities',Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([,name])=>name).join(', '))}${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value)+' '+(units[key]||''))).join('')}${line('Repair spares / medical kits',`${x.parts??'—'} / ${x.medkits??'—'}`)}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')}`:'<p>Detailed snapshot unavailable for this older mission.</p>'}</details></div></article>`;
+  };
+  const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');
+  return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card for its full status or end it from here.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;
+}
+function siteExplorer(){return `${label('Site explorer / AI input')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements for the matching model. The candidate sites below will use its scores when connected.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(siteAiRequest(explorerValues),null,2))}</pre></details><p class="note">Mineral values and roughness retain the units of your source data. Missing values remain null.</p>`;}
+function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Ask GroundTruth</h1><p>Ask about this site, mission operations or any research topic. Answers include the search sources used.</p></div><div class="research-search"><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Get answer →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see an answer with source links.</p>'}</div>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
-function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Core facilities. Search to add optional modules before launch. Pressurized modules share enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. greenhouse, airlock"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
+function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Core facilities. Optional search lists only modules with a local 3D model. Pressurized modules connect by enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. recycler, laboratory"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
 function breakdown(s) {
   const r = ranking(s);
   return factors
@@ -318,7 +350,7 @@ function inspect() {
     )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a>${select("research-type", "Evidence collection", ["Studies", "Operations", "News", "Logistics"], researchType)}<label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search evidence")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}<br><small>${esc(r.source)} · ${esc(r.category || researchType)} · ${esc(r.date || "Date unavailable")}</small></p>`).join("")}</details>`;
 }
 function design() {
-  return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 6)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
+  return `${btn("inspect", "← Site inspection", "back")}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 12)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
     ["array", "Array rating (kW)", 1, 40],
     ["battery", "Battery capacity (kWh)", 1, 300],
     ["load", "Habitat load (kW)", 0.1, 10],
@@ -335,12 +367,10 @@ function design() {
     )
     .join(
       "",
-    )}</div>${["rover", "backup"].map((k) => `<label><input id="${k}" type="checkbox" ${cfg[k] ? "checked" : ""}> ${k === "rover" ? "Robotic rover" : "Backup power"}</label>　`).join("")}</details>${facilityControls()}<details><summary>Crew manifest</summary><div class="fields">${roster
-    .slice(0, cfg.crew)
-    .map((name, i) => select("role" + i, name, roles, cfg.roles[i]))
-    .join(
-      "",
-    )}</div></details><small>Solar input ${fmt(annual(site, "ALLSKY_SFC_SW_DWN") ?? 5, 2)} kWh/m²/day · ${annual(site, "ALLSKY_SFC_SW_DWN") === null ? "demo assumption" : "POWER climatology"}. Mars projection scales available solar energy.</small><div class="actions"><button class="primary" type="submit">Launch mission　→</button></div></form>`;
+    )}</div>${["rover", "backup"].map((k) => `<label><input id="${k}" type="checkbox" ${cfg[k] ? "checked" : ""}> ${k === "rover" ? "Robotic rover" : "Backup power"}</label>　`).join("")}</details>${facilityControls()}${crewManifest()}<small>Solar input ${fmt(annual(site, "ALLSKY_SFC_SW_DWN") ?? 5, 2)} kWh/m²/day · ${annual(site, "ALLSKY_SFC_SW_DWN") === null ? "demo assumption" : "POWER climatology"}. Mars projection scales available solar energy.</small><div class="actions"><button class="primary" type="submit">Launch mission　→</button></div></form>`;
+}
+function crewManifest(){
+  return `<details><summary>Crew manifest · ${cfg.crew} people</summary><p class="note">Personal details remain in this browser. Baseline pulse and sleep targets adjust the training display; this is not a medical prediction.</p>${cfg.crewMembers.slice(0,cfg.crew).map((person,i)=>`<fieldset class="crew-person"><legend>Person ${i+1}</legend><label class="field">Name<input data-crew="${i}:name" maxlength="70" value="${esc(person.name)}"></label>${select('role'+i,'Role',roles,cfg.roles[i])}<div class="fields">${[['age','Age (years)',18,100,1],['heightCm','Height (cm)',100,230,1],['weightKg','Weight (kg)',30,250,.1],['baselinePulse','Resting pulse (bpm)',35,130,1],['sleepHours','Sleep target (hours)',3,12,.5]].map(([key,title,min,max,step])=>`<label class="field">${title}<input type="number" data-crew="${i}:${key}" min="${min}" max="${max}" step="${step}" value="${esc(person[key]??'')}"></label>`).join('')}</div><label class="field">Operational notes<input data-crew="${i}:notes" maxlength="180" value="${esc(person.notes||'')}"></label></fieldset>`).join('')}</details>`;
 }
 const metrics = (m) =>
   Object.entries(m.resources)
@@ -368,7 +398,7 @@ function crewControls(m) {
   crewIndex = Math.min(crewIndex, m.cfg.crew - 1);
   const duty = m.duties[crewIndex],
     station = stations[duty.key];
-  return `<section class="crew-ops"><h2>Crew operations</h2><div class="fields">${select("operator", "Astronaut", roster.slice(0, m.cfg.crew), roster[crewIndex])}${select(
+  return `<section class="crew-ops"><h2>Crew operations</h2><div class="fields">${select("operator", "Astronaut", crewNames(), crewName(crewIndex))}${select(
     "workorder",
     "Assignment",
     Object.values(stations).map((s) => s.task),
@@ -399,8 +429,7 @@ function workTotals(m) {
   );
 }
 function astra(m) {
-  return `<h2>ASTRA crew health</h2>${pulseMonitor(m, Math.min(crewIndex, m.cfg.crew - 1))}<small>Simulated training telemetry · ${m.medkits} medical kits</small>${roster
-    .slice(0, m.cfg.crew)
+  return `<h2>ASTRA crew health</h2>${pulseMonitor(m, Math.min(crewIndex, m.cfg.crew - 1))}<small>Simulated training telemetry · ${m.medkits} medical kits</small>${crewNames()
     .map((_, i) => {
       const v = vitals(m, i);
       return `<details ${i === 0 ? "open" : ""}><summary>${v.name} · ${v.status}</summary><p>${v.role}</p>${line("Heart rate / SpO₂", `${v.pulse} bpm / ${v.spo2}%`)}${line("Temperature / hydration", `${v.temp} °C / ${v.hydration}%`)}${line("Activity", dutyPose(m, i).status)}${line("Stress estimate", v.status === "Nominal" ? "Baseline" : "Elevated")}${line("Fatigue / sleep", `${v.fatigue}% / ${v.sleep} h`)}${i === 0 ? spark(m.history.map((x) => x.hr)) : ""}</details>`;
@@ -419,10 +448,20 @@ function groundTruth() {
   );
 }
 function environmentControls(){const env=mission?.environment||{temperature:-35,wind:12,dust:0,radiation:0.2},moon=mission?.cfg.mode==='Moon projection';return `<details open><summary>Live environment</summary><p class="note">Changes apply during the running simulation.${moon?' The Moon has no atmospheric wind; dust is a local plume scenario.':''}</p>${[['temperature','Temperature °C',-120,55,1],...(moon?[]:[['wind','Wind m/s',0,60,1]]),['dust',moon?'Dust plume opacity %':'Dust opacity %',0,100,1],['radiation','Radiation mSv/day',0,5,.1]].map(([key,title,min,max,step])=>`<label class="field">${title}<input type="range" data-environment="${key}" min="${min}" max="${max}" step="${step}" value="${env[key]}"><output>${env[key]}</output></label>`).join('')}</details>`;}
+function missionOverview(m){
+  const crew=crewNames().map((name,i)=>{
+    const v=vitals(m,i),safe=v.status==='Nominal';
+    return `<div class="status-row"><div><strong>${esc(name)}</strong><small>${esc(v.status)} · ${v.pulse} bpm · SpO₂ ${v.spo2}%</small></div>${bar(Math.min(100,v.spo2))}</div>`;
+  }).join('');
+  const equipment=[['Habitat',m.integrity??100,m.active.oxygen?'Oxygen failure':'Operational'],['Solar array',m.active.solar?20:100,m.active.solar?'Array failure':'Operational'],['Rover',m.active.rover?15:Math.round((m.roverEnergy??2.4)/2.4*100),m.active.rover?'Disabled':m.cfg.rover?'Operational':'Not deployed']].filter(([name])=>name!=='Rover'||m.cfg.rover)
+    .map(([name,value,status])=>`<div class="status-row"><div><strong>${name}</strong><small>${status}</small></div>${bar(value)}</div>`).join('');
+  const facilities=Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([key,name])=>`<span class="status-chip">${esc(name)}</span>`).join('');
+  return `<section class="mission-status"><h2>Mission status</h2><details open><summary>Health and people · ${m.cfg.crew}</summary>${crew}</details><details open><summary>Buildings and equipment</summary>${equipment}</details><details open><summary>Active facilities</summary><div class="status-chips">${facilities}</div></details></section>`;
+}
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${missionOverview(m)}${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -472,7 +511,7 @@ function render() {
   const activeTab=page==='inspect'?'discover':['design','control','report'].includes(page)?'mission':page;
   const content = { past:pastMissions, explorer:siteExplorer, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
   if(!app.querySelector('.workspace')){
-    const tabs=[['past','Past missions'],['discover','Site atlas'],['explorer','Site explorer'],['travel','Travel'],['mission','Mission'],['research','GroundTruth']];
+    const tabs=[['past','Past missions'],['discover','Sites'],['travel','Travel'],['mission','Mission'],['research','GroundTruth']];
     app.innerHTML=`<section class="workspace" style="--drawer-width:${drawerWidth}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" title="${name}" aria-label="${name}">${name}</button>`).join('')}<a class="earth-viewer-link" href="/orbit.html">Earth Viewer ↗</a></nav><div class="panel-drawer"><div class="drawer-head"><span id="drawer-title"></span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel"></div><div class="drawer-resize" role="separator" aria-label="Resize side panel" aria-orientation="vertical" tabindex="0"></div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
     app.querySelector('.viewport').prepend(atlas);
     app.querySelector('.viewport').insertAdjacentHTML('beforeend','<div class="weather-layer" aria-hidden="true"></div>');
@@ -526,9 +565,9 @@ function go(name) {
 function displayScene() {
   if (!scene) return;
   const loading=app.querySelector('.mission-loading');if(loading)loading.remove();
-  if(['design','control'].includes(page)){const overlay=document.createElement('div');overlay.className='mission-loading';overlay.innerHTML='<div class="mission-loading-card"><div class="mission-loading-rocket">🚀</div><div class="mission-loading-spinner"></div><strong>Preparing terrain and habitat</strong><p>Loading Earth imagery and 3D scene…</p></div>';app.querySelector('.workspace').append(overlay);scene.waitForTiles().then(()=>overlay.remove());}
+  let overlay;
+  if(['design','control'].includes(page)){overlay=document.createElement('div');overlay.className='mission-loading';overlay.innerHTML='<div class="mission-loading-card"><span class="mission-loading-kicker">MISSIONFORGE / EARTH ANALOG</span><div class="mission-loading-orbit" aria-hidden="true"><span></span></div><strong>Preparing the field site</strong><p>Loading terrain, imagery and settlement models…</p><div class="mission-loading-track"><span></span></div></div>';app.querySelector('.workspace').append(overlay);}
   if (["past", "discover", "research"].includes(page)) scene.overview();
-  else if(page==='explorer')scene.preview(site);
   else if (page === 'travel') { scene.overview(); if(trip.stops.length)scene.showRoute(routePoints()); }
   else if (page === "inspect") scene.inspect(site);
   else if(page==='design')scene.preview(site);
@@ -537,10 +576,11 @@ function displayScene() {
     scene.setFacilities(cfg.facilities||{});
     scene.sync(mission, playing ? speed : 0);
   }
+  if(overlay)scene.waitForTiles().then(ready=>{if(!overlay.isConnected)return;if(ready)overlay.remove();else{overlay.querySelector('p').textContent='Some map detail is still loading. You can continue now.';overlay.querySelector('.mission-loading-track').innerHTML='<button type="button" class="mission-loading-continue">Continue to mission</button>';overlay.querySelector('button').onclick=()=>overlay.remove();}});
 }
 function route() {
   const target = location.hash.slice(1);
-  page = [
+  page = target==='explorer'?'discover':[
     "past",
     "explorer",
     "travel",
@@ -664,12 +704,12 @@ async function launch() {
     sun: annual(site, "ALLSKY_SFC_SW_DWN") ?? 5,
   };
   const expedition = start(cfg);
-  scene?.place(site, cfg);
-  await playback;
   mission = expedition;
   playing = true;
   tab = "Systems";
   save();
+  scene?.place(site, cfg);
+  await playback;
   go("control");
 }
 function tick(h) {
@@ -713,6 +753,7 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
+  if(e.target.dataset.crew){const [index,key]=e.target.dataset.crew.split(':');const person=cfg.crewMembers[Number(index)];if(!person)return;if(e.target.type==='number'&&value!==''&&!e.target.checkValidity())return;person[key]=e.target.type==='number'?(value===''?'':Number(value)):value.trim();save();update();return;}
   if(id==='sim-speed'){speed=Number(value.replace('×',''));save();update();return;}
   if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));update();return;}
   if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
@@ -727,6 +768,7 @@ app.addEventListener("change", (e) => {
     else if (e.target.checkValidity()) cfg[id] = Number(value);
     else return;
     save();
+    if (id === "crew") ensureCrew();
     if (id === "crew" || id === "rover") {
       update();
       displayScene();
@@ -758,7 +800,7 @@ app.addEventListener("change", (e) => {
     loadObs();
   }
   if (id === "operator") {
-    crewIndex = roster.indexOf(value);
+    crewIndex = Math.max(0,crewNames().indexOf(value));
     if (["Helmet", "Follow crew"].includes(cameraPreset))
       scene?.view(cameraPreset, crewIndex);
     update();
@@ -767,7 +809,7 @@ app.addEventListener("change", (e) => {
   if (id === "workorder") {
     const key = Object.keys(stations).find((k) => stations[k].task === value);
     if (assignDuty(mission, crewIndex, key)) {
-      log(mission, roster[crewIndex] + " assigned to " + stations[key].name);
+      log(mission, crewName(crewIndex) + " assigned to " + stations[key].name);
       scene?.sync(mission, playing ? speed : 0);
       save();
     }
@@ -801,16 +843,26 @@ app.addEventListener("click", async (e) => {
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
   if(act==='resume-mission'){const entry=missionHistory.find(x=>x.id===id);if(!entry?.snapshot)return;mission=entry.snapshot;playing=entry.playing&&mission.outcome==='In progress';speed=entry.speed||1;site=mission.cfg.site;cfg=structuredClone(mission.cfg);save();go('control');return;}
+  if(act==='end-mission'){
+    const entry=missionHistory.find(x=>x.id===id);
+    if(!entry?.snapshot||entry.outcome!=='In progress')return;
+    entry.snapshot.outcome='Ended by operator';
+    log(entry.snapshot,'Mission ended by operator.');
+    entry.outcome=entry.snapshot.outcome;entry.logs=entry.snapshot.logs.slice(-80);entry.playing=false;
+    if(mission?.id===id){mission=entry.snapshot;playing=false;scene?.sync(mission,0);}
+    save();update();return;
+  }
   if(act==='add-facility'){cfg.addedFacilities??=[];if(extraFacilities[id]&&!cfg.addedFacilities.includes(id))cfg.addedFacilities.push(id);facilitySearch='';const field=app.querySelector('#facility-search');if(field)field.value='';if(mission&&page==='control')mission.cfg.addedFacilities=[...cfg.addedFacilities];save();update();if(page==='control')displayScene();return;}
   if(act==='remove-facility'){cfg.addedFacilities=(cfg.addedFacilities||[]).filter(x=>x!==id);if(mission&&page==='control')mission.cfg.addedFacilities=[...cfg.addedFacilities];save();update();if(page==='control')displayScene();return;}
   if(act==='archive-site'){const archived=missionHistory.find(x=>x.site?.id===id);const selected=sites.find(x=>x.id===id)||archived?.site;if(selected)choose(selected);return;}
-  if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));toast('Site inputs saved locally for AI integration');update();return;}
+  if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));refreshAiRankings();toast('Site inputs saved for AI integration');update();return;}
+  if(act==='refresh-ai'){refreshAiRankings();return;}
   if(act==='clear-explorer'){explorerValues={};localStorage.removeItem('mf-explorer-inputs');update();return;}
   if(act==='ask-research'){
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
     if(!researchQuestion)return toast('Enter a research question');
     researchAnswer='<p>Searching cited sources…</p>';update();
-    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));const brief=(result.summary||[]).map(r=>`<li>${esc(r.text)} <a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.source)} ↗</a></li>`).join('');researchAnswer=(brief?`<section class="research-brief"><h3>Evidence summary</h3><p>Key points from the linked research snippets:</p><ul>${brief}</ul></section>`:'')+(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch(error){researchAnswer=`<p class="empty-card">${error.message==='missing_key'?'Add SERPAPI_KEY to .env.local and restart the server.':'Source search is temporarily unavailable. Please retry.'}</p>`;}update();return;
+    try{const result=await json('/api/analog/ask?q='+encodeURIComponent(researchQuestion.slice(0,200)));const paragraphs=(result.answer||'').split(/\n\s*\n/).filter(Boolean).map(x=>`<p>${esc(x)}</p>`).join('');researchAnswer=`<section class="research-brief"><h3>${esc(result.answerType||'Source answer')}</h3>${paragraphs||'<p>The search returned no answer text. Review the linked sources below.</p>'}</section>`+(result.sources||[]).map(r=>`<article><small>${esc(r.source)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('');}catch(error){researchAnswer=`<p class="empty-card">${error.message==='missing_key'?'Add SERPAPI_KEY to .env.local and restart the server.':'Source search is temporarily unavailable. Please retry.'}</p>`;}update();return;
   }
   if (act === "followRover") {
     if (!cfg.rover) return toast("No rover is deployed");
@@ -933,77 +985,16 @@ app.addEventListener("click", async (e) => {
   }
   if (act === "groundtruth") {
     const output = document.querySelector("#gt-results"),
-      question = document.querySelector("#gt-question").value;
+      question = document.querySelector("#gt-question").value.trim();
+    if(!question)return toast('Enter a question');
     const v = vitals(mission, crewIndex),
       incidents = Object.keys(mission.active).join(" ");
-    const context = [
-      mission.cfg.mode,
-      mission.health ? "SpO2 " + v.spo2 + "% HR " + v.pulse : "",
-      mission.logs.at(-1)?.msg ?? "",
-    ].join(" ");
-    const category = mission.health
-      ? "medical-support"
-      : incidents
-        ? "incident"
-        : "site";
-    output.textContent = "Searching trusted sources…";
+    const context = [site.name,mission.cfg.mode,incidents,mission.health||'',question].filter(Boolean).join(' ').slice(0,200);
+    output.textContent = "Searching…";
     button.disabled = true;
     try {
-      const r = await json(
-        "/api/research/" +
-          category +
-          "?q=" +
-          encodeURIComponent(
-            (
-              site.name +
-              " " +
-              question +
-              " " +
-              incidents +
-              " " +
-              (mission.health ?? "") +
-              " " +
-              context
-            ).slice(0, 200),
-          ),
-      );
-      output.innerHTML =
-        '<p class="note">Context · ' +
-        esc(v.name) +
-        " / " +
-        v.pulse +
-        " BPM / SpO₂ " +
-        v.spo2 +
-        "% / " +
-        esc(mission.cfg.mode) +
-        "</p><h3>Training interpretation</h3><p>" +
-        esc(mission.health || incidents || "Routine operations") +
-        " · " +
-        esc(mission.logs.at(-1)?.msg || "Mission commissioned") +
-        "</p><p>" +
-        esc(
-          Object.keys(mission.active)
-            .map((k) => failures[k].slice(1).join(" / "))
-            .join(" · "),
-        ) +
-        "</p><small>Simulator options. The publications below provide background for this exercise.</small>" +
-        r.results
-          .map(
-            (x) =>
-              '<article><a target="_blank" rel="noopener" href="' +
-              esc(x.link) +
-              '">' +
-              esc(x.title) +
-              "</a><p>" +
-              esc(x.snippet || "Open the source for the full article.") +
-              "</p><small>" +
-              esc(x.source) +
-              " · " +
-              esc(x.date ?? "Date unavailable") +
-              "</small></article>",
-          )
-          .join("") +
-        (r.results.length ? "" : "No matching evidence returned.");
+      const r = await json('/api/analog/ask?q='+encodeURIComponent(context));
+      output.innerHTML = `<p class="note">${esc(v.name)} · ${v.pulse} BPM · SpO₂ ${v.spo2}% · ${esc(mission.cfg.mode)}</p><h3>${esc(r.answerType||'Answer')}</h3>${(r.answer||'No answer text returned.').split(/\n\s*\n/).filter(Boolean).map(text=>`<p>${esc(text)}</p>`).join('')}${(r.sources||[]).map(x=>`<article><a target="_blank" rel="noopener" href="${esc(x.link)}">${esc(x.title)} ↗</a><p>${esc(x.snippet)}</p><small>${esc(x.source)}</small></article>`).join('')}`;
     } catch {
       output.textContent =
         "GroundTruth search unavailable. Internal mission responses remain available.";
@@ -1054,8 +1045,7 @@ app.addEventListener("click", async (e) => {
           mission.resources[k] - mission.initial[k],
         ]),
       ),
-      crewSummary: roster
-        .slice(0, mission.cfg.crew)
+      crewSummary: crewNames()
         .map((_, i) => vitals(mission, i)),
       assumptions:
         "Simplified deterministic training simulation; see SIMULATION_ASSUMPTIONS.md",
@@ -1100,6 +1090,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("hashchange", route);
 route();
+refreshAiRankings();
 loadRates().then(()=>{if(page==='travel')update();});
 try {
   const { createScene } = await import("./scene.js");
@@ -1112,7 +1103,7 @@ try {
         scene?.view(cameraPreset, crewIndex);
     }
     equip = id.startsWith("crew")
-      ? roster[Number(id.slice(4))] + " · " + cfg.roles[Number(id.slice(4))]
+      ? crewName(Number(id.slice(4))) + " · " + cfg.roles[Number(id.slice(4))]
       : id.startsWith("Solar")
         ? "Solar array · " + cfg.array + " kW installed"
         : id === "Rover"

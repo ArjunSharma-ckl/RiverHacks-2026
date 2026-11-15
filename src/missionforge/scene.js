@@ -1,14 +1,17 @@
 import * as C from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { createViewer, addBaseImagery } from "../viewer.js";
+import { enableGlobeSpin } from "../globe-spin.js";
 import { initLayers, getLayer } from "../layers.js";
 import { crewScene } from "./crew-scene.js";
 import { stations } from "./duties.js";
 import { pointOnRoute } from "./navigation.js";
+import { vitals } from './simulation.js';
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 export function createScene(onPick) {
   const { viewer, scene, camera, lensFlare, terrainReady } = createViewer("atlas");
+  enableGlobeSpin(viewer);
   initLayers(viewer, ["bluemarble", "esri"]);
   addBaseImagery();
   scene.globe.enableLighting = true;
@@ -46,12 +49,14 @@ export function createScene(onPick) {
   function pin(s) {
     pins.entities.add({
       id: s.id,
-      position: pos(s.lon, s.lat),
+      position: pos(s.lon, s.lat, 35),
       point: {
         pixelSize: 8,
         color: orange,
         outlineColor: C.Color.WHITE,
         outlineWidth: 2,
+        heightReference:C.HeightReference.RELATIVE_TO_GROUND,
+        disableDepthTestDistance:Number.POSITIVE_INFINITY,
       },
       label: {
         text: s.name.toUpperCase(),
@@ -60,6 +65,8 @@ export function createScene(onPick) {
         pixelOffset: new C.Cartesian2(12, 0),
         outlineWidth: 3,
         style: C.LabelStyle.FILL_AND_OUTLINE,
+        heightReference:C.HeightReference.RELATIVE_TO_GROUND,
+        disableDepthTestDistance:Number.POSITIVE_INFINITY,
       },
     });
   }
@@ -68,7 +75,7 @@ export function createScene(onPick) {
     site,
     placed = false;
   const layoutCache = new Map(), layoutPending = new Map();
-  const defaultLayout = { east:0, north:0, scale:1.6, slope:null };
+  const defaultLayout = { east:0, north:0, scale:1.9, slope:null };
   let layout = defaultLayout, placedLayout = null, lastRate = 0;
   const within = (promise, ms) => Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(Error('Terrain sample timed out')),ms))]);
   async function prepareLayout(s) {
@@ -94,7 +101,7 @@ export function createScene(onPick) {
       });
       const best=scored.sort((a,b)=>a.score-b.score)[0];
       if(!Number.isFinite(best.score))return defaultLayout;
-      return {east:best.east,north:best.north,scale:best.slope<.08?1.9:best.slope<.22?1.65:1.4,slope:best.slope};
+      return {east:best.east,north:best.north,scale:best.slope<.08?2.2:best.slope<.22?1.9:1.6,slope:best.slope};
     })().then(value=>{layoutCache.set(s.id,value);layoutPending.delete(s.id);return value;},()=>{layoutPending.delete(s.id);return defaultLayout;});
     layoutPending.set(s.id,task);
     return task;
@@ -112,6 +119,29 @@ export function createScene(onPick) {
     const e = scene.pick(position)?.id;
     if (e) onPick(e.id);
   }, C.ScreenSpaceEventType.LEFT_CLICK);
+  const tooltip=document.createElement('div');
+  tooltip.className='scene-entity-tooltip';
+  tooltip.hidden=true;
+  viewer.container.append(tooltip);
+  viewer.screenSpaceEventHandler.setInputAction(({endPosition})=>{
+    const picked=scene.pick(endPosition)?.id;
+    const id=typeof picked==='string'?picked:picked?.id;
+    if(!placed||!id||!base.entities.getById(id)){tooltip.hidden=true;return;}
+    const m=roverMission;
+    let title=id,detail='Settlement asset · operational';
+    if(/^crew\d+$/.test(id)){
+      const index=Number(id.slice(4)),v=m&&index<m.cfg.crew?vitals(m,index):null;
+      title=v?.name||`Crew ${index+1}`;
+      detail=v?`${v.status} · ${v.pulse} bpm · SpO₂ ${v.spo2}%`:'Crew telemetry pending';
+    } else if(id==='Rover')detail=m?(m.active.rover?'Disabled':'Operational')+` · ${Math.round((m.roverEnergy??2.4)/2.4*100)}% battery`:'Rover telemetry pending';
+    else if(id==='Habitat')detail=m?(m.active.oxygen?'Oxygen system failure':'Operational')+` · ${Math.round(m.integrity??100)}% integrity`:'Habitat telemetry pending';
+    else if(id.startsWith('Solar '))detail=m?.active.solar?'Array failure':'Solar array operational';
+    tooltip.replaceChildren();
+    const heading=document.createElement('strong'),body=document.createElement('span');
+    heading.textContent=title;body.textContent=detail;tooltip.append(heading,body);
+    tooltip.style.left=`${endPosition.x+18}px`;tooltip.style.top=`${endPosition.y-54}px`;
+    tooltip.hidden=false;
+  },C.ScreenSpaceEventType.MOUSE_MOVE);
   const duration = () =>
     matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1.05;
   function overview() {
@@ -264,8 +294,8 @@ export function createScene(onPick) {
   // A closed survey loop east of the settlement keeps the rover clear of the
   // habitat and gives the chase camera a continuous, fluid route.
   const roverPath = [
-    [38, 0], [44, -18], [58, -24], [70, -12],
-    [72, 8], [58, 24], [44, 20], [38, 0],
+    [85, 0], [105, -30], [135, -35], [155, -10],
+    [155, 35], [120, 50], [90, 30], [85, 0],
   ];
   const roverLength = roverPath.slice(1).reduce(
     (sum, point, index) =>
@@ -363,9 +393,10 @@ export function createScene(onPick) {
     passage("Research north ring", 40, -1, 40, 26);
     passage("Bio spur", 40, 14, 44.1, 14);
     passage("Chem spur", 40, 26, 44.1, 26);
-    const extraModels={greenhouse:['laboratory',-46,25],observatory:['comms',-38,8],power:['habitat2',42,26],storage:['logistics',-32,-18],comms:['comms',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
-    for(const key of c.addedFacilities||[]){const item=extraModels[key];if(item)model('Extra '+key,...item)}
-    if (c.rover) model("Rover", "rover", 38, 0, undefined, 1.05);
+    const extraModels={storage:['logistics',-32,-18],comms:['comms',34,-12],landing:['kestrel',72,-22],recycler:['recycler',-30,-9],lab:['laboratory',58,38],habitat:['habitat',-30,35],medical:['medical',-30,-32],solar:['solar',-42,35]};
+    const links={storage:[[-10,-16,-26,-16],[-26,-16,-26,-18]],recycler:[[-18,-9,-25,-9]],lab:[[40,26,40,38],[40,38,54,38]],habitat:[[-10,22,-10,35],[-10,35,-24,35]],medical:[[-10,-16,-10,-32],[-10,-32,-26,-32]]};
+    for(const key of c.addedFacilities||[]){const item=extraModels[key];if(item){model('Extra '+key,...item);for(const [index,segment] of (links[key]||[]).entries())passage('Extra '+key+' corridor '+index,...segment)}}
+    if (c.rover) model("Rover", "rover", 85, 0, undefined, 1.05);
     for (let i = 0; i < c.crew; i++)
       model("crew" + i, "crew", -3 + i * 1.6, -5 + (i % 2) * 1.3);
     for (let i = 0; i < 4; i++)
@@ -468,12 +499,12 @@ export function createScene(onPick) {
           ? Math.min(devicePixelRatio, 1.5, Math.sqrt(3600000 / (innerWidth * innerHeight)))
           : mode === "Performance"
             ? 0.7
-            : 0.9;
+            : Math.min(devicePixelRatio||1,1.15,Math.sqrt(3000000/Math.max(1,innerWidth*innerHeight)));
       viewer.targetFrameRate = 30;
       viewer.shadows = mode !== "Performance";
       scene.postProcessStages.fxaa.enabled = mode === "High";
       scene.globe.maximumScreenSpaceError =
-        mode === "High" ? 2 : mode === "Performance" ? 5 : 3;
+        mode === "High" ? 1.8 : mode === "Performance" ? 5 : 2.5;
       scene.globe.tileCacheSize = mode === "Performance" ? 150 : 220;
     },
     skip: () => camera.completeFlight(),
@@ -485,7 +516,20 @@ export function createScene(onPick) {
     view,
     resize(){viewer.resize();scene.requestRender();},
     sync,
-    waitForTiles(){return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;remove();clearTimeout(timer);resolve()};const remove=scene.globe.tileLoadProgressEvent.addEventListener(count=>{if(count===0)finish()});const timer=setTimeout(finish,12000);if(scene.globe.tilesLoaded)setTimeout(finish,300)})},
+    async waitForTiles(){
+      await within(terrainReady,5000).catch(()=>{});
+      return new Promise(resolve=>{
+        const started=performance.now();let stableSince=0;
+        const timer=setInterval(()=>{
+          const now=performance.now();
+          const settled=camera.positionCartographic.height<1800&&scene.globe.tilesLoaded;
+          stableSince=settled?(stableSince||now):0;
+          if(now-started>30000||stableSince&&now-stableSince>1400&&now-started>2500){
+            clearInterval(timer);resolve(Boolean(stableSince&&now-stableSince>1400));
+          }
+        },150);
+      });
+    },
     setFacilities,
     showRoute,
     pick: (cb) => {
@@ -527,6 +571,7 @@ export function createScene(onPick) {
             pixelSize: 6,
             color: orange,
             heightReference: C.HeightReference.CLAMP_TO_GROUND,
+            disableDepthTestDistance:Number.POSITIVE_INFINITY,
           },
         }),
       );

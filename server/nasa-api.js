@@ -1,4 +1,4 @@
-import { research } from './analog-api.js';
+import { answerQuestion, research } from './analog-api.js';
 import { sourceLink } from './serp-links.js';
 import { report } from './reports.js';
 // One API surface, used by the Vite dev/preview middleware and by the
@@ -235,6 +235,7 @@ export function createApi(env = {}, extras = {}) {
       return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
     },
     '/analog/research': p => cached('research:v2:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/analog/ask': p => cached('ask:v1:' + (p.get('q') ?? '').slice(0,200).toLowerCase(), 60 * MINUTE, () => answerQuestion(p, serpKey)),
     '/place': p => {
       const latitude = number(p, 'lat', -90, 90), longitude = number(p, 'lon', -180, 180);
       const key = `place:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
@@ -416,7 +417,7 @@ export function createApi(env = {}, extras = {}) {
       res.end(JSON.stringify(await route(url.searchParams)));
     } catch {
       res.statusCode = 503;
-      const serpRoute=Boolean(category)||['/vendors','/analog/research','/object'].includes(url.pathname);
+      const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
       res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));
     }
   };

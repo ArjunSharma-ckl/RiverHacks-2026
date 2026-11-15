@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 
 import { createViewer, addBaseImagery } from './viewer.js';
+import { enableGlobeSpin } from './globe-spin.js';
 import { initLayers } from './layers.js';
 import { createSky } from './sky.js';
 import { paintGalaxy } from './galaxy.js';
@@ -16,13 +17,14 @@ import { mountMissionControls } from './mission.js';
 import { SUBJECTS } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
+enableGlobeSpin(viewer);
 
 initLayers(viewer, [
   'bluemarble',
   'esri',
   ...WEATHER_LAYERS.map((spec) => `w:${spec.id}`)
 ]);
-addBaseImagery({ blueMarble: false });
+addBaseImagery({ blueMarble: true });
 
 
 paintGalaxy(scene);

@@ -1,15 +1,18 @@
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const KEYS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-// Relative Earth field conditions only. Earth cannot reproduce lunar vacuum or Martian pressure.
+// NASA planetary temperature references set the coldness target. These are
+// relative Earth field-season rankings, not a planetary environment prediction.
+// Mars mean: -65 C; Moon nighttime: -153 C.
+export const PLANET_REFERENCE = {Mars:{temperature:-65,span:90},Moon:{temperature:-153,span:165}};
 export function climateScore({temperature, precipitation, wind, solar}, target) {
   if (![temperature, precipitation, wind].every(Number.isFinite)) return null;
-  const cold = target === 'Moon' ? -15 : -5;
-  const coldFit = Math.max(0, 1 - Math.abs(temperature - cold) / 35);
+  const reference = PLANET_REFERENCE[target] || PLANET_REFERENCE.Mars;
+  const coldFit = Math.max(0, 1 - Math.abs(temperature - reference.temperature) / reference.span);
   const dryFit = Math.max(0, 1 - precipitation / 5);
   const windFit = target === 'Moon' ? Math.max(0, 1 - wind / 12) : Math.max(0, 1 - Math.abs(wind - 7) / 18);
   const sunFit = Number.isFinite(solar) ? Math.max(0, Math.min(1, solar / 5)) : null;
-  return Math.round(100 * (sunFit===null?(0.43*coldFit+0.34*dryFit+0.23*windFit):(0.38*coldFit + 0.3*dryFit + 0.2*windFit + 0.12*sunFit)));
+  return Math.round(100 * (sunFit===null?(0.5*coldFit+0.32*dryFit+0.18*windFit):(0.45*coldFit + 0.3*dryFit + 0.17*windFit + 0.08*sunFit)));
 }
 
 export function rankMonths(power, target) {
