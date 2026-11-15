@@ -174,9 +174,6 @@ export function createPanel(root) {
       subtitle.textContent = [place.subtitle, place.provider].filter(Boolean).join(' · ');
       body.textContent = place.description || 'No description returned for this point.';
       status.remove();
-      if (!place.configured) {
-        extra.append(element('p', 'place-setup', 'Set SERPAPI_KEY as a Cloudflare secret to enable place descriptions and images.'));
-      }
       if (place.address || place.rating) {
         extra.append(definitionList([
           ...(place.address ? [['Location', place.address]] : []),
