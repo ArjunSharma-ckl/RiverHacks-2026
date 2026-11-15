@@ -1,6 +1,8 @@
 import { roverSteel } from './steel-fatigue.js';
 import { condition, damage, equipment, equipmentForModel, equipmentIds, exposureRates, maintain, maintenancePlan, unavailable, weather, recordCheckpoint } from './exposure.js';
 import { cue, toggleSound } from "./audio.js";
+import { launchSequence } from "./launch.js";
+import { warmFilm } from "./film-cache.js";
 import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, loadSeason, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
@@ -55,10 +57,22 @@ const bar = (n) =>
   `<span class="chart"><i style="width:${Math.max(0, Math.min(100, n))}%"></i></span>`;
 const label = (s) => `<span class="eyebrow"><i class="tick"></i>${s}</span>`;
 const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "Unavailable");
+const storedPhoto = (id) =>
+  ['atacama','death','haughton','iceland','mauna','mcmurdo'].includes(id);
+// Sites without a stored photograph still get real satellite imagery, so a
+// basaltic plain never renders as an empty card.
+const satellitePhoto = (s) => {
+  const dx = 0.42 / Math.max(0.25, Math.cos((s.lat * Math.PI) / 180)),
+    dy = 0.28,
+    box = [s.lon - dx, s.lat - dy, s.lon + dx, s.lat + dy]
+      .map((n) => n.toFixed(4))
+      .join(',');
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${box}&bboxSR=4326&imageSR=4326&size=640,400&format=jpg&f=image`;
+};
 const photo = (s) =>
-  ['atacama','death','haughton','iceland','mauna','mcmurdo'].includes(s.id)
+  storedPhoto(s.id)
     ? `<img alt="Satellite view of ${s.name}" src="/assets/mission/${s.id}.jpg">`
-    : `<div class="site-image-fallback" role="img" aria-label="No site photograph available"><span>${esc(s.type||'Field site')}</span></div>`;
+    : `<img alt="Satellite imagery of ${s.name}" loading="lazy" src="${satellitePhoto(s)}" onerror="this.remove()">`;
 const cache = {},
   obs = new Map();
 let sortBy = "Suitability",
@@ -69,18 +83,54 @@ let drawerOpen = true, drawerWidth = Number(localStorage.getItem('mf-drawer-widt
 const explorerFields=SITE_FEATURES;
 let explorerValues={};
 try{explorerValues=JSON.parse(localStorage.getItem('mf-explorer-inputs')||'{}')}catch{}
-let aiRankings=new Map(),aiRankingStatus='AI rankings not connected';
+let aiRankings=new Map(),aiRankingStatus='AI rankings not loaded';
+let aiRequestId=0,aiTimer=null;
+const AI_PAGES=['discover','inspect','design','past','control'];
 async function refreshAiRankings(){
-  try{const target=encodeURIComponent(JSON.stringify(siteAiRequest(explorerValues)));const response=await fetch('/api/analog/site-rankings?target='+target,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error();aiRankings=parseSiteRankings(await response.json(),new Set(sites.map(s=>s.id)));aiRankingStatus=aiRankings.size?`${aiRankings.size} AI-ranked sites loaded`:'AI rankings not connected';}
-  catch{aiRankingStatus='AI rankings not connected';}
-  if(['discover','explorer'].includes(page))update();
+  const request=++aiRequestId;
+  aiRankingStatus='Scoring sites…';
+  try{
+    const target=encodeURIComponent(JSON.stringify(siteAiRequest(explorerValues)));
+    const response=await fetch('/api/analog/site-rankings?target='+target,{signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Error('service');
+    const parsed=parseSiteRankings(await response.json(),new Set(sites.map(s=>s.id)));
+    if(request!==aiRequestId)return;
+    aiRankings=parsed;
+    aiRankingStatus=aiRankings.size?`AI model scored ${aiRankings.size} sites`:'AI returned no scores';
+  }catch{
+    if(request!==aiRequestId)return;
+    aiRankingStatus='AI rankings unavailable · server offline';
+  }
+  if(AI_PAGES.includes(page))update();
+}
+function scheduleAiRefresh(){clearTimeout(aiTimer);aiTimer=setTimeout(refreshAiRankings,450);}
+const aiFeatureText=(s)=>{
+  const ai=aiRankings.get(s.id);
+  if(!ai)return '';
+  return SITE_FEATURES.filter(([key])=>Number.isFinite(ai.features?.[key]))
+    .slice(0,3)
+    .map(([key,name])=>`${name} ${fmt(ai.features[key],ai.features[key]<2?2:0)}`)
+    .join(' · ');
+};
+function aiPanel(s){
+  const ai=aiRankings.get(s.id);
+  if(!ai)
+    return `<h2>AI site match</h2><p class="note">${esc(aiRankingStatus)}. Describe a target in the site explorer and every site is scored against the same seven inputs.</p><div class="actions pills">${btn('explorer','Enter AI inputs')}</div>`;
+  return `<h2>AI site match</h2>${line('AI score',ai.score+' / 100')}${line('Model',esc(ai.modelVersion))}${SITE_FEATURES.map(([key,name])=>line(name,Number.isFinite(ai.features?.[key])?fmt(ai.features[key],ai.features[key]<2?2:1):'Unavailable')).join('')}<p class="note">These seven features are exactly what the model reads. Change the target inputs in the site explorer to re-rank every candidate.</p>`;
+}
+function uptimeLabel(m){
+  if(!m)return '—';
+  const start=Number(m.startedAt)||Date.now();
+  const total=Math.max(0,Math.floor((Date.now()-start)/1000));
+  const d=Math.floor(total/86400),h=Math.floor((total%86400)/3600),min=Math.floor((total%3600)/60),sec=total%60;
+  return (d?d+'d ':'')+[h,min,sec].map(n=>String(n).padStart(2,'0')).join(':');
 }
 let missionHistory=[];
 try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}catch{}
 let facilitySearch='';
 const extraFacilities={storage:'Storage depot',comms:'Communications relay',landing:'Descent vehicle',recycler:'Water recycling module',lab:'Research laboratory',habitat:'Habitat module',medical:'Medical module',solar:'Solar array'};
 let gtAnswer = "",
-  quality = "Performance";
+  quality = "Balanced";
 let crewIndex = 0;
 let cameraPreset = "Overview";
 let site = sites[0],
@@ -237,6 +287,7 @@ function missionHud(m) {
       <span><b>Transports</b>2 pressurized cars ready</span>
       <span><b>Integrity</b>${fmt(m.integrity ?? 100, 1)}%</span>
     </div>
+    <div class="hud-timer"><b>Settlement uptime</b><span data-uptime>${uptimeLabel(m)}</span></div>
     <footer class="hud-status ${alerts.length ? "warn" : ""}">${esc(status)}</footer>`;
 }
 function reasoning(s) {
@@ -287,23 +338,23 @@ function rows() {
   return ranked().filter(s => (filterTemp==='Any' || (filterTemp==='Below 0°C' ? (annual(s,'T2M')??100)<0 : filterTemp==='0–15°C' ? (annual(s,'T2M')??100)>=0 && (annual(s,'T2M')??100)<=15 : (annual(s,'T2M')??-100)>15)) && (filterMineral==='Any' || minerals[s.id]===filterMineral))
     .map(
       (s) =>
-        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(aiRankings.has(s.id)?`AI model ${aiRankings.get(s.id).modelVersion}`:reasoning(s))}</span>${SITE_FEATURES.some(([,name])=>name===sortBy)?`<span class="score-reason">${esc(sortBy)}: ${featureValue(s,SITE_FEATURES.find(([,name])=>name===sortBy)[0])??'Awaiting measurement'}</span>`:''}</span><b class="site-card-score">${displayScore(s)??"—"}<small>/100</small></b></button>`,
+        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(aiRankings.has(s.id)?`AI ${aiRankings.get(s.id).modelVersion} · ${aiFeatureText(s)}`:reasoning(s))}</span>${SITE_FEATURES.some(([,name])=>name===sortBy)?`<span class="score-reason">${esc(sortBy)}: ${featureValue(s,SITE_FEATURES.find(([,name])=>name===sortBy)[0])??'Awaiting measurement'}</span>`:''}</span><b class="site-card-score">${displayScore(s)??"—"}<small>/100</small></b></button>`,
     )
     .join("");
 }
 function discover() {
-  return `${siteExplorer()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<small>${esc(aiRankingStatus)} · ${aiRankings.size?'Scores from the connected model':'Current scores are editorial estimates'}</small>${btn('refresh-ai','Refresh AI rankings')}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${siteExplorer()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<div class="ai-bar"><small>${esc(aiRankingStatus)}</small><button type="button" class="ai-refresh" data-act="refresh-ai">Refresh</button></div><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
 function pastMissions(){
   const entries=missionHistory;
   const card=x=>{
     const m=x.snapshot, alerts=Object.keys(m?.active||{});
-    return `<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${m?btn('resume-mission:'+esc(x.id),'Open mission'):''}${x.outcome==='In progress'?btn('end-mission:'+esc(x.id),'End mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Full mission summary</summary>${m?`${line('Objective',esc(m.cfg.objective))}${line('Duration',`${fmt(m.h,1)} / ${fmt(m.cfg.days*SOL,1)} h`)}${line('Active failures',alerts.length?alerts.map(k=>esc(failures[k]?.[0]||k)).join(', '):'None')}${line('Crew',m.cfg.crewMembers?.slice(0,m.cfg.crew).map(p=>esc(p.name)).join(', ')||`${m.cfg.crew} members`)}${line('Facilities',Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([,name])=>name).join(', '))}${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value)+' '+(units[key]||''))).join('')}${line('Repair spares / medical kits',`${x.parts??'—'} / ${x.medkits??'—'}`)}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')}`:'<p>Detailed snapshot unavailable for this older mission.</p>'}</details></div></article>`;
+    return `<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed${m&&x.outcome==='In progress'?' · T+'+uptimeLabel(m):''}</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${m?btn('resume-mission:'+esc(x.id),'Open mission'):''}${x.outcome==='In progress'?btn('end-mission:'+esc(x.id),'End mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Full mission summary</summary>${m?`${line('Objective',esc(m.cfg.objective))}${line('Duration',`${fmt(m.h,1)} / ${fmt(m.cfg.days*SOL,1)} h`)}${line('Active failures',alerts.length?alerts.map(k=>esc(failures[k]?.[0]||k)).join(', '):'None')}${line('Crew',m.cfg.crewMembers?.slice(0,m.cfg.crew).map(p=>esc(p.name)).join(', ')||`${m.cfg.crew} members`)}${line('Facilities',Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([,name])=>name).join(', '))}${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value)+' '+(units[key]||''))).join('')}${line('Repair spares / medical kits',`${x.parts??'—'} / ${x.medkits??'—'}`)}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')}`:'<p>Detailed snapshot unavailable for this older mission.</p>'}</details></div></article>`;
   };
-  const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');
-  return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card for its full status or end it from here.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;
+  const active=entries.filter(x=>x.outcome==='In progress');
+  return `${label('Mission archive')}<h1>Missions</h1><p>Every mission you start is stored here and keeps running while you use other tabs. Each one carries a settlement uptime clock.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${entries.length?entries.map(card).join(''):'<p class="empty-card">Start a mission and it is saved here immediately.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;
 }
-function siteExplorer(){return `${label('Site explorer / AI input')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements for the matching model. The candidate sites below will use its scores when connected.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(siteAiRequest(explorerValues),null,2))}</pre></details><p class="note">Mineral values and roughness retain the units of your source data. Missing values remain null.</p>`;}
+function siteExplorer(){return `${label('Site explorer / AI input')}<h1>Describe a target site</h1><p>These seven measurements are the model's entire input. Fill any of them and every candidate site is re-scored against your target.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="${esc({olivine:'modal %',plagioclase:'modal %',lowCalciumPyroxene:'modal %',highCalciumPyroxene:'modal %',smfe:'band depth',roughness:'µm',surfaceTemperature:'°C mean'}[key]||'Number')}"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(siteAiRequest(explorerValues),null,2))}</pre></details><p class="note">Mineral values and roughness retain the units of your source data. Missing values remain null.</p>`;}
 function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Ask GroundTruth</h1><p>Ask about this site, mission operations or any research topic. Answers include the search sources used.</p></div><div class="research-search"><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Get answer →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see an answer with source links.</p>'}</div>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
 function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Core facilities. Optional search lists only modules with a local 3D model. Pressurized modules connect by enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. recycler, laboratory"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
@@ -331,7 +382,7 @@ function inspect() {
     power = o.power,
     fire = o.fires,
     other = sites.find((s) => s.id === compare) || sites[1];
-  return `${btn("discover", "← Candidate sites", "back")}${label(site.country + " / Site inspection")}<h1>${site.name}</h1><small>${coords(site)}</small><p>${site.surface}. ${site.hazard}.</p><div class="actions">${btn("design", "Establish research habitat　→", "primary")}</div><h2>Site suitability</h2>${line(profiles[profile], (ranking(site).score ?? "—") + " / 100")}<details><summary>Scoring factors and comparison</summary><small>${coverage(site)} · relative suitability model</small>${breakdown(site)}${select(
+  return `${btn("discover", "← Candidate sites", "back")}${label(site.country + " / Site inspection")}<h1>${site.name}</h1><small>${coords(site)}</small><p>${site.surface}. ${site.hazard}.</p><div class="actions">${btn("design", "Establish research habitat　→", "primary")}</div><h2>Site suitability</h2>${line(profiles[profile], (ranking(site).score ?? "—") + " / 100")}${aiPanel(site)}<details><summary>Scoring factors and comparison</summary><small>${coverage(site)} · relative suitability model</small>${breakdown(site)}${select(
     "compare",
     "Compare with",
     sites.filter((s) => s.id !== site.id).map((s) => s.name),
@@ -351,7 +402,7 @@ function inspect() {
     )}<small>Detection coverage varies. An empty result cannot establish site safety.</small><h3>EONET · within 500 km</h3>${o.events?.map((e) => line(esc(e.title), esc(e.date?.slice(0, 10)))).join("") ?? (o.events === null ? "Event feed unavailable." : "Retrieving events…")}${o.events?.length === 0 ? "No regional events returned." : ""}</details><details><summary>GroundTruth AI · Site evidence</summary><a href="${site.source}" target="_blank" rel="noopener">Field research reference ↗</a>${select("research-type", "Evidence collection", ["Studies", "Operations", "News", "Logistics"], researchType)}<label class="field">Research question<input id="research" maxlength="170" value="${esc(research)}" placeholder="Why test rovers at this site?"></label>${btn("research", "Search evidence")}${researchResults.map((r) => `<p><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a><br>${esc(r.snippet)}<br><small>${esc(r.source)} · ${esc(r.category || researchType)} · ${esc(r.date || "Date unavailable")}</small></p>`).join("")}</details>`;
 }
 function design() {
-  return `${btn("inspect", "← Site inspection", "back")}${mission ? btn("control", "Open mission control") : ""}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p><form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 12)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
+  return `${btn("inspect", "← Site inspection", "back")}${mission ? btn("control", "Open mission control") : ""}${label("MF-001 / Mission design")}<h1>Configure expedition</h1><p>${site.name} · ${coords(site)}</p>${aiRankings.has(site.id)?line('AI site match', aiRankings.get(site.id).score+' / 100 · '+esc(aiRankings.get(site.id).modelVersion)):''}<form id="config"><div class="fields">${num("crew", "Crew members", cfg.crew, 1, 12)}${num("days", "Duration (sols)", cfg.days, 3, 30)}${select("mode", "Environment", ["Earth analog test", "Moon projection", "Mars projection"], cfg.mode)}${select("objective", "Objective", ["Habitat endurance and rover exploration", "Geological survey", "Crew survival", "Equipment reliability"], cfg.objective)}</div><details open><summary>Habitat and equipment</summary><div class="fields">${[
     ["array", "Array rating (kW)", 1, 40],
     ["battery", "Battery capacity (kWh)", 1, 300],
     ["load", "Habitat load (kW)", 0.1, 10],
@@ -542,7 +593,7 @@ function missionOverview(m){
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${btn("mission-back", "← Back")}${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${missionOverview(m)}${environmentControls()}${engineeringControls(replayFrame ? { ...m, ...replayFrame, outcome: "Replay" } : m)}${replayControls(m)}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${btn("mission-back", "← Back")}${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}${line("Settlement uptime", `<span data-uptime>${uptimeLabel(m)}</span>`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${missionOverview(m)}${environmentControls()}${engineeringControls(replayFrame ? { ...m, ...replayFrame, outcome: "Replay" } : m)}${replayControls(m)}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -789,9 +840,12 @@ function launch() {
   };
   const expedition = start(cfg);
   mission = expedition;
+  mission.startedAt = Date.now();
   playing = true;
   tab = "Systems";
   save();
+  // The Blender launch film plays from the copy cached when the site opened.
+  launchSequence().catch(() => {});
   go("control");
 }
 function tick(h) {
@@ -843,7 +897,7 @@ app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
   if(e.target.dataset.crew){const [index,key]=e.target.dataset.crew.split(':');const person=cfg.crewMembers[Number(index)];if(!person)return;if(e.target.type==='number'&&value!==''&&!e.target.checkValidity())return;person[key]=e.target.type==='number'?(value===''?'':Number(value)):value.trim();save();update();return;}
   if(id==='sim-speed'){speed=Number(value.replace('×',''));save();update();return;}
-  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));update();return;}
+  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));scheduleAiRefresh();update();return;}
   if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
   if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
   if (e.target.id === 'engineering-replay' && mission) {
@@ -1232,6 +1286,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("hashchange", route);
 route();
+warmFilm();
 refreshAiRankings();
 loadRates().then(()=>{if(page==='travel')update();});
 try {
@@ -1262,6 +1317,10 @@ try {
   document.querySelector("#map-status").textContent =
     "3D Earth unavailable · WebGL 2 required";
 }
+setInterval(() => {
+  const el = document.querySelector('[data-uptime]');
+  if (el && mission && mission.outcome === 'In progress') el.textContent = uptimeLabel(mission);
+}, 1000);
 let previousFrame=Date.now();
 setInterval(() => {
   const now=Date.now(),hours=Math.max(0,now-previousFrame)/3000*.1;previousFrame=now;

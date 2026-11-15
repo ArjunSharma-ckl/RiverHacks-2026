@@ -91,7 +91,7 @@ export function addCatalog(viewer, fleet, onCatalog) {
       point:{pixelSize:5,color:missionColors.get(contact.job) ?? color,distanceDisplayCondition:new C.DistanceDisplayCondition(/^STARLINK/i.test(contact.name)?3000:0,Infinity)},
       path:{leadTime:2800,trailTime:2800,width:2,resolution:30,
         material:new C.PolylineGlowMaterialProperty({glowPower:0.22,taperPower:0.5,color:(missionColors.get(contact.job) ?? color).withAlpha(0.85)})},
-      label:{text:contact.name,font:'12px sans-serif',pixelOffset:new C.Cartesian2(0,-18)}});
+      label:{text:contact.name,font:"600 14px system-ui, 'Segoe UI', Roboto, sans-serif",scale:1,pixelOffset:new C.Cartesian2(0,-20),outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE}});
     fleet.track(target);
   };
 }

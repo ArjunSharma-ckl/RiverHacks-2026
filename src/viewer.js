@@ -74,7 +74,9 @@ export function createViewer(container) {
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
   viewer.targetFrameRate = 30;
-  viewer.resolutionScale = Math.min(devicePixelRatio || 1, 1.4, Math.sqrt(3000000 / Math.max(1, innerWidth * innerHeight)));
+  // Real device pixels keep labels and place names sharp on the globe.
+  viewer.useBrowserRecommendedResolution = false;
+  viewer.resolutionScale = Math.min(2, Math.max(1, devicePixelRatio || 1));
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.

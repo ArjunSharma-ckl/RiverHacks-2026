@@ -1,6 +1,14 @@
 import { condition, unavailable } from './exposure.js';
 // Coordinates are metres east/north of the habitat. Work happens in simulated hours.
-import { pointOnRoute, walkRoute } from "./navigation.js";
+// Every astronaut walks a private ring outside the habitat. The ring is a real
+// circle, so a completed cycle returns to the exact starting point: the walk is
+// continuous and never looks like a teleport.
+const TAU = Math.PI * 2;
+const RING_BASE = 34;
+const RING_STEP = 5;
+const ringRadius = (i) => RING_BASE + i * RING_STEP;
+const ringAngleOf = ([x, y]) => Math.atan2(y, x);
+const shortestArc = (from, to) => ((to - from + Math.PI * 3) % TAU) - Math.PI;
 
 export const stations = {
   water: {
@@ -138,7 +146,11 @@ export function prepareDuties(m) {
     m.duties = Array.from({ length: m.cfg.crew }, (_, i) => ({
       key: defaultDuty(m.cfg.roles[i]),
       elapsed: 0,
-      origin: [-3 + i * 1.25, -4],
+      origin: (() => {
+        const angle = -Math.PI / 2 + (i * TAU) / Math.max(1, m.cfg.crew);
+        const radius = ringRadius(i);
+        return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+      })(),
       cycles: 0,
     }));
   m.inventory ??= { regolith: 0, components: 0 };
@@ -162,26 +174,30 @@ export function dutyPose(m, i, ahead = 0) {
     ];
   const paused = offDuty(m, i),
     phase = (d.elapsed + (paused ? 0 : ahead)) % cycle;
-  const progress =
-    phase < travel
-      ? phase / travel
-      : phase < travel + work
-        ? 1
-        : 1 - (phase - travel - work) / travel;
-  const routeKey = `${d.key}|${i}|${d.origin[0].toFixed(2)}|${d.origin[1].toFixed(2)}`;
-  if (d.routeKey !== routeKey) {
-    d.route = walkRoute(d.origin, dock);
-    d.routeKey = routeKey;
-  }
+  const radius = ringRadius(i),
+    homeAngle = ringAngleOf(d.origin),
+    dockAngle = ringAngleOf(dock),
+    arc = shortestArc(homeAngle, dockAngle);
   const returning = phase >= travel + work,
-    busy = phase >= travel && !returning;
-  const point = pointOnRoute(d.route, returning ? 1 - progress : progress);
+    busy = phase >= travel && !returning,
+    progress =
+      phase < travel
+        ? phase / travel
+        : returning
+          ? 1 - (phase - travel - work) / travel
+          : 1;
+  const angle = homeAngle + arc * progress;
+  const x = Math.cos(angle) * radius,
+    y = Math.sin(angle) * radius;
+  // Walk along the circle: the tangent keeps the suit facing where it is going,
+  // and reverses on the way back so the turn is continuous.
+  const direction = Math.sign(arc || 1) * (returning ? -1 : 1);
   return {
-    x: point.x,
-    y: point.y,
+    x,
+    y,
     heading: busy
-      ? Math.atan2(station.at[0] - dock[0], station.at[1] - dock[1])
-      : point.heading + (returning ? Math.PI : 0),
+      ? Math.atan2(station.at[0] - x, station.at[1] - y)
+      : Math.atan2(-Math.sin(angle) * direction, Math.cos(angle) * direction),
     working: !paused && busy,
     walking: !paused && !busy,
     status: paused

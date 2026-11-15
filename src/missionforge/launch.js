@@ -1,6 +1,8 @@
-const film = "/cinematics/orion-mission-cut.mp4";
+import { filmSource } from "./film-cache.js";
 
-export function launchSequence() {
+const fallbackFilm = "/cinematics/mission-launch-1080p.mp4";
+
+export async function launchSequence() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
   const panel = document.createElement("dialog");
   panel.className = "launch-screen";
@@ -12,6 +14,8 @@ export function launchSequence() {
     </div>
     <aside class="launch-note">Made by humans in blender</aside>`;
   const video = panel.querySelector("video");
+  // Play the cached Blender render when it is already in browser storage.
+  const film = (await filmSource()) || fallbackFilm;
   video.volume = .72;
   document.body.append(panel);
   panel.showModal();

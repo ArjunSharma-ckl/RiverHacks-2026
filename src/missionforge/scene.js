@@ -32,12 +32,10 @@ export function createScene(onPick) {
   scene.shadowMap.size = 1024;
   scene.shadowMap.darkness = 0.3;
   viewer.targetFrameRate = 30;
-  viewer.useBrowserRecommendedResolution = true;
-  viewer.resolutionScale = Math.min(
-    2,
-    Math.max(1, devicePixelRatio),
-    Math.sqrt(3600000 / Math.max(1, innerWidth * innerHeight)),
-  );
+  // Render at real device pixels: the old 0.7 scale upscaled the frame and made
+  // every map label look pixelated.
+  viewer.useBrowserRecommendedResolution = false;
+  viewer.resolutionScale = Math.min(2, Math.max(1, devicePixelRatio || 1));
   scene.msaaSamples = 4;
   scene.postProcessStages.fxaa.enabled = true;
   const pins = new C.CustomDataSource("Analog field sites"),
@@ -61,10 +59,11 @@ export function createScene(onPick) {
       },
       label: {
         text: s.name.toUpperCase(),
-        font: "15px sans-serif",
+        font: "600 16px system-ui, 'Segoe UI', Roboto, sans-serif",
+        scale: 1,
         horizontalOrigin: C.HorizontalOrigin.LEFT,
-        pixelOffset: new C.Cartesian2(12, 0),
-        outlineWidth: 3,
+        pixelOffset: new C.Cartesian2(13, 0),
+        outlineWidth: 4,
         style: C.LabelStyle.FILL_AND_OUTLINE,
         heightReference:C.HeightReference.RELATIVE_TO_GROUND,
         disableDepthTestDistance:Number.POSITIVE_INFINITY,
@@ -76,7 +75,7 @@ export function createScene(onPick) {
     site,
     placed = false;
   const layout = { east: 0, north: 0, scale: 1.9 };
-  let renderQuality = "Performance";
+  let renderQuality = "Balanced";
   const surface = new C.CustomDataSource("Settlement photo");
   viewer.dataSources.add(surface);
   function showGlobe() {
@@ -263,6 +262,8 @@ export function createScene(onPick) {
   let roverDriving = false;
   let roverMission = null;
   let roverLastFrame = performance.now();
+  let roverPose = { x: 85, y: 0, heading: 0 };
+  let roverSite = "";
   function showGroundTile(s,opacity=0.55){
     if(groundSite===s.id&&groundLayer){groundLayer.alpha=opacity;return;}
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
@@ -295,7 +296,13 @@ export function createScene(onPick) {
     camera.cancelFlight();
     if (groundLayer) groundLayer.show = false;
     startClock(s);
-    roverDistance = 0;
+    // Adding a facility rebuilds the settlement. Keep the rover where it is
+    // instead of snapping it back to the start of the survey loop.
+    if (roverSite !== s.id) {
+      roverDistance = 0;
+      roverPose = { x: 85, y: 0, heading: 0 };
+      roverSite = s.id;
+    }
     roverFollow = false;
     roverDriving = false;
     roverLastFrame = performance.now();
@@ -384,7 +391,7 @@ export function createScene(onPick) {
     if(points.length<2)return;
     for(let i=0;i<points.length;i++){
       const p=points[i];
-      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:'15px sans-serif',pixelOffset:new C.Cartesian2(12,-15),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
+      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:"600 16px system-ui, 'Segoe UI', Roboto, sans-serif",scale:1,pixelOffset:new C.Cartesian2(13,-16),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
       if(i){const a=points[i-1],g=new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a.lon,a.lat),C.Cartographic.fromDegrees(p.lon,p.lat));const positions=[];for(let j=0;j<=48;j++){const f=j/48,q=g.interpolateUsingFraction(f);positions.push(pos(C.Math.toDegrees(q.longitude),C.Math.toDegrees(q.latitude),10000+Math.sin(Math.PI*f)*Math.min(500000,g.surfaceDistance*.12)));}itinerary.entities.add({polyline:{positions,width:3,material:C.Color.fromCssColorString('#9de9c9')}});}
     }
     const sphere=C.BoundingSphere.fromPoints(points.map(p=>pos(p.lon,p.lat)));
@@ -427,11 +434,16 @@ export function createScene(onPick) {
     const now = performance.now();
     const delta = Math.min((now - roverLastFrame) / 1000, 3);
     roverLastFrame = now;
-    if (roverDriving) roverDistance = (roverDistance + delta * 8.5) % roverLength;
+    if (roverDriving) {
+      roverDistance = (roverDistance + delta * 8.5) % roverLength;
+      roverPose = pointOnRoute(roverPath, roverDistance / roverLength);
+    }
     const rover = base.entities.getById("Rover");
     if (!rover) return;
     if (!roverDriving && !roverFollow) return;
-    const point = pointOnRoute(roverPath, roverDistance / roverLength);
+    // A parked rover keeps the pose it last drove to, so the chase camera sits
+    // behind the vehicle instead of jumping to the loop start.
+    const point = roverPose;
     const world = local(point.x, point.y, 1.05);
     rover.position.setValue(world);
     rover.orientation ??= new C.ConstantProperty();
@@ -459,10 +471,10 @@ export function createScene(onPick) {
       scene.msaaSamples = mode === "High" ? 2 : 1;
       viewer.resolutionScale =
         mode === "High"
-          ? Math.min(devicePixelRatio, 1.5, Math.sqrt(3600000 / (innerWidth * innerHeight)))
+          ? Math.min(devicePixelRatio || 1, 2)
           : mode === "Performance"
-            ? 0.7
-            : Math.min(devicePixelRatio||1,1.15,Math.sqrt(3000000/Math.max(1,innerWidth*innerHeight)));
+            ? 1
+            : Math.min(devicePixelRatio || 1, 1.5);
       viewer.targetFrameRate = 30;
       viewer.shadows = !placed && mode !== "Performance";
       scene.postProcessStages.fxaa.enabled = mode === "High";

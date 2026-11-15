@@ -151,7 +151,7 @@ export function createSky(viewer) {
     if (LABELLED_STARS.has(star.name)) {
       entity.label = new C.LabelGraphics({
         text: star.name,
-        font: '500 11px ui-monospace, SFMono-Regular, Menlo, monospace',
+        font: '600 13px ui-monospace, SFMono-Regular, Menlo, monospace',
         fillColor: C.Color.fromCssColorString('#9fb4cc'),
         pixelOffset: new C.Cartesian2(10, -2),
         horizontalOrigin: C.HorizontalOrigin.LEFT,
