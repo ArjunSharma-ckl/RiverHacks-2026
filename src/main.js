@@ -13,7 +13,7 @@ import { createSatellites } from './satellites.js';
 import { createWeather, WEATHER_LAYERS } from './weather.js';
 import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
-import { createControls } from './controls.js';
+import { createControls, HOME } from './controls.js';
 import { mountMissionControls } from './mission.js';
 import { createEventList } from './event-list.js';
 import { createQuality } from './quality.js';
@@ -177,3 +177,37 @@ scene.preRender.addEventListener(() => {
     }
   }
 });
+
+
+// Landing sequence. While the headline is up the globe drifts slowly, which
+// is what makes the first screen feel alive rather than a still; the first
+// deliberate input from the viewer ends it. Clicking through flies the camera
+// in, and that push-in is the one piece of motion the page spends boldness on.
+let introDrift = true;
+let driftFrame = performance.now();
+const stopDrift = () => { introDrift = false; };
+for (const type of ['pointerdown', 'wheel', 'keydown']) {
+  window.addEventListener(type, stopDrift, { once: true, passive: true });
+}
+const calmMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+scene.preUpdate.addEventListener(() => {
+  const now = performance.now();
+  const elapsed = Math.min((now - driftFrame) / 1000, 0.1);
+  driftFrame = now;
+  if (!introDrift || calmMotion()) return;
+  if (!document.body.classList.contains('intro-open')) return;
+  camera.constrainedAxis = C.Cartesian3.UNIT_Z;
+  camera.rotateRight(0.016 * elapsed);
+});
+
+document.addEventListener('orbit:enter', () => {
+  stopDrift();
+  if (calmMotion()) return;
+  camera.flyTo({
+    destination: C.Cartesian3.fromDegrees(HOME.longitude, HOME.latitude, HOME.height * 0.78),
+    orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    duration: 1.7,
+    easingFunction: C.EasingFunction.QUADRATIC_IN_OUT,
+  });
+}, { once: true });
