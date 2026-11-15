@@ -15,7 +15,8 @@ export async function weatherMap(params, res) {
     return res.end('Invalid forecast request');
   }
   const [layers, palette, colorscalerange] = field;
-  const url = new URL('https://thredds.ucar.edu/thredds/wms/grib/NCEP/GFS/Global_onedeg/Best');
+  const grid = params.get('field') === 'clouds' ? 'Global_0p5deg' : 'Global_onedeg';
+  const url = new URL('https://thredds.ucar.edu/thredds/wms/grib/NCEP/GFS/' + grid + '/Best');
   url.search = new URLSearchParams({
     service: 'WMS', version: '1.1.1', request: 'GetMap', srs: 'EPSG:4326',
     bbox: '-180,-90,180,90', width: '720', height: '360', format: 'image/png',

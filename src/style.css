@@ -320,3 +320,21 @@ button { font: inherit; cursor: pointer; }
 #hud .pad button { background:#202020; }
 
 
+
+#event-list {
+  position: fixed; z-index: 4; top: 72px; right: 14px; width: min(340px, 38vw);
+  max-height: calc(100dvh - 128px); overflow: auto; box-sizing: border-box;
+  padding: 16px; background: #11191af5; color: white; border: 1px solid #536162;
+  border-radius: 8px; font: 14px/1.5 system-ui;
+}
+#event-list h2 { margin: 0 0 12px; font-size: 19px; }
+#event-list h3 { font-size: 14px; }
+#event-list input { width: 100%; padding: 8px; }
+#event-list summary { cursor: pointer; padding: 10px 0; }
+#event-list details { border-top: 1px solid #46504f; }
+#event-list a { display: block; margin: 7px 0; color: #ade1ef; }
+#event-list img { display: block; width: 100%; max-height: 170px; object-fit: cover; }
+#event-list nav { display: flex; justify-content: space-between; margin-top: 10px; }
+@media (max-width: 760px) {
+  #event-list { top: auto; bottom: 28px; right: 8px; width: calc(100vw - 16px); max-height: 37dvh; }
+}

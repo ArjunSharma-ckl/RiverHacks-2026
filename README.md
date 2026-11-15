@@ -68,12 +68,12 @@ bloom and a lens-flare stage on the Sun. Cesium world terrain loads if a
 
 **Weather.** The main toggle displays NOAA GFS cloud cover. Cloud cover,
 precipitation, high cloud-top temperature, water vapor and surface temperature
-use a global one-degree forecast grid at three-hour intervals. The clock selects
+use global forecasts at three-hour intervals. Cloud cover animates six hours of half-degree NOAA GFS fields. The clock selects
 the forecast valid time. NASA satellite overlays show observations where
 available, with the Earth basemap visible through missing imagery.
 
 **Active events.** Open storms, wildfires, floods, volcanoes and ice events from
-NASA EONET, as clickable markers.
+NASA EONET appear as clustered markers and in a searchable event list. Expand an event for its sources, dated NASA Worldview imagery and optional SerpApi reports and images.
 
 **Click anywhere on Earth** for a SerpApi-powered place card: the nearest mapped
 place, a short description, coordinates, source links and nearby imagery. The

@@ -1,4 +1,7 @@
+import { trueColour } from './true-colour.js';
+import { createEventList } from './event-list.js';
 import * as C from 'cesium';
+import { createCloudLoop } from './cloud-loop.js';
 import { gibsWms } from './gibs.js';
 import { setLayer, dropLayer, getLayer } from './layers.js';
 
@@ -7,7 +10,7 @@ function forecast(id, label, note, on = false) {
   return { id, label, note, forecast: true, stepMinutes: 180, latencyMinutes: 0, alpha: 0.62, on };
 }
 export const WEATHER_LAYERS = [
-  forecast('clouds', 'Cloud cover — NOAA GFS', 'Blue to violet shows increasing cloud cover, from clear to overcast.', true),
+  forecast('clouds', 'Cloud cover — 6-hour NOAA GFS loop', 'Six hours of cloud forecasts ending at the displayed UTC time. Denser blue-violet shading means more cloud.', true),
   forecast('precip', 'Precipitation — NOAA GFS', 'Forecast rain and snow rate. Dry areas show the surface.'),
   forecast('cloudtop', 'High cloud-top temperature — NOAA GFS', 'Temperature where the model predicts high clouds.'),
   forecast('vapor', 'Atmospheric water vapor — NOAA GFS', 'Total water vapor in the atmospheric column.'),
@@ -36,7 +39,7 @@ export const WEATHER_LAYERS = [
     id: 'truecolor', label: 'Daily true colour — VIIRS', layer: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor',
     stepMinutes: 1440, latencyMinutes: 1440, alpha: 1, maxLevel: 8,
 
-    note: 'Global daytime mosaic. Areas without observations show the basemap.'
+    note: 'Daily observations blend into summer polar imagery (Arctic June 2026, Antarctic December 2025) and the Earth basemap where coverage ends.'
   }
 ];
 
@@ -92,6 +95,9 @@ export function createWeather(viewer, { onStatus } = {}) {
   const events = new C.CustomDataSource('eonet');
   events.show = false;
   viewer.dataSources.add(events);
+  const clouds = createCloudLoop(viewer);
+  let colourRequest;
+  const eventList = createEventList();
   let eventsLoaded = false;
   let live = true;
 
@@ -107,6 +113,19 @@ export function createWeather(viewer, { onStatus } = {}) {
     const stamp = timestampFor(spec, C.JulianDate.toDate(viewer.clock.currentTime));
     entry.stamp = stamp;
     entry.failures = 0;
+    if (spec.id === 'truecolor') {
+      colourRequest?.abort();
+      const request = colourRequest = new AbortController();
+      trueColour(stamp, request.signal).then(provider => {
+        if (!request.signal.aborted) setLayer('w:truecolor', new C.ImageryLayer(provider, { alpha: entry.alpha }));
+      }).catch(() => { if (!request.signal.aborted) { entry.failures = 7; report(); } });
+      return;
+    }
+    if (spec.id === 'clouds') {
+      clouds.setOpacity(entry.alpha);
+      clouds.load(stamp).catch(() => { entry.failures = 7; report(); });
+      return;
+    }
     if (spec.forecast) {
       const provider = new C.SingleTileImageryProvider({
         url: '/api/weather/map?field=' + spec.id + '&time=' + encodeURIComponent(stamp),
@@ -138,6 +157,8 @@ export function createWeather(viewer, { onStatus } = {}) {
     entry.enabled = enabled;
     if (enabled) build(entry);
     else {
+      if (id === 'truecolor') colourRequest?.abort();
+      if (id === 'clouds') clouds.clear();
       dropLayer(`w:${id}`);
       entry.stamp = undefined;
     }
@@ -148,6 +169,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     const entry = state.get(id);
     if (!entry) return;
     entry.alpha = alpha;
+    if (id === 'clouds') clouds.setOpacity(alpha);
     const layer = getLayer(`w:${id}`);
     if (layer) layer.alpha = alpha;
   }
@@ -178,13 +200,17 @@ export function createWeather(viewer, { onStatus } = {}) {
       const response = await fetch('/api/nasa/events');
       if (!response.ok) throw new Error('unavailable');
       const payload = await response.json();
+      const icons = new Map();
+      eventList.populate(payload.events);
+      events.clustering.enabled = true;
       for (const event of payload.events ?? []) {
         const color = EVENT_COLORS[event.category] ?? '#9aa7b8';
+        if (!icons.has(color)) icons.set(color, pin(color, event.category));
         events.entities.add({
           name: event.title,
           position: C.Cartesian3.fromDegrees(event.longitude, event.latitude, 18000),
           billboard: {
-            image: pin(color,event.category),
+            image: icons.get(color),
             width: 26,
             height: 26,
             scaleByDistance: new C.NearFarScalar(2.0e6, 1.1, 4.0e7, 0.55)
@@ -193,6 +219,7 @@ export function createWeather(viewer, { onStatus } = {}) {
         });
       }
     } catch {
+      eventList.message('Events could not be loaded. Toggle Natural events to retry.');
       eventsLoaded = false;
     }
   }
@@ -213,10 +240,12 @@ export function createWeather(viewer, { onStatus } = {}) {
       }
     },
     async setEvents(show) {
+      eventList.visible(show);
       events.show = show;
       if (show) await loadEvents();
       document.getElementById('event-credit').textContent = events.show && events.entities.values.length ? 'NASA EONET' : '';
     },
+    openEvent: eventList.open,
     eventsSource: events
   };
 }

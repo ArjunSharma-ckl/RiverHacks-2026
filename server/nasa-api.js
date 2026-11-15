@@ -249,7 +249,7 @@ export function createApi(env = {}, extras = {}) {
     },
     // Open natural events: storms, wildfires, floods, volcanoes, ice.
     '/nasa/events': () => cached('events', 5 * MINUTE, async () => {
-      const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=200&days=45');
+      const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
       const events = [];
       for (const event of data.events ?? []) {
         const last = event.geometry?.[event.geometry.length - 1];
@@ -267,6 +267,30 @@ export function createApi(env = {}, extras = {}) {
       }
       return { events };
     }),
+
+    '/nasa/event-detail': async params => {
+      const { events } = await routes['/nasa/events']();
+      const event = events.find(item => item.id === params.get('id'));
+      if (!event) throw new Error('Unknown event');
+      return cached('event-detail:' + event.id, 6 * 60 * MINUTE, async () => {
+        const q = event.title + ' ' + event.date.slice(0, 4);
+        async function search(engine) {
+          if (!serpKey) throw new Error('Search unavailable');
+          const params = new URLSearchParams({engine, q, api_key: serpKey});
+          const data = await getJson('https://serpapi.com/search.json?' + params);
+          if (data.error) throw new Error('Search unavailable');
+          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
+            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
+            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+        }
+        const nasaQuery = event.title.replace(/[^\w .-]/g, ' ').slice(0, 60).trim();
+        const [web, images, nasa] = await Promise.allSettled([
+          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+        ]);
+        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
+          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+      });
+    },
 
     // Point meteorology and solar resource from NASA POWER.
     '/nasa/power': (params) => {

@@ -3,6 +3,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 
 import { createViewer, addBaseImagery } from './viewer.js';
+import { CLOUD_KEYS } from './cloud-loop.js';
 import { initLayers } from './layers.js';
 import { createSky } from './sky.js';
 import { paintGalaxy } from './galaxy.js';
@@ -21,7 +22,8 @@ initLayers(viewer, [
   'bluemarble',
   'esri',
   'w:truecolor',
-  ...WEATHER_LAYERS.filter(spec => spec.id !== 'truecolor').map((spec) => `w:${spec.id}`)
+  ...CLOUD_KEYS,
+  ...WEATHER_LAYERS.filter(spec => !['clouds', 'truecolor'].includes(spec.id)).map((spec) => `w:${spec.id}`)
 ]);
 addBaseImagery({ blueMarble: false });
 
@@ -72,7 +74,7 @@ viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
     if (entity.catalogContact) { trackContact(entity.catalogContact); return panel.showContact(entity.catalogContact); }
     if (weather.eventsSource.entities.contains(entity)) {
       const event = entity.properties?.getValue(viewer.clock.currentTime);
-      if (event) return panel.showEvent(event);
+      if (event) return weather.openEvent(event.id);
     }
     if (satellites.entities.includes(entity)) satellites.track(entity);
     if (entity.name && SUBJECTS.has(entity.name)) return panel.show(entity.name);
