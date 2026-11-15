@@ -15,6 +15,7 @@ export function mountMissionControls(viewer) {
   cameraControls.tiltEventTypes = [...cameraControls.tiltEventTypes, CameraEventType.RIGHT_DRAG];
 
   const panel = document.querySelector('#mission');
+  if (!panel) return;
   const phase = panel.querySelector('select');
   const description = panel.querySelector('p');
   for (const [name] of phases) phase.add(new Option(name));
