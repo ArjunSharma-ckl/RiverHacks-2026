@@ -1,4 +1,5 @@
 import { WMS_URL } from './gibs.js';
+import { serpBadge } from './serp-badge.js';
 
 function node(tag, text) {
   const item = document.createElement(tag);
@@ -51,13 +52,26 @@ function research(row, event) {
     if (!r.ok) throw new Error();
     const data = await r.json();
     status.remove();
+    // Dated headlines first: for a storm or a fire burning right now, this is
+    // the part of the record that is actually moving.
+    if (data.news?.length) {
+      const head = node('h3','Live coverage');
+      head.append(serpBadge('Google News'));
+      row.append(head);
+      for (const story of data.news) {
+        const item = link(story.title, story.link, story.thumbnail);
+        row.append(item);
+        const meta = [story.source, story.date].filter(Boolean).join(' · ');
+        if (meta) row.append(node('small', meta));
+      }
+    }
     for (const [heading, items] of [[event.fire ? 'NASA Image Library · VIIRS background' : 'NASA Image Library',data.nasa],['Web reports · SerpApi',data.links],['Images · SerpApi',data.images]]) {
       if (!items.length) continue;
       row.append(node('h3',heading));
       for (const result of items) row.append(link(result.title,result.link,result.thumbnail));
     }
     if (data.searchUnavailable) row.append(node('p','SerpApi search is currently unavailable.'));
-    else if (!data.links.length && !data.images.length) row.append(node('p','No matching web reports or images.'));
+    else if (!data.links.length && !data.images.length && !data.news?.length) row.append(node('p','No matching web reports or images.'));
   }).catch(() => { status.textContent = 'Additional reports could not be loaded.'; });
 }
 
@@ -88,7 +102,9 @@ export function createEventList() {
   const next = node('button','Next');
   const nav = node('nav');
   nav.append(prev,next);
-  panel.append(fold,heading,select,node('small','Web reports and image search use SerpApi. NASA sources are listed separately.'),search,count,rows,nav);
+  const attribution = node('small','Web, news and image search use SerpApi. NASA sources are listed separately.');
+  attribution.prepend(serpBadge('Search'), document.createElement('br'));
+  panel.append(fold,heading,select,attribution,search,count,rows,nav);
   document.body.append(panel);
   let all = [], matches = [], page = 0;
   const size = 35;
