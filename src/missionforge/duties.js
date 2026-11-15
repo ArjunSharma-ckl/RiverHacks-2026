@@ -6,8 +6,8 @@ export const stations = {
     output: "Water recovered",
     unit: "L",
     yield: 0.35,
-    at: [-10, -7],
-    door: [-7, -7],
+    at: [-18, -9],
+    door: [-13, -9],
     model: "recycler",
   },
   lab: {
@@ -17,7 +17,7 @@ export const stations = {
     unit: "samples",
     yield: 1,
     at: [-19, -2],
-    door: [-15.5, -2],
+    door: [-13.5, -2],
     model: "laboratory",
   },
   med: {
@@ -26,8 +26,8 @@ export const stations = {
     output: "Suit checks",
     unit: "checks",
     yield: 1,
-    at: [2, -13],
-    door: [2, -10],
+    at: [5, -13],
+    door: [1.3, -13],
     model: "medical",
   },
   stores: {
@@ -37,7 +37,7 @@ export const stations = {
     unit: "audits",
     yield: 1,
     at: [14, -8],
-    door: [11, -7],
+    door: [8.4, -8],
     model: "logistics",
   },
 };
@@ -49,7 +49,7 @@ Object.assign(stations, {
     unit: "kg",
     yield: 4,
     at: [29, 17],
-    door: [26, 15],
+    door: [24.5, 17],
     model: "recycler",
   },
   forge: {
@@ -58,8 +58,8 @@ Object.assign(stations, {
     output: "Components produced",
     unit: "parts",
     yield: 1,
-    at: [21, 4],
-    door: [18, 4],
+    at: [28, 4],
+    door: [22.4, 4],
     model: "logistics",
   },
   build: {
@@ -69,7 +69,7 @@ Object.assign(stations, {
     unit: "sections",
     yield: 1,
     at: [-19, 16],
-    door: [-15, 16],
+    door: [-19, 14.3],
     model: "laboratory",
   },
   power: {
@@ -79,7 +79,7 @@ Object.assign(stations, {
     unit: "checks",
     yield: 1,
     at: [19, 15],
-    door: [16, 15],
+    door: [19, 13.2],
     model: "medical",
   },
 });

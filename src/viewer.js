@@ -89,17 +89,21 @@ export function createViewer(container) {
     orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 }
   });
 
+  let terrainReady = Promise.resolve(viewer.terrainProvider);
   {
     const options = { requestWaterMask: false, requestVertexNormals: true };
-    const terrainReady = ION_TOKEN ? C.createWorldTerrainAsync(options)
-      : C.IonResource.fromAssetId(1, { server: '/api/ion/', accessToken: '' })
-        .then(resource => C.CesiumTerrainProvider.fromUrl(resource, options));
-    terrainReady
-      .then((terrain) => { viewer.terrainProvider = terrain; })
-      .catch(() => {});
+    terrainReady = (ION_TOKEN ? C.createWorldTerrainAsync(options)
+      : C.ArcGISTiledElevationTerrainProvider.fromUrl(
+        'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer'
+      ))
+      .then((terrain) => {
+        viewer.terrainProvider = terrain;
+        return terrain;
+      })
+      .catch(() => viewer.terrainProvider);
   }
 
-  return { viewer, scene, camera, lensFlare };
+  return { viewer, scene, camera, lensFlare, terrainReady };
 }
 
 // Shaded-relief Blue Marble is the cleanest global basemap; Esri imagery takes

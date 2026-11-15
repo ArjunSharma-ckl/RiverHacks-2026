@@ -7,13 +7,15 @@ import { stations } from "./duties.js";
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 export function createScene(onPick) {
-  const { viewer, scene, camera, lensFlare } = createViewer("atlas");
+  const { viewer, scene, camera, lensFlare, terrainReady } = createViewer("atlas");
   initLayers(viewer, ["bluemarble", "esri"]);
   addBaseImagery();
-  scene.globe.enableLighting = false;
+  scene.globe.enableLighting = true;
+  scene.globe.dynamicAtmosphereLighting = true;
+  scene.globe.dynamicAtmosphereLightingFromSun = true;
   scene.postProcessStages.bloom.enabled = false;
   if (lensFlare) lensFlare.enabled = false;
-  scene.sun.show = false;
+  scene.sun.show = true;
   scene.moon.show = false;
   scene.globe.showWaterEffect = false;
   scene.screenSpaceCameraController.minimumZoomDistance = 1;
@@ -116,12 +118,13 @@ export function createScene(onPick) {
       z,
     );
   const actors = crewScene(viewer, base, local);
-  function model(id, file, e, n) {
+  function model(id, file, e, n, scale) {
     base.entities.add({
       id,
       position: local(e, n),
       model: {
         uri: "/models/mission/" + file + ".glb",
+        ...(scale ? { scale } : {}),
         ...(file === "field-suit"
           ? {
               nodeTransformations: Object.fromEntries(
@@ -137,24 +140,43 @@ export function createScene(onPick) {
       },
     });
   }
-  function box(id, e, n, z, dim, color) {
-    base.entities.add({
-      id,
-      position: local(e, n, z),
-      box: {
-        dimensions: new C.Cartesian3(...dim),
-        material: C.Color.fromCssColorString(color),
-        heightReference: C.HeightReference.RELATIVE_TO_GROUND,
-      },
-    });
+  function passage(id, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1, length = Math.hypot(dx, dy);
+    if (length < 0.05) return;
+    const eastWest = Math.abs(dx) >= Math.abs(dy);
+    const ux = dx / length, uy = dy / length;
+    for (let start = 0, segment = 0; start < length - 0.01; start += 2, segment++) {
+      const section = Math.min(2, length - start);
+      model(
+        id + " " + segment,
+        eastWest ? "passage-ew" : "passage-ns",
+        x1 + ux * (start + section / 2),
+        y1 + uy * (start + section / 2),
+        section / 2,
+      );
+    }
   }
-  function view(preset = "Overview", astronaut = 0) {
+  async function terrainHeight(point) {
+    await terrainReady;
+    if (!viewer.terrainProvider) return scene.globe.getHeight(point) ?? 0;
+    try {
+      const [sampled] = await C.sampleTerrainMostDetailed(viewer.terrainProvider, [point]);
+      return sampled.height;
+    } catch {
+      return scene.globe.getHeight(point) ?? 0;
+    }
+  }
+  async function view(preset = "Overview", astronaut = 0) {
     if (!placed) return;
     if (actors.cameraMode(preset, astronaut)) return;
     if(preset==='Overview'){
       const point=C.Cartographic.fromDegrees(site.lon,site.lat);
-      const ground=scene.globe.getHeight(point)??0;
-      camera.flyTo({destination:pos(site.lon,site.lat,ground+240),orientation:{heading:0,pitch:-1.13,roll:0},duration:duration()});
+      const ground=await terrainHeight(point);
+      const target=C.Cartesian3.fromDegrees(site.lon,site.lat,ground+2);
+      camera.flyToBoundingSphere(new C.BoundingSphere(target,30),{
+        duration:duration(),
+        offset:new C.HeadingPitchRange(Math.PI,-0.68,280),
+      });
       return;
     }
     const e =
@@ -166,7 +188,7 @@ export function createScene(onPick) {
     const target =
       e?.position.getValue(viewer.clock.currentTime) ?? local(0, 0);
     const carto = C.Cartographic.fromCartesian(target);
-    carto.height = scene.globe.getHeight(carto) ?? 0;
+    carto.height = await terrainHeight(carto);
     camera.flyToBoundingSphere(
       new C.BoundingSphere(C.Cartographic.toCartesian(carto), 1),
       {
@@ -190,8 +212,18 @@ export function createScene(onPick) {
   function showGroundTile(s,opacity=0.55){
     if(groundSite===s.id&&groundLayer){groundLayer.alpha=opacity;return;}
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
-    groundSite=s.id;
-    if(tiles[s.id]){groundLayer=C.ImageryLayer.fromProviderAsync(C.SingleTileImageryProvider.fromUrl('/assets/mission/'+s.id+'-ground.jpg',{rectangle:C.Rectangle.fromDegrees(...tiles[s.id]),credit:'Esri World Imagery and contributors'}));groundLayer.alpha=opacity;viewer.imageryLayers.add(groundLayer);}
+        groundSite = s.id;
+    if(tiles[s.id]){groundLayer=C.ImageryLayer.fromProviderAsync(C.SingleTileImageryProvider.fromUrl('/assets/mission/'+s.id+'-ground.jpg',{rectangle:C.Rectangle.fromDegrees(...tiles[s.id]),credit:'Esri World Imagery and contributors'}));groundLayer.alpha=opacity;groundLayer.show=opacity>0;viewer.imageryLayers.add(groundLayer);}
+  }
+  function startClock(s) {
+    const now = new Date();
+    const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const morning = 9.5; // local solar time
+    const start = midnight + (morning - s.lon / 15) * 3600000;
+    viewer.clock.currentTime = C.JulianDate.fromDate(new Date(start));
+    viewer.clock.clockStep = C.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
+    viewer.clock.multiplier = 600;
+    viewer.clock.shouldAnimate = true;
   }
   let placedSignature='';
   function place(s, c) {
@@ -207,7 +239,8 @@ export function createScene(onPick) {
     )
       return;
     camera.cancelFlight();
-    showGroundTile(s,0.18);
+    if (groundLayer) groundLayer.show = false;
+    startClock(s);
     site = s;
     placedSignature=signature;
     placed = true;
@@ -218,50 +251,29 @@ export function createScene(onPick) {
     model("Habitat", "habitat", 0, 0);
     model("Science module", "habitat2", -8, 6);
     model("Kestrel descent vehicle", "kestrel", 60, -65);
-    box("North pressure passage", 0, 8.3, 1, [1.6, 12.6, 1.95], "#6d7976");
-    box("West pressure passage", -4.2, 5.8, 1, [7.5, 1.55, 1.95], "#6d7976");
     model("Emergency shelter", "medical", 0, 17);
     model("Crew quarters", "habitat", -10, -18);
     for (const station of Object.values(stations))
       model(station.name, station.model, ...station.at);
-    // Enclosed pressure passages connect the inhabited modules through a central spine.
-    const passage=(id,x,y,w,h)=>{box(id,x,y,1,[w,h,2.05],"#65716e");box(id+' roof seam',x,y,2.05,[Math.max(.18,w-.2),Math.max(.18,h-.2),.09],"#303e3b")};
-    passage("South pressure spine",0,-7.5,2.2,15);
-    passage("West pressure spine",-9,-2,18,2.2);
-    passage("East pressure spine",7,-7,14,2.2);
-    passage("Laboratory passage",-17,-2,16,2.2);
-    passage("Quarters passage",-10,-12,2.2,12);
-    passage("Medical passage",2,-12,4,2.2);
-    passage("Reclamation passage",-10,-7,2.2,10);
-    passage("Fabrication passage",14,4,28,2.2);
-    passage("Construction passage",-19,9,2.2,18);
-    passage("Battery passage",19,10,2.2,12);
-    const extraModels={greenhouse:['laboratory',-46,25],observatory:['laboratory',-38,8],power:['habitat2',28,18],storage:['logistics',-32,-15],comms:['habitat2',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
-    for(const key of c.addedFacilities||[]){const item=extraModels[key];if(!item)continue;model('Extra '+key,...item);if(key!=='landing')passage('Extra passage '+key,item[1]/2,item[2]/2,Math.max(2,Math.abs(item[1])),2.2)}
-    if (c.rover) model("Rover", "rover", 7, -5);
+    // A ribbed pressure loop links the habitat, laboratories, medical bay and depot.
+    passage("North corridor", 0, 0, 0, 15.2);
+    passage("West corridor", 0, -2, -13.5, -2);
+    passage("South corridor", 0, 0, 0, -13);
+    passage("East corridor", 0, -8, 8.4, -8);
+    passage("Water corridor", 0, -9, -13, -9);
+    passage("Quarters corridor", -10, -6, -10, -15.9);
+    passage("Fabrication corridor", 0, 4, 22.4, 4);
+    passage("Battery corridor", 19, 4, 19, 13.2);
+    passage("Construction corridor", -19, 0, -19, 14.3);
+    passage("Medical connector", 0, -13, 1.3, -13);
+    const extraModels={greenhouse:['laboratory',-46,25],observatory:['laboratory',-38,8],power:['habitat2',42,26],storage:['logistics',-32,-18],comms:['habitat2',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
+    for(const key of c.addedFacilities||[]){const item=extraModels[key];if(item)model('Extra '+key,...item)}
+    if (c.rover) model("Rover", "rover", 5.5, -3);
     for (let i = 0; i < c.crew; i++)
       model("crew" + i, "field-suit", -3 + i * 1.6, -5 + (i % 2) * 1.3);
-    for (let i = 0; i < 4; i++) {
-      box(
-        "Array support " + i,
-        5 + i * 2.4,
-        3,
-        0.55,
-        [0.15, 0.15, 1.1],
-        "#9ba3a9",
-      );
-      box("Solar " + i, 5 + i * 2.4, 3, 1.14, [2.25, 4, 0.12], "#26476b");
-    }
-    box("Communications mast", -4, -1, 2.8, [0.14, 0.14, 5.6], "#c8ccd0");
-    base.entities.add({
-      id: "Communications",
-      position: local(-4, -1, 5.7),
-      ellipsoid: {
-        radii: new C.Cartesian3(1.2, 1.2, 0.28),
-        material: C.Color.WHITE,
-        heightReference: C.HeightReference.RELATIVE_TO_GROUND,
-      },
-    });
+    for (let i = 0; i < 4; i++)
+      model("Solar " + i, "solar", 6 + (i % 2) * 4.5, 9 + Math.floor(i / 2) * 4.2);
+    model("Communications", "comms", -5, 13);
     view();
     setFacilities(c.facilities || {});
   }
@@ -285,17 +297,17 @@ export function createScene(onPick) {
     actors.sync(m, rate);
     let greenhouse = base.entities.getById("Constructed greenhouse");
     if (m.construction >= 4 && !greenhouse)
-      model("Constructed greenhouse", "laboratory", -28, 16);
+      model("Constructed greenhouse", "laboratory", -34, 20);
     setFacilities(m.cfg.facilities||{});
     for (let i = 0; i < 4; i++)
-      base.entities.getById("Solar " + i).box.material = m.active.solar
+      base.entities.getById("Solar " + i).model.color = m.active.solar
         ? orange
-        : C.Color.fromCssColorString("#26476b");
+        : C.Color.WHITE;
     const rover = base.entities.getById("Rover");
     if (rover) {
       rover.position = local(
-        7 + 6 * Math.sin(m.km),
-        -5 - 4 * (1 - Math.cos(m.km)),
+        5.5 + 2.2 * Math.sin(m.km),
+        -3 - 1.6 * (1 - Math.cos(m.km)),
       );
       rover.model.color = m.active.rover ? orange : C.Color.WHITE;
     }
