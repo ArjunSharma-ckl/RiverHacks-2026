@@ -74,6 +74,19 @@ test('live conditions change the same mission state and planned facilities gate 
   assert.ok(stressed.crewDose>0);
   assert.equal(stressed.production.water,0);
 });
+test('packed supplies persist and a wind dust event suspends work until conditions improve',()=>{
+  const m=start({...cfg,mode:'Mars projection',food:12,medkits:1,regolith:8,components:2});
+  assert.equal(m.resources.food,12);
+  assert.equal(m.medkits,1);
+  assert.deepEqual(m.inventory,{regolith:8,components:2});
+  m.environment.wind=30;m.environment.dust=70;
+  advance(m,1);
+  assert.equal(m.active.storm,true);
+  assert.ok(m.logs.some(x=>x.msg.includes('surface operations suspended')));
+  m.environment.wind=5;m.environment.dust=0;
+  advance(m,1);
+  assert.equal(m.active.storm,undefined);
+});
 test("oxygen, rover and medical events propagate to the same state", () => {
   const m = start(cfg),
     normal = start(cfg);

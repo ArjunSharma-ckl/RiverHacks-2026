@@ -17,8 +17,12 @@ export function createScene(onPick) {
   scene.moon.show = false;
   scene.globe.showWaterEffect = false;
   scene.screenSpaceCameraController.minimumZoomDistance = 1;
+  scene.screenSpaceCameraController.zoomEventTypes = [C.CameraEventType.WHEEL,C.CameraEventType.PINCH];
+  scene.screenSpaceCameraController.tiltEventTypes = [C.CameraEventType.RIGHT_DRAG,C.CameraEventType.MIDDLE_DRAG,C.CameraEventType.PINCH];
+  scene.screenSpaceCameraController.maximumTiltAngle = C.Math.PI_OVER_TWO;
   viewer.shadows = true;
   scene.shadowMap.softShadows = true;
+  scene.shadowMap.size = 1024;
   scene.shadowMap.darkness = 0.3;
   viewer.targetFrameRate = 30;
   viewer.useBrowserRecommendedResolution = true;
@@ -48,7 +52,7 @@ export function createScene(onPick) {
       },
       label: {
         text: s.name.toUpperCase(),
-        font: "10px monospace",
+        font: "15px sans-serif",
         horizontalOrigin: C.HorizontalOrigin.LEFT,
         pixelOffset: new C.Cartesian2(12, 0),
         outlineWidth: 3,
@@ -103,7 +107,7 @@ export function createScene(onPick) {
       duration: duration(),
     });
   }
-  function preview(s){inspect(s,5200);pins.show=false;}
+  function preview(s){inspect(s,900);pins.show=false;}
   const local = (east, north, z = 0) =>
     pos(
       site.lon +
@@ -150,7 +154,7 @@ export function createScene(onPick) {
     if(preset==='Overview'){
       const point=C.Cartographic.fromDegrees(site.lon,site.lat);
       const ground=scene.globe.getHeight(point)??0;
-      camera.flyTo({destination:pos(site.lon,site.lat,ground+95),orientation:{heading:0,pitch:-1.47,roll:0},duration:duration()});
+      camera.flyTo({destination:pos(site.lon,site.lat,ground+240),orientation:{heading:0,pitch:-1.13,roll:0},duration:duration()});
       return;
     }
     const e =
@@ -189,7 +193,9 @@ export function createScene(onPick) {
     groundSite=s.id;
     if(tiles[s.id]){groundLayer=C.ImageryLayer.fromProviderAsync(C.SingleTileImageryProvider.fromUrl('/assets/mission/'+s.id+'-ground.jpg',{rectangle:C.Rectangle.fromDegrees(...tiles[s.id]),credit:'Esri World Imagery and contributors'}));groundLayer.alpha=opacity;viewer.imageryLayers.add(groundLayer);}
   }
+  let placedSignature='';
   function place(s, c) {
+    const signature=JSON.stringify(c.addedFacilities||[]);
     if (
       placed &&
       site.id === s.id &&
@@ -197,12 +203,13 @@ export function createScene(onPick) {
       site.lon === s.lon &&
       base.entities.getById("crew" + (c.crew - 1)) &&
       !base.entities.getById("crew" + c.crew) &&
-      Boolean(base.entities.getById("Rover")) === c.rover
+      Boolean(base.entities.getById("Rover")) === c.rover && placedSignature===signature
     )
       return;
     camera.cancelFlight();
     showGroundTile(s,0.18);
     site = s;
+    placedSignature=signature;
     placed = true;
     pins.show = false;
     fires.show = false;
@@ -229,6 +236,8 @@ export function createScene(onPick) {
     passage("Fabrication passage",14,4,28,2.2);
     passage("Construction passage",-19,9,2.2,18);
     passage("Battery passage",19,10,2.2,12);
+    const extraModels={greenhouse:['laboratory',-46,25],observatory:['laboratory',-38,8],power:['habitat2',28,18],storage:['logistics',-32,-15],comms:['habitat2',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
+    for(const key of c.addedFacilities||[]){const item=extraModels[key];if(!item)continue;model('Extra '+key,...item);if(key!=='landing')passage('Extra passage '+key,item[1]/2,item[2]/2,Math.max(2,Math.abs(item[1])),2.2)}
     if (c.rover) model("Rover", "rover", 7, -5);
     for (let i = 0; i < c.crew; i++)
       model("crew" + i, "field-suit", -3 + i * 1.6, -5 + (i % 2) * 1.3);
@@ -265,7 +274,7 @@ export function createScene(onPick) {
     if(points.length<2)return;
     for(let i=0;i<points.length;i++){
       const p=points[i];
-      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:'12px sans-serif',pixelOffset:new C.Cartesian2(12,-15),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
+      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:'15px sans-serif',pixelOffset:new C.Cartesian2(12,-15),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
       if(i){const a=points[i-1],g=new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a.lon,a.lat),C.Cartographic.fromDegrees(p.lon,p.lat));const positions=[];for(let j=0;j<=48;j++){const f=j/48,q=g.interpolateUsingFraction(f);positions.push(pos(C.Math.toDegrees(q.longitude),C.Math.toDegrees(q.latitude),10000+Math.sin(Math.PI*f)*Math.min(500000,g.surfaceDistance*.12)));}itinerary.entities.add({polyline:{positions,width:3,material:C.Color.fromCssColorString('#9de9c9')}});}
     }
     const sphere=C.BoundingSphere.fromPoints(points.map(p=>pos(p.lon,p.lat)));
@@ -296,7 +305,9 @@ export function createScene(onPick) {
     base.entities.getById("Habitat").model.color = m.active.oxygen
       ? orange
       : C.Color.WHITE;
-    scene.fog.density = m.active.storm ? 0.003 : 0.0002 + (m.environment?.dust||0)*0.00002;
+    const dust=Math.max(0,Math.min(100,m.environment?.dust||0));
+    scene.fog.density = m.active.storm ? 0.004 : 0.0002 + dust*0.000035;
+    scene.fog.minimumBrightness = Math.max(0.04,0.25-dust*0.002);
   }
   overview();
   return {
@@ -320,6 +331,7 @@ export function createScene(onPick) {
     place,
     view,
     sync,
+    waitForTiles(){return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;remove();clearTimeout(timer);resolve()};const remove=scene.globe.tileLoadProgressEvent.addEventListener(count=>{if(count===0)finish()});const timer=setTimeout(finish,12000);if(scene.globe.tilesLoaded)setTimeout(finish,300)})},
     setFacilities,
     showRoute,
     pick: (cb) => {

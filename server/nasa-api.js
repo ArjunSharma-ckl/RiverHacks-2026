@@ -67,6 +67,42 @@ export function createApi(env = {}) {
   const firmsKey = env.FIRMS_MAP_KEY;
 
   const routes = {
+    '/cities': async p => {
+      const input=(p.get('q')||'').trim().slice(0,80);
+      if(!/^[\p{L}\p{M} .,'-]{2,80}$/u.test(input)) throw Error('bad city');
+      const chunks=input.split(',').map(x=>x.trim());
+      let city=chunks[0],region=chunks.length>1?chunks.slice(1).join(' ').toLowerCase():'';
+      const lookup=name=>cached('cities:'+name.toLowerCase(),DAY,()=>getJson('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name,count:'100',language:'en',format:'json'})));
+      const cities=data=>(data.results||[]).filter(x=>/^PPL(?:A\d?|C|F|G|R|S)?$/.test(x.feature_code||'')&&Number.isFinite(x.latitude)&&Number.isFinite(x.longitude));
+      let candidates=cities(await lookup(city));
+      if(!region&&city.includes(' ')&&!candidates.some(x=>x.name.toLowerCase()===city.toLowerCase())){
+        const words=city.split(/\s+/);region=words.pop().toLowerCase();city=words.join(' ');candidates=cities(await lookup(city));
+      }
+      const exact=candidates.filter(x=>x.name.toLowerCase()===city.toLowerCase());
+      if(exact.length)candidates=exact;
+      const matching=region?candidates.filter(x=>[x.admin1,x.country,x.country_code].some(v=>v?.toLowerCase().includes(region))):candidates;
+      const sorted=matching.sort((a,b)=>(b.population||0)-(a.population||0));
+      let serpMatch=false;
+      if(serpKey&&sorted.length)try{
+        const q=new URLSearchParams({engine:'google',q:`${city} ${region} city municipality`,num:'3',api_key:serpKey});
+        const evidence=await cached('city-serp:'+input.toLowerCase(),60*MINUTE,()=>getJson('https://serpapi.com/search.json?'+q));
+        serpMatch=[evidence.knowledge_graph?.title,...(evidence.organic_results||[]).slice(0,3).map(x=>x.title)].some(title=>title?.toLowerCase().includes(city.toLowerCase()));
+      }catch{}
+      return {results:sorted.slice(0,8).map(({name,admin1,country,latitude,longitude})=>({name,admin1,country,latitude,longitude})),source:'Open-Meteo city gazetteer',serpMatch};
+    },
+    '/vendors': p => {
+      if(!serpKey)throw Error('SerpAPI key required');
+      const category=p.get('category')==='materials'?'materials':'transport';
+      const place=(p.get('place')||'').slice(0,80).replace(/[^\p{L}\p{M}\w ,.'-]/gu,'').trim();
+      if(!place)throw Error('place required');
+      return cached('vendor:'+category+':'+place,60*MINUTE,async()=>{
+        const q=category==='materials'?`${place} research expedition equipment supplier laboratory field materials`:`${place} expedition travel charter ground transport agency`;
+        const params=new URLSearchParams({engine:'google',q,num:'8',api_key:serpKey});
+        const data=await getJson('https://serpapi.com/search.json?'+params);
+        if(data.error)throw Error('Vendor search unavailable');
+        return {results:(data.organic_results||[]).filter(r=>/^https:\/\//.test(r.link||'')).slice(0,8).map(({title,link,snippet})=>({title,link,snippet})),source:'SerpAPI Google search',category};
+      });
+    },
     '/analog/climate': p => {
       const lat = number(p, 'lat', -90, 90), lon = number(p, 'lon', -180, 180);
       const q = new URLSearchParams({latitude:lat.toFixed(4), longitude:lon.toFixed(4), community:'RE', format:'JSON', parameters:'T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS'});

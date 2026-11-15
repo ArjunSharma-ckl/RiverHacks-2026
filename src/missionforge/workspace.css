@@ -1,4 +1,5 @@
-.workspace{position:relative;height:calc(100dvh - 66px);min-height:540px;overflow:hidden;background:#0b1417;--drawer-width:390px;--rail-width:112px}
+.workspace{position:relative;height:100dvh;min-height:0;overflow:hidden;background:#0b1417;--drawer-width:390px;--rail-width:112px}
+html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background:#0b1417;scrollbar-color:#050a09 #20332d}
 .workspace>.viewport{position:absolute;inset:0;width:100%;height:100%;min-height:0;z-index:0}
 .tab-rail{position:absolute;left:0;top:0;bottom:0;width:var(--rail-width);z-index:8;display:flex;flex-direction:column;gap:7px;padding:18px 9px;background:#0b1417ed;border-right:1px solid #29433f;overflow:auto}
 .tab-rail button{width:100%;text-align:left;min-height:46px;padding:11px;color:#b9d3ca;background:transparent;border:1px solid transparent;border-radius:11px;font-size:12px}
@@ -15,6 +16,21 @@
 .panel-drawer .panel button:hover{border-color:#a7ecd0}
 .panel-drawer .panel .row,.panel-drawer .panel .trip-leg,.panel-drawer .panel .trip-stop{background:#10201c;border-color:#315246}
 .panel-drawer .panel a{color:#a7ecd0}
+.tab-rail .earth-viewer-link{display:grid;place-items:center;min-height:47px;margin-top:auto;padding:6px;color:#bdf3d2;border:1px solid #426b58;border-radius:10px;text-align:center;text-decoration:none;font-size:11px;line-height:1.2}
+.tab-rail .earth-viewer-link:hover{background:#18342f}
+.panel-drawer .panel,.tab-rail,.city-results{scrollbar-color:#050a09 #20332d;scrollbar-width:thin}
+.panel-drawer .panel::-webkit-scrollbar,.tab-rail::-webkit-scrollbar,.city-results::-webkit-scrollbar{width:10px}
+.panel-drawer .panel::-webkit-scrollbar-track,.tab-rail::-webkit-scrollbar-track,.city-results::-webkit-scrollbar-track{background:#172822}
+.panel-drawer .panel::-webkit-scrollbar-thumb,.tab-rail::-webkit-scrollbar-thumb,.city-results::-webkit-scrollbar-thumb{background:#050a09;border:2px solid #314a3e;border-radius:10px}
+#rankings{margin-top:23px}
+.mission-groundtruth button{display:block;width:100%;height:auto;white-space:normal;line-height:1.35;margin:13px 0}
+.mission-groundtruth input{width:100%}
+.facility-search{margin:14px 0}.facility-search input{width:100%}.facility-search-results{display:grid;gap:7px;margin:10px 0}.facility-search-results button{text-align:left;border-radius:9px}.facility-extra{margin:10px 0}
+.mission-loading{position:absolute;z-index:6;inset:0;display:grid;place-items:center;pointer-events:none;background:#06110ecc;color:#ddf5e9}.mission-loading-card{padding:30px;text-align:center;border:1px solid #497866;border-radius:19px;background:#0b1417e8;box-shadow:0 0 80px #58a99730}.mission-loading-rocket{font-size:35px;animation:rocket-bob 1.2s ease-in-out infinite alternate}.mission-loading-spinner{width:40px;height:40px;margin:17px auto;border:3px solid #365a4c;border-top-color:#bdf3d2;border-radius:50%;animation:loading-spin 1s linear infinite}@keyframes loading-spin{to{transform:rotate(360deg)}}@keyframes rocket-bob{to{transform:translateY(-8px)}}
+.weather-layer{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;background:repeating-linear-gradient(115deg,transparent 0 15px,#eac69b42 16px 17px,transparent 18px 28px),linear-gradient(#c7975425,#ab73462c);background-size:240px 240px,100% 100%;animation:weather-drift 2s linear infinite;transition:opacity .3s}@keyframes weather-drift{to{background-position:240px 0,0 0}}
+.archive-log{margin:7px 0!important;padding:8px 0;border-bottom:1px solid #315246;font-size:11px}
+.panel-drawer .panel .research-results article{margin:12px 0;padding:14px;border:1px solid #426455;border-radius:12px;background:#14231f}.panel-drawer .panel .research-results article p{margin:8px 0}.panel-drawer .panel .prompt-suggestions button{white-space:normal}
+.groundtruth-hero{padding:22px 18px;border-radius:17px;background:radial-gradient(circle at 85% 5%,#2b5140,#10201b 67%);border:1px solid #456a58}.groundtruth-hero h1{margin:9px 0}.research-search{display:grid;gap:10px;margin:20px 0 5px}.research-search button{border-radius:9px}.vendor-card{margin:10px 0;padding:13px;border:1px solid #3b6653;border-radius:12px;background:#14231f}.vendor-card a{font-weight:700}.vendor-card p{margin:8px 0;font-size:11px}
 .panel-drawer .panel .primary{background:#a7ecd0;color:#082019}
 .drawer-reopen{display:none;position:absolute;z-index:9;top:12px;left:12px;padding:8px 11px;background:#0b1417;color:#e8f5ed;border:1px solid #548473;border-radius:6px}
 .drawer-closed .panel-drawer,.drawer-closed .tab-rail{display:none}
@@ -40,4 +56,4 @@
 @media(max-width:410px){.travel-stats{grid-template-columns:1fr 1fr}.explorer-grid{grid-template-columns:1fr}}
 @container (max-width:340px){.panel .fields,.panel .explorer-grid{grid-template-columns:1fr}.travel-stats{grid-template-columns:1fr 1fr}.panel h1{font-size:27px}}
 @media(max-width:700px){.workspace{--rail-width:76px}.tab-rail button{font-size:10px;padding:7px}.panel-drawer .panel{padding:18px}.facility-list{grid-template-columns:1fr}}
-@media print{.mast,.tab-rail,.drawer-head,.drawer-reopen,.workspace>.viewport,.panel-drawer button{display:none!important}.workspace{height:auto;min-height:0;background:white}.panel-drawer{position:static;width:100%;background:white;color:black;border:0;box-shadow:none}.panel-drawer .panel,.panel-drawer .panel p,.panel-drawer .panel small,.panel-drawer .panel h1,.panel-drawer .panel h2{color:black;overflow:visible}.panel-drawer .panel .trip-stop,.panel-drawer .panel .trip-leg{background:white;color:black;border-color:#888;break-inside:avoid}.panel-drawer .panel input,.panel-drawer .panel select{background:white;color:black;border-color:#999}}
+@media print{html:has(.workspace),body:has(.workspace){height:auto;overflow:visible;background:white}.mast,.tab-rail,.drawer-head,.drawer-reopen,.workspace>.viewport,.panel-drawer button{display:none!important}.workspace{height:auto;min-height:0;background:white}.panel-drawer{position:static;width:100%;background:white;color:black;border:0;box-shadow:none}.panel-drawer .panel,.panel-drawer .panel p,.panel-drawer .panel small,.panel-drawer .panel h1,.panel-drawer .panel h2{color:black;overflow:visible}.panel-drawer .panel .trip-stop,.panel-drawer .panel .trip-leg{background:white;color:black;border-color:#888;break-inside:avoid}.panel-drawer .panel input,.panel-drawer .panel select{background:white;color:black;border-color:#999}}
