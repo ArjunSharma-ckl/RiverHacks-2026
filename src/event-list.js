@@ -46,23 +46,56 @@ function research(row, event) {
       endpoint = '/api/nasa/point-detail?' + new URLSearchParams({kind:'fires',lat:event.latitude,lon:event.longitude,date});
     } else endpoint = '/api/nasa/event-detail?id=' + encodeURIComponent(event.id);
   }
-  const status = node('p','Searching NASA imagery and using SerpApi for web reports and images…');
+  const status = node('p','Reading NASA imagery and SerpApi research…');
   row.append(status);
+  const form = node('form');
+  form.className = 'ask-form';
+  const input = node('input');
+  input.type = 'search';
+  input.placeholder = 'Ask a follow-up about this…';
+  input.setAttribute('aria-label','Ask a follow-up about '+event.title);
+  const send = node('button','Ask');
+  send.type = 'submit';
+  form.append(input, send);
+  const answer = node('div');
+  answer.className = 'ask-answer';
+  form.onsubmit = async submitEvent => {
+    submitEvent.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    answer.replaceChildren(node('p','Asking SerpApi…'));
+    try {
+      const response = await fetch('/api/analog/ask?' + new URLSearchParams({q:(event.title + ': ' + question).slice(0,200)}));
+      const data = await response.json();
+      if (!response.ok) throw new Error();
+      answer.replaceChildren(node('p', data.answer || 'SerpApi returned no answer text.'));
+      for (const source of (data.sources || []).slice(0,3)) answer.append(link(source.title, source.link));
+    } catch {
+      answer.replaceChildren(node('p','SerpApi could not answer that just now.'));
+    }
+  };
   fetch(endpoint).then(async r => {
     if (!r.ok) throw new Error();
     const data = await r.json();
     status.remove();
-    // Dated headlines first: for a storm or a fire burning right now, this is
-    // the part of the record that is actually moving.
-    if (data.news?.length) {
-      const head = node('h3','Live coverage');
-      head.append(serpBadge('Google News'));
-      row.append(head);
-      for (const story of data.news) {
-        const item = link(story.title, story.link, story.thumbnail);
-        row.append(item);
-        const meta = [story.source, story.date].filter(Boolean).join(' · ');
-        if (meta) row.append(node('small', meta));
+    if (data.explanation || data.news?.length) {
+      if (data.explanation) {
+        const summary = node('p');
+        summary.className = 'point-summary';
+        summary.textContent = data.explanation;
+        row.append(summary);
+      }
+      // Dated headlines first: for a storm or a fire burning right now, this is
+      // the part of the record that is actually moving.
+      if (data.news?.length) {
+        const head = node('h3','Live coverage');
+        head.append(serpBadge('Google News'));
+        row.append(head);
+        for (const story of data.news) {
+          row.append(link(story.title, story.link, story.thumbnail));
+          const meta = [story.source, story.date].filter(Boolean).join(' · ');
+          if (meta) row.append(node('small', meta));
+        }
       }
     }
     for (const [heading, items] of [[event.fire ? 'NASA Image Library · VIIRS background' : 'NASA Image Library',data.nasa],['Web reports · SerpApi',data.links],['Images · SerpApi',data.images]]) {
@@ -70,9 +103,9 @@ function research(row, event) {
       row.append(node('h3',heading));
       for (const result of items) row.append(link(result.title,result.link,result.thumbnail));
     }
-    if (data.searchUnavailable) row.append(node('p','SerpApi search is currently unavailable.'));
-    else if (!data.links.length && !data.images.length && !data.news?.length) row.append(node('p','No matching web reports or images.'));
-  }).catch(() => { status.textContent = 'Additional reports could not be loaded.'; });
+    if (!data.links.length && !data.images.length && !data.news?.length && !data.explanation) row.append(node('p','No additional web results for this point.'));
+    row.append(form, answer);
+  }).catch(() => { status.remove(); row.append(form, answer); });
 }
 
 export function createEventList() {

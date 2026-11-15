@@ -2,7 +2,7 @@ import { roverSteel } from './steel-fatigue.js';
 import { condition, damage, equipment, equipmentForModel, equipmentIds, exposureRates, maintain, maintenancePlan, unavailable, weather, recordCheckpoint } from './exposure.js';
 import { cue, toggleSound } from "./audio.js";
 import { launchSequence } from "./launch.js";
-import { warmFilm } from "./film-cache.js";
+import { cacheFilm } from "./launch.js";
 import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, loadSeason, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
@@ -57,22 +57,14 @@ const bar = (n) =>
   `<span class="chart"><i style="width:${Math.max(0, Math.min(100, n))}%"></i></span>`;
 const label = (s) => `<span class="eyebrow"><i class="tick"></i>${s}</span>`;
 const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "Unavailable");
-const storedPhoto = (id) =>
-  ['atacama','death','haughton','iceland','mauna','mcmurdo'].includes(id);
-// Sites without a stored photograph still get real satellite imagery, so a
-// basaltic plain never renders as an empty card.
-const satellitePhoto = (s) => {
-  const dx = 0.42 / Math.max(0.25, Math.cos((s.lat * Math.PI) / 180)),
-    dy = 0.28,
-    box = [s.lon - dx, s.lat - dy, s.lon + dx, s.lat + dy]
-      .map((n) => n.toFixed(4))
-      .join(',');
-  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${box}&bboxSR=4326&imageSR=4326&size=640,400&format=jpg&f=image`;
+const SITE_PHOTO_FALLBACK = {
+  snake: '/analogs/lava-beds-earth.webp',
+  kilauea: '/analogs/kilauea-earth.webp'
 };
-const photo = (s) =>
-  storedPhoto(s.id)
-    ? `<img alt="Satellite view of ${s.name}" src="/assets/mission/${s.id}.jpg">`
-    : `<img alt="Satellite imagery of ${s.name}" loading="lazy" src="${satellitePhoto(s)}" onerror="this.remove()">`;
+const photo = (s) => {
+  const fallback = SITE_PHOTO_FALLBACK[s.id] || '/analogs/atacama-earth.webp';
+  return `<img alt="Satellite view of ${s.name}" loading="lazy" src="/assets/mission/${s.id}.jpg" onerror="this.onerror=null;this.src='${fallback}'">`;
+};
 const cache = {},
   obs = new Map();
 let sortBy = "Suitability",
@@ -1286,7 +1278,8 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("hashchange", route);
 route();
-warmFilm();
+// Cache the launch film and habitat models on first load.
+cacheFilm();
 refreshAiRankings();
 loadRates().then(()=>{if(page==='travel')update();});
 try {

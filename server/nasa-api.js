@@ -1,4 +1,4 @@
-import { answerQuestion, research } from './analog-api.js';
+import { answerQuestion, overviewText, research } from './analog-api.js';
 import { sourceLink } from './serp-links.js';
 import { thermalPoints } from './thermal.js';
 import { weatherMap } from './weather-map.js';
@@ -189,6 +189,17 @@ const POWER_PARAMETERS = [
   ['ALLSKY_SFC_SW_DWN', 'Solar irradiance', 'kWh/m²/day']
 ];
 
+// SerpApi snippets arrive HTML-escaped, and Google occasionally answers with
+// an anti-bot page when it does not like a query. Both are cleaned here so the
+// panel never shows raw entities or a robot-check paragraph.
+function plainText(value) {
+  return String(value || '')
+    .replace(/&#(d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .trim();
+}
+
 export function createApi(env = {}, extras = {}) {
   const nasaKey = env.NASA_API_KEY || 'DEMO_KEY';
   const serpKey = env.SERPAPI_KEY;
@@ -207,44 +218,47 @@ export function createApi(env = {}, extras = {}) {
   };
 
   async function pointResearch(q, subject) {
-        async function search(engine) {
-          if (!serpKey) throw new Error('Search unavailable');
-          const params = new URLSearchParams({engine, q, api_key: serpKey});
-          const data = await getJson('https://serpapi.com/search.json?' + params);
-          if (data.error) throw new Error('Search unavailable');
-          if (engine === 'google') {
-            return (data.organic_results || []).slice(0, 5).map(({title,link}) => ({title,link}));
-          }
-          if (engine === 'google_news') {
-            // Google News groups related coverage under `stories`; flatten so a
-            // grouped result still yields individual headlines.
-            const flat = [];
-            for (const item of data.news_results || []) {
-              for (const story of (item.stories?.length ? item.stories : [item])) {
-                if (story?.title && story?.link) {
-                  flat.push({
-                    title: story.title,
-                    link: story.link,
-                    source: story.source?.name || story.source || '',
-                    date: story.date || '',
-                    thumbnail: story.thumbnail || ''
-                  });
-                }
-              }
+    async function search(engine) {
+      if (!serpKey) throw new Error('Search unavailable');
+      const params = new URLSearchParams({engine, q, api_key: serpKey, num: '8'});
+      const data = await getJson('https://serpapi.com/search.json?' + params);
+      if (data.error) throw new Error('Search unavailable');
+      if (engine === 'google') {
+        const results = (data.organic_results || []).filter(r => r.title && r.title !== 'Untitled' && r.link);
+        const overview = plainText(overviewText(data));
+        const usable = /not a robot|javascript is disabled|unusual traffic/i.test(overview) ? '' : overview;
+        const digest = results.filter(r => r.snippet).slice(0, 2).map(r => plainText(r.snippet)).join(' ');
+        return {
+          links: results.slice(0, 5).map(({title, link, snippet}) => ({title: plainText(title), link, snippet: plainText(snippet)})),
+          explanation: (usable || digest).slice(0, 1600)
+        };
+      }
+      if (engine === 'google_news') {
+        const flat = [];
+        for (const item of data.news_results || []) {
+          for (const story of (item.stories?.length ? item.stories : [item])) {
+            if (story?.title && story?.link) {
+              flat.push({ title: story.title, link: story.link,
+                source: story.source?.name || story.source || '',
+                date: story.date || '', thumbnail: story.thumbnail || '' });
             }
-            return flat.slice(0, 5);
           }
-          return (data.images_results || []).slice(0, 4)
-            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
         }
-        const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
-        const [web, images, news, nasa] = await Promise.allSettled([
-          search('google'), search('google_images'), search('google_news'),
-          routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
-        ]);
-        return { links: web.value || [], images: images.value || [], news: news.value || [],
-          nasa: nasa.value?.photos || [],
-          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+        return flat.slice(0, 5);
+      }
+      return (data.images_results || []).slice(0, 4)
+        .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+    }
+    const nasaQuery = subject.replace(/[^A-Za-z0-9_ .-]/g, ' ').slice(0,60).trim();
+    const [web, images, news, nasa] = await Promise.allSettled([
+      search('google'), search('google_images'), search('google_news'),
+      routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+    ]);
+    // Google refuses some image queries while the text search still answers, so
+    // only a failed web search makes the research unavailable.
+    return { explanation: web.value?.explanation || '', links: web.value?.links || [],
+      images: images.value || [], news: news.value || [], nasa: nasa.value?.photos || [],
+      searchUnavailable: web.status === 'rejected' && images.status === 'rejected' };
   }
   const routes = {
     '/earth-analogs': p => proxyMissionBackend('/earth-analogs', p),
@@ -519,7 +533,8 @@ export function createApi(env = {}, extras = {}) {
         delete result.__proxyStatus;
       }
       res.end(JSON.stringify(result));
-    } catch {
+    } catch (error) {
+      console.error('api error', url.pathname, error);
       res.statusCode = 503;
       const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
       res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));

@@ -351,6 +351,11 @@ button { font: inherit; cursor: pointer; }
 #event-list.folded > :not(:first-child) { display: none; }
 #event-list select { width: 100%; padding: 6px; }
 #event-list > small { display: block; margin: 8px 0; }
+#event-list .point-summary { margin: 6px 0 10px; line-height: 1.55; white-space: pre-line; }
+#event-list .ask-form { display: flex; gap: 6px; margin-top: 12px; }
+#event-list .ask-form input { flex: 1; min-width: 0; }
+#event-list .ask-form button { padding: 8px 12px; }
+#event-list .ask-answer { margin-top: 8px; }
 
 /* SerpApi attribution. One tag, wherever live search results are shown. */
 .serp-tag {

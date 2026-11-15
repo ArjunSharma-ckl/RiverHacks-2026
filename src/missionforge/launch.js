@@ -1,9 +1,40 @@
-import { filmSource } from "./film-cache.js";
+const film = "/cinematics/mission-launch-1080p.mp4";
+const CACHE = "missionforge-cinematics-v1";
 
-const fallbackFilm = "/cinematics/mission-launch-1080p.mp4";
+// The launch film is the heaviest single asset on the site. Put it in the Cache
+// API on first load so a replay, or a second visit, plays from disk instead of
+// pulling it over the network again.
+export async function cacheFilm() {
+  if (!("caches" in window)) return film;
+  try {
+    const store = await caches.open(CACHE);
+    if (!(await store.match(film))) await store.add(film);
+    const hit = await store.match(film);
+    if (hit) return URL.createObjectURL(await hit.blob());
+  } catch {
+    // Private browsing, no quota, or an offline first load: fall back to the
+    // network URL, which still works.
+  }
+  return film;
+}
 
-export async function launchSequence() {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+// The habitat models are what the simulation needs the moment the film ends,
+// so fetch them while the viewer is watching rather than after.
+export function warmSimulation() {
+  const assets = [
+    "habitat", "habitat2", "field-suit", "rover", "solar", "comms",
+    "laboratory", "logistics", "medical", "recycler", "passage-ew", "passage-ns",
+  ];
+  for (const name of assets) {
+    fetch("/models/mission/" + name + ".glb", { cache: "force-cache" }).catch(() => {});
+  }
+}
+
+export function launchSequence() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    warmSimulation();
+    return Promise.resolve();
+  }
   const panel = document.createElement("dialog");
   panel.className = "launch-screen";
   panel.setAttribute("aria-label", "Expedition launch film");
@@ -14,19 +45,19 @@ export async function launchSequence() {
     </div>
     <aside class="launch-note">Made by humans in blender</aside>`;
   const video = panel.querySelector("video");
-  // Play the cached Blender render when it is already in browser storage.
-  const film = (await filmSource()) || fallbackFilm;
   video.volume = .72;
   document.body.append(panel);
   panel.showModal();
   return new Promise((resolve) => {
     let watchdog;
+    let objectUrl = "";
     let done = false;
     function finish() {
       if (done) return;
       done = true;
       clearTimeout(watchdog);
       video.pause();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
       video.removeAttribute("src");
       video.load();
       panel.close();
@@ -49,13 +80,22 @@ export async function launchSequence() {
       speed.setAttribute("aria-pressed", String(video.playbackRate === 2));
     };
     video.defaultPlaybackRate = 1.5;
-    video.src = film;
     video.playbackRate = 1.5;
     watch();
+    // Build the habitat's assets while the film runs.
+    warmSimulation();
+    cacheFilm().then((source) => {
+      if (done) return;
+      if (source !== film) objectUrl = source;
+      video.src = source;
+      start();
+    });
+    function start() {
     video.play().catch(async () => {
       if (done) return;
       video.muted = true;
       try { await video.play(); } catch { finish(); }
     });
+    }
   });
 }

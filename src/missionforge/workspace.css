@@ -80,3 +80,86 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 .hud-timer{display:flex;justify-content:space-between;gap:8px;padding:8px 0 6px;border-top:1px solid #29483c;color:#b5cbbf}
 .hud-timer b{color:#7fa996;font-weight:500}
 .hud-timer span{color:#d8f6e7;font-variant-numeric:tabular-nums}
+.site-catalog [data-act="refresh-ai"]{padding:6px 12px;font-size:12px;line-height:1.2;width:auto;align-self:flex-start}
+
+/* Asset readout on hover. A status colour runs down the edge of the card and
+   through the bars, so the state of a suit or a module is legible before the
+   words are read. */
+.scene-entity-tooltip {
+  display: grid;
+  gap: 7px;
+  width: 230px;
+  max-width: 230px;
+  padding: 11px 13px 12px;
+  border: 1px solid #ffffff1f;
+  border-left: 3px solid var(--hud-accent, #8bc4a8);
+  border-radius: 10px;
+  background: #060d12f2;
+  color: #eaf6f1;
+  box-shadow: 0 14px 40px #000000a6;
+  backdrop-filter: blur(10px);
+  font: 11px/1.45 system-ui, sans-serif;
+}
+.scene-entity-tooltip[data-state="ok"] { --hud-accent: #6ee7a8; }
+.scene-entity-tooltip[data-state="warn"] { --hud-accent: #ffc163; }
+.scene-entity-tooltip[data-state="bad"] { --hud-accent: #ff7b6b; }
+
+.scene-entity-tooltip header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.scene-entity-tooltip strong { font-size: 13px; letter-spacing: -0.01em; }
+.scene-entity-tooltip .hud-chip {
+  flex: none;
+  color: #9fb6c4;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+.scene-entity-tooltip .hud-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--hud-accent, #b5d9c3);
+  font-size: 11px;
+  font-weight: 600;
+}
+.hud-beat {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--hud-accent, #6ee7a8);
+  animation: hud-beat 1s infinite ease-out;
+}
+@keyframes hud-beat {
+  0% { transform: scale(0.72); opacity: 0.55; }
+  18% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.72); opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) { .hud-beat { animation: none; } }
+
+.hud-stat {
+  display: grid;
+  grid-template-columns: 62px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.hud-stat label { color: #93a9b6; font-size: 10px; }
+.hud-stat b {
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #eaf6f1;
+}
+.hud-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #ffffff1c;
+  overflow: hidden;
+}
+.hud-bar i { display: block; height: 100%; border-radius: 2px; background: #6ee7a8; }
+.hud-bar[data-state="warn"] i { background: #ffc163; }
+.hud-bar[data-state="bad"] i { background: #ff7b6b; }
