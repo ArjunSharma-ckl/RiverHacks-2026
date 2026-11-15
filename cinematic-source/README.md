@@ -88,6 +88,19 @@ blender -b --python cinematic-source/verify_blend.py     # asserts the animation
 blender -b --python cinematic-source/render_check.py     # sample frames
 ```
 
+## Rendered film
+
+`missionforge-launch-30s.mp4` is the full sequence rendered from this scene:
+1920×1080, 30 fps, 900 frames, exactly 30.0 s, H.264, no audio track. Rebuild it
+with:
+
+```sh
+blender -b --python cinematic-source/render_final.py
+```
+
+The render uses EEVEE Next at 64 samples with motion blur disabled; the 900
+frames took about three minutes on the reference machine.
+
 `verify_blend.py` reopens the saved file and checks, at multiple frames, that the
 stack lifts off, both boosters detach and separate, the core falls behind, the
 upper stage keeps climbing, Orion separates and turns, the arrays unfold, the
