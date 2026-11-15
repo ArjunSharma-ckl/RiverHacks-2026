@@ -1,5 +1,5 @@
 import { trueColour } from './true-colour.js';
-import { createEventList } from './event-list.js';
+import { thermalLayer, THERMAL } from './thermal-layer.js';
 import * as C from 'cesium';
 import { createCloudLoop } from './cloud-loop.js';
 import { gibsWms } from './gibs.js';
@@ -88,7 +88,7 @@ function timestampFor(spec, date) {
     : `${snapped.toISOString().slice(0, 19)}Z`;
 }
 
-export function createWeather(viewer, { onStatus } = {}) {
+export function createWeather(viewer, { onStatus, eventList } = {}) {
   const state = new Map(WEATHER_LAYERS.map((spec) => [spec.id, {
     spec, enabled: false, alpha: spec.alpha, stamp: undefined, failures: 0
   }]));
@@ -97,7 +97,8 @@ export function createWeather(viewer, { onStatus } = {}) {
   viewer.dataSources.add(events);
   const clouds = createCloudLoop(viewer);
   let colourRequest;
-  const eventList = createEventList();
+  const thermal = thermalLayer(viewer,eventList);
+  let eventItems = [];
   let eventsLoaded = false;
   let live = true;
 
@@ -113,6 +114,10 @@ export function createWeather(viewer, { onStatus } = {}) {
     const stamp = timestampFor(spec, C.JulianDate.toDate(viewer.clock.currentTime));
     entry.stamp = stamp;
     entry.failures = 0;
+    if (spec.id === 'fires') {
+      thermal.load(stamp).catch(() => { entry.failures = 7; report(); });
+      return;
+    }
     if (spec.id === 'truecolor') {
       colourRequest?.abort();
       const request = colourRequest = new AbortController();
@@ -157,6 +162,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     entry.enabled = enabled;
     if (enabled) build(entry);
     else {
+      if (id === 'fires') { thermal.clear(); eventList.visible(false,THERMAL); }
       if (id === 'truecolor') colourRequest?.abort();
       if (id === 'clouds') clouds.clear();
       dropLayer(`w:${id}`);
@@ -169,6 +175,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     const entry = state.get(id);
     if (!entry) return;
     entry.alpha = alpha;
+    if (id === 'fires') thermal.opacity(alpha);
     if (id === 'clouds') clouds.setOpacity(alpha);
     const layer = getLayer(`w:${id}`);
     if (layer) layer.alpha = alpha;
@@ -201,7 +208,8 @@ export function createWeather(viewer, { onStatus } = {}) {
       if (!response.ok) throw new Error('unavailable');
       const payload = await response.json();
       const icons = new Map();
-      eventList.populate(payload.events);
+      eventItems = payload.events.sort((a,b)=>b.date.localeCompare(a.date));
+      eventList.populate(eventItems);
       events.clustering.enabled = true;
       for (const event of payload.events ?? []) {
         const color = EVENT_COLORS[event.category] ?? '#9aa7b8';
@@ -242,7 +250,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     async setEvents(show) {
       eventList.visible(show);
       events.show = show;
-      if (show) await loadEvents();
+      if (show) { await loadEvents(); if (eventItems.length) eventList.populate(eventItems); }
       document.getElementById('event-credit').textContent = events.show && events.entities.values.length ? 'NASA EONET' : '';
     },
     openEvent: eventList.open,

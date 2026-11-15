@@ -1,3 +1,4 @@
+import { thermalPoints } from './thermal.js';
 import { weatherMap } from './weather-map.js';
 import { research } from './analog-api.js';
 import { report } from './reports.js';
@@ -191,6 +192,23 @@ export function createApi(env = {}, extras = {}) {
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
 
+  async function pointResearch(q, subject) {
+        async function search(engine) {
+          if (!serpKey) throw new Error('Search unavailable');
+          const params = new URLSearchParams({engine, q, api_key: serpKey});
+          const data = await getJson('https://serpapi.com/search.json?' + params);
+          if (data.error) throw new Error('Search unavailable');
+          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
+            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
+            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+        }
+        const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
+        const [web, images, nasa] = await Promise.allSettled([
+          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+        ]);
+        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
+          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+  }
   const routes = {
     '/cities': async p => {
       const input=(p.get('q')||'').trim().slice(0,80);
@@ -268,27 +286,33 @@ export function createApi(env = {}, extras = {}) {
       return { events };
     }),
 
+    '/nasa/thermal-points': params => {
+      const date = params.get('date');
+      return cached('thermal:'+date, 30*MINUTE, () => thermalPoints(date));
+    },
+    '/nasa/point-detail': params => {
+      const kind = params.get('kind');
+      let subject, query;
+      if (kind === 'fires') {
+        const lat = number(params,'lat',-90,90), lon = number(params,'lon',-180,180);
+        const date = params.get('date');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date');
+        subject = 'VIIRS thermal anomalies';
+        query = 'satellite thermal hotspot near '+lat.toFixed(2)+', '+lon.toFixed(2)+' '+date;
+      } else {
+        subject = (params.get('name') || '').slice(0,80);
+        if (!subject || !['Stars','Planets','Satellites'].includes(kind)) throw new Error('Invalid point');
+        query = subject+' '+kind+' NASA';
+      }
+      return cached('point:'+query, 6*60*MINUTE, () => pointResearch(query,subject));
+    },
     '/nasa/event-detail': async params => {
       const { events } = await routes['/nasa/events']();
       const event = events.find(item => item.id === params.get('id'));
       if (!event) throw new Error('Unknown event');
       return cached('event-detail:' + event.id, 6 * 60 * MINUTE, async () => {
         const q = event.title + ' ' + event.date.slice(0, 4);
-        async function search(engine) {
-          if (!serpKey) throw new Error('Search unavailable');
-          const params = new URLSearchParams({engine, q, api_key: serpKey});
-          const data = await getJson('https://serpapi.com/search.json?' + params);
-          if (data.error) throw new Error('Search unavailable');
-          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
-            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
-            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
-        }
-        const nasaQuery = event.title.replace(/[^\w .-]/g, ' ').slice(0, 60).trim();
-        const [web, images, nasa] = await Promise.allSettled([
-          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
-        ]);
-        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
-          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+        return pointResearch(q, event.title);
       });
     },
 

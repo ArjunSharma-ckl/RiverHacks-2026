@@ -14,7 +14,9 @@ import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
 import { createControls } from './controls.js';
 import { mountMissionControls } from './mission.js';
-import { SUBJECTS } from './catalog.js';
+import { createEventList } from './event-list.js';
+import { STARS, PLANET_NAMES } from './ephemeris.js';
+import { SUBJECTS, describe } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
 
@@ -32,7 +34,22 @@ paintGalaxy(scene);
 
 const sky = createSky(viewer);
 const satellites = createSatellites(viewer);
-const trackContact = addCatalog(viewer, satellites);
+const pointList = createEventList();
+function skyRows(group) {
+  if (group === 'Satellites') return (satellites.contacts || []).map(c => ({
+    sky:true,id:c.norad,title:c.name,category:group,description:() =>
+      'CelesTrak · NORAD '+c.norad+' · '+c.job+(Number.isFinite(c.alt) ? ' · Altitude '+Math.round(c.alt)+' km' : '')
+  }));
+  if (group === 'Stars') return STARS.map(s=>({sky:true,id:s.name,title:s.name,category:group,
+    description:()=>describe(s.name)+' · Right ascension '+s.ra+'° · Declination '+s.dec+'° · Magnitude '+s.mag}));
+  return PLANET_NAMES.map(name=>({sky:true,id:name,title:name,category:group,description:()=>describe(name)}));
+}
+function pointMode(group,on) {
+  pointList.visible(on,group);
+  if (on) pointList.populate(skyRows(group),group);
+}
+for (const group of ['Planets','Stars','Satellites']) pointMode(group,true);
+const trackContact = addCatalog(viewer, satellites, () => pointList.populate(skyRows('Satellites'),'Satellites'));
 
 const controls = createControls(viewer, {
   onEscape: () => {
@@ -44,7 +61,7 @@ const controls = createControls(viewer, {
 mountMissionControls(viewer);
 
 let statusHandler = () => {};
-const weather = createWeather(viewer, { onStatus: (entries) => statusHandler(entries) });
+const weather = createWeather(viewer, { eventList:pointList, onStatus: (entries) => statusHandler(entries) });
 
 const panel = createPanel(document.getElementById('details'));
 
@@ -55,7 +72,8 @@ createHud(document.getElementById('hud'), {
   satellites,
   weather,
   lensFlare,
-  chooseContact(contact) { trackContact(contact); panel.showContact(contact); },
+  pointMode,
+  chooseContact(contact) { trackContact(contact); pointList.open(contact.norad,'Satellites'); },
   controls,
   setStatus: (handler) => { statusHandler = handler; }
 });
@@ -65,20 +83,23 @@ createHud(document.getElementById('hud'), {
 viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
   const picked = scene.pick(position, 9, 9);
 
+  if (picked?.id?.thermal !== undefined) return pointList.open(picked.id.thermal,'Thermal anomalies');
   if (picked?.id?.catalogIndex !== undefined) {
     trackContact(picked.id);
-    return panel.showContact(picked.id);
+    return pointList.open(picked.id.norad,'Satellites');
   }
   if (picked?.id instanceof C.Entity) {
     const entity = picked.id;
-    if (entity.catalogContact) { trackContact(entity.catalogContact); return panel.showContact(entity.catalogContact); }
+    if (entity.catalogContact) { trackContact(entity.catalogContact); return pointList.open(entity.catalogContact.norad,'Satellites'); }
     if (weather.eventsSource.entities.contains(entity)) {
       const event = entity.properties?.getValue(viewer.clock.currentTime);
       if (event) return weather.openEvent(event.id);
     }
     if (satellites.entities.includes(entity)) satellites.track(entity);
+    if (STARS.some(s => s.name === entity.name)) return pointList.open(entity.name,'Stars');
     if (entity.name && SUBJECTS.has(entity.name)) return panel.show(entity.name);
   }
+  if (PLANET_NAMES.includes(picked?.id)) return pointList.open(picked.id,'Planets');
   if (typeof picked?.id === 'string' && SUBJECTS.has(picked.id)) {
     return panel.show(picked.id, { subtitle: 'Direction is real; distance is compressed' });
   }

@@ -338,3 +338,9 @@ button { font: inherit; cursor: pointer; }
 @media (max-width: 760px) {
   #event-list { top: auto; bottom: 28px; right: 8px; width: calc(100vw - 16px); max-height: 37dvh; }
 }
+.intro-open #event-list { visibility: hidden; }
+#event-list > button:first-child { float: right; }
+#event-list.folded { width: auto; padding: 6px; }
+#event-list.folded > :not(:first-child) { display: none; }
+#event-list select { width: 100%; padding: 6px; }
+#event-list > small { display: block; margin: 8px 0; }
