@@ -22,7 +22,7 @@ initLayers(viewer, [
   'esri',
   ...WEATHER_LAYERS.map((spec) => `w:${spec.id}`)
 ]);
-addBaseImagery();
+addBaseImagery({ blueMarble: false });
 
 
 paintGalaxy(scene);

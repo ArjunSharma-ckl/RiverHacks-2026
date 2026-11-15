@@ -6,18 +6,19 @@ export const CREDIT = 'NASA EOSDIS GIBS';
 
 // WMS avoids having to know each layer's tile-matrix set, and covers layers
 // that are only published in the geographic projection.
-export function gibsWms({ layer, time, format = 'image/png', transparent = true, maximumLevel = 7 }) {
+export function gibsWms({ layer, time, format = 'image/png', transparent = true, maximumLevel = 7, credit = CREDIT }) {
   const parameters = { format, transparent: String(transparent) };
   if (time) parameters.time = time;
   return new C.WebMapServiceImageryProvider({
     url: WMS_URL,
     layers: layer,
     parameters,
-    tileWidth: 512,
-    tileHeight: 512,
+    tileWidth: 256,
+    tileHeight: 256,
+    enablePickFeatures: false,
     tilingScheme: new C.GeographicTilingScheme(),
     maximumLevel,
-    credit: CREDIT
+    credit: new C.Credit(credit, true)
   });
 }
 

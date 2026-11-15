@@ -153,15 +153,16 @@ button { font: inherit; cursor: pointer; }
   margin: 0;
   text-align: right;
   font: var(--mono);
-  color: #5d6c80;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
 }
 
-.cesium-widget-credits { display: none !important; }
+#credits a { color: #fff; }
 
 @media (max-width: 760px) {
   #hud { width: calc(100vw - 32px); max-height: 50vh; }
   #details { bottom: 12px; left: 16px; right: 16px; width: auto; max-height: 42vh; }
-  #credits { display: none; }
+  #credits { font-size: 10px; }
 }
 :root { --accent:#9be3bd; --line:#34453f; --glass:#101918ed; --dim:#a4b8af; }
 #hud { width:min(280px,calc(100vw - 32px)); border-radius:8px; }

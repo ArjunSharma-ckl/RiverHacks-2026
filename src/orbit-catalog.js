@@ -42,11 +42,12 @@ export function addCatalog(viewer, fleet) {
       });
     } else {
       const p = new C.Cartesian3();
+      const geo = new C.Cartographic();
       points.forEach((point,i) => {
         const c = fleet.contacts[i];
         c.speed = data.speeds[i];
         if (c.speed) {
-          const geo=C.Cartographic.fromCartesian(C.Cartesian3.unpack(data.xyz,3*i,p));
+          C.Cartographic.fromCartesian(C.Cartesian3.unpack(data.xyz,3*i,p), C.Ellipsoid.WGS84, geo);
           c.lat=C.Math.toDegrees(geo.latitude); c.lon=C.Math.toDegrees(geo.longitude); c.alt=geo.height/1000;
         }
         if (!point) return;
@@ -61,7 +62,7 @@ export function addCatalog(viewer, fleet) {
         }
         if (close) nearby.get(i).position=C.Cartesian3.clone(p);
         else if (nearby.has(i)) {viewer.entities.remove(nearby.get(i));nearby.delete(i);}
-        if (point.show) point.position = C.Cartesian3.clone(p);
+        if (point.show) point.position = p;
       });
     }
     fleet.refreshSearch?.();
