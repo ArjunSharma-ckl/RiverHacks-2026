@@ -613,7 +613,7 @@ async function loadObs() {
 }
 async function launch() {
   if (document.querySelector(".launch-screen")) return;
-  const playback = launchSequence(site.name);
+  const playback = launchSequence();
   gtAnswer = "";
   groundQuestion = "";
   incident = "solar";
