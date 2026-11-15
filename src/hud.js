@@ -201,6 +201,7 @@ export function createHud(root, context) {
   qualityLabel.textContent = 'Quality: ' + quality.level.label;
   const qualityRange = document.createElement('input');
   qualityRange.type = 'range';
+  qualityRange.id = 'quality-slider';
   qualityRange.min = '0';
   qualityRange.max = String(quality.levels.length - 1);
   qualityRange.step = '1';

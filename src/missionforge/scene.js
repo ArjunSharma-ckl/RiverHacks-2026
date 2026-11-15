@@ -5,14 +5,14 @@ import { createViewer, addBaseImagery } from "../viewer.js";
 import { enableGlobeSpin } from "../globe-spin.js";
 import { initLayers, getLayer } from "../layers.js";
 import { crewScene } from "./crew-scene.js";
-import { stations } from "./duties.js";
+import { stations, dutyPose } from "./duties.js";
 import { pointOnRoute } from "./navigation.js";
 import { vitals } from './simulation.js';
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 import { createQuality } from "../quality.js";
 export function createScene(onPick) {
-  const { viewer, scene, camera, lensFlare } = createViewer("atlas");
+  const { viewer, scene, camera, lensFlare, terrainReady } = createViewer("atlas");
   enableGlobeSpin(viewer);
   initLayers(viewer, ["bluemarble", "esri"]);
   addBaseImagery();
@@ -111,8 +111,10 @@ export function createScene(onPick) {
     scene.globe.show = true;
     scene.skyAtmosphere.show = true;
     scene.sun.show = true;
+    scene.globe.enableLighting = true;
     scene.highDynamicRange = true;
     scene.light.intensity = 2;
+    clearDust();
     viewer.shadows = renderQuality !== "Performance";
   }
   viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
@@ -155,6 +157,29 @@ export function createScene(onPick) {
     row.append(name, track, value);
     return row;
   }
+  // Shared sensor groups. Every figure comes from the running simulation.
+  function reserves(m) {
+    if (!m?.resources || !m.initial) return [];
+    const row = (label, key) => {
+      const ratio = m.initial[key] > 0 ? Math.max(0, m.resources[key] / m.initial[key]) : 0;
+      return [label, Math.round(Math.min(1, ratio) * 100) + "%", ratio, band(ratio, 0.4, 0.18, true)];
+    };
+    return [row("Power", "battery"), row("O2 store", "oxygen"), row("Water", "water")];
+  }
+  function wear(m, kind) {
+    if (!m) return [];
+    try {
+      const dust = condition(m, kind).dust;
+      return Number.isFinite(dust) ? [["Dust load", Math.round(dust * 100) + "%", dust, band(dust, 0.5, 0.8)]] : [];
+    } catch { return []; }
+  }
+  function outside(m) {
+    const e = m?.environment;
+    if (!e) return "";
+    return "Outside " + Math.round(e.temperature) + " C  /  wind " + Math.round(e.wind ?? 0) + " m/s"
+      + (m.active?.storm ? "  /  storm" : "");
+  }
+  let sunlight = 1;
   function readout(id, m) {
     if (/^crew\d+$/.test(id)) {
       const index = Number(id.slice(4));
@@ -163,11 +188,16 @@ export function createScene(onPick) {
       return {
         title: v.name, chip: v.role || "Crew", status: v.status,
         state: v.status === "Nominal" ? "ok" : "warn", pulse: v.pulse,
+        tag: "Crew " + String(index + 1).padStart(2, "0"),
+        activity: (() => { try { return dutyPose(m, index).status; } catch { return ""; } })(),
         rows: [
-          ["Pulse", v.pulse + " bpm", (v.pulse - 40) / 130, band(v.pulse, 105, 135)],
-          ["Blood oxygen", v.spo2 + "%", (v.spo2 - 85) / 15, band(v.spo2, 94, 90, true)],
+          ["SpO2", v.spo2 + "%", (v.spo2 - 85) / 15, band(v.spo2, 94, 90, true)],
+          ["Core temp", v.temp + " C", (Number(v.temp) - 35.5) / 3.5, band(Number(v.temp), 37.6, 38.5)],
+          ["Hydration", v.hydration + "%", v.hydration / 100, band(v.hydration, 72, 60, true)],
           ["Fatigue", v.fatigue + "%", v.fatigue / 100, band(v.fatigue, 60, 85)],
+          ["Sleep", v.sleep + " h", Number(v.sleep) / 9, band(Number(v.sleep), 6, 4, true)],
         ],
+        env: outside(m),
       };
     }
     if (id === "Rover") {
@@ -180,10 +210,15 @@ export function createScene(onPick) {
         title: "Rover", chip: "Surface vehicle",
         status: m?.active?.rover ? "Disabled" : phase,
         state: m?.active?.rover ? "bad" : dockPhase === "charging" ? "warn" : "ok",
+        tag: "Vehicle 01",
         rows: [
           ["Battery", charge + "%", charge / 100, band(charge, 35, 15, true)],
           ["Survey", Math.round((roverDistance / roverLength) * 100) + "%", roverDistance / roverLength, "ok"],
+          ["Speed", (roverDriving && dockPhase !== "charging" ? "8.5" : "0.0") + " m/s", roverDriving && dockPhase !== "charging" ? 0.7 : 0.02, "ok"],
+          ["Odometer", (m?.km ?? 0).toFixed(1) + " km", Math.min(1, (m?.km ?? 0) / 40), "ok"],
+          ...wear(m, "rover"),
         ],
+        env: outside(m),
       };
     }
     if (["Habitat", "Crew quarters", "Science module"].includes(id) || id.startsWith("Extra habitat")) {
@@ -193,11 +228,15 @@ export function createScene(onPick) {
         title: id, chip: "Pressurised module",
         status: fault ? "Oxygen system failure" : "Life support nominal",
         state: fault ? "bad" : "ok",
+        tag: "Module",
         rows: [
           ["Integrity", integrity + "%", integrity / 100, band(integrity, 70, 45, true)],
-          ["Oxygen", fault ? "Fault" : "Nominal", fault ? 0.15 : 1, fault ? "bad" : "ok"],
-          ["Crew aboard", String(m?.cfg?.crew ?? "--"), Math.min(1, (m?.cfg?.crew ?? 0) / 8), "ok"],
+          ["O2 loop", fault ? "Fault" : "Nominal", fault ? 0.15 : 1, fault ? "bad" : "ok"],
+          ...reserves(m),
+          ["Crew", String(m?.cfg?.crew ?? "--"), Math.min(1, (m?.cfg?.crew ?? 0) / 8), "ok"],
+          ...wear(m, "habitat"),
         ],
+        env: outside(m),
       };
     }
     if (id.startsWith("Solar")) {
@@ -206,16 +245,120 @@ export function createScene(onPick) {
         title: "Solar array", chip: "Power generation",
         status: fault ? "Array failure" : "Generating",
         state: fault ? "bad" : "ok",
-        rows: [["Output", fault ? "Offline" : "Nominal", fault ? 0.05 : 0.88, fault ? "bad" : "ok"]],
+        tag: "Power",
+        rows: [
+          ["Output", fault ? "Offline" : Math.round(sunlight * 100) + "%", fault ? 0.05 : sunlight, fault ? "bad" : band(sunlight, 0.45, 0.2, true)],
+          ...reserves(m).slice(0, 1),
+          ...wear(m, "solar"),
+        ],
+        env: outside(m),
       };
     }
-    return { title: id, chip: "Settlement asset", status: "Operational", state: "ok", rows: [] };
+    if (id === "Scout buggy" || id === "Cargo hauler") {
+      const moving = id === "Scout buggy" && roverDriving;
+      return {
+        title: id, chip: "Surface vehicle", tag: id === "Scout buggy" ? "Vehicle 02" : "Vehicle 03",
+        status: moving ? "Perimeter patrol" : "Parked", state: "ok",
+        rows: [
+          ["Speed", (moving ? "5.5" : "0.0") + " m/s", moving ? 0.45 : 0.02, "ok"],
+          ...(id === "Scout buggy" ? [["Patrol", Math.round((scoutDistance / scoutLength) * 100) + "%", scoutDistance / scoutLength, "ok"]] : []),
+        ],
+        env: outside(m),
+      };
+    }
+    const kind = equipmentForModel(id);
+    const down = kind ? Boolean(m && unavailable(m, kind)) : false;
+    return {
+      title: id, chip: "Settlement asset", tag: "Asset",
+      status: down ? "Offline" : "Operational", state: down ? "bad" : "ok",
+      rows: [...reserves(m).slice(0, 1), ...(kind ? wear(m, kind) : [])],
+      env: outside(m),
+    };
   }
+  // Tactical card: a tag strip, a live trace for anything with a pulse, then
+  // segmented sensor bars. Built once per target and refreshed in place so the
+  // trace keeps running while the numbers move.
+  let hudId = "";
+  const SVG = "http://www.w3.org/2000/svg";
+  function trace() {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("class", "hud-ecg");
+    svg.setAttribute("viewBox", "0 0 200 34");
+    svg.setAttribute("preserveAspectRatio", "none");
+    const path = document.createElementNS(SVG, "path");
+    let d = "M0 20";
+    for (let beat = 0; beat < 8; beat++) {
+      const x = beat * 50;
+      d += ` L${x + 14} 20 L${x + 18} 16 L${x + 22} 20 L${x + 25} 23 L${x + 28} 3 L${x + 31} 30 L${x + 34} 20 L${x + 40} 15 L${x + 45} 20 L${x + 50} 20`;
+    }
+    path.setAttribute("d", d);
+    svg.append(path);
+    return svg;
+  }
+  function fillRows(holder, info) {
+    holder.replaceChildren(...info.rows.map((row) => statRow(...row)));
+  }
+  function drawCard(info) {
+    tooltip.dataset.state = info.state;
+    tooltip.replaceChildren();
+    const strip = document.createElement("div");
+    strip.className = "hud-strip";
+    const tag = document.createElement("span");
+    tag.textContent = info.tag || "Asset";
+    const chip = document.createElement("span");
+    chip.className = "hud-chip";
+    chip.textContent = info.chip;
+    strip.append(tag, chip);
+    const title = document.createElement("strong");
+    title.textContent = info.title;
+    tooltip.append(strip, title);
+    if (info.pulse) {
+      const monitor = document.createElement("div");
+      monitor.className = "hud-monitor";
+      const svg = trace();
+      svg.style.setProperty("--beat", ((60 / Math.max(40, info.pulse)) * 4).toFixed(2) + "s");
+      const figure = document.createElement("div");
+      figure.className = "hud-bpm";
+      const number = document.createElement("b");
+      number.textContent = info.pulse;
+      const unit = document.createElement("small");
+      unit.textContent = "bpm";
+      figure.append(number, unit);
+      monitor.append(svg, figure);
+      tooltip.append(monitor);
+    }
+    const status = document.createElement("p");
+    status.className = "hud-status";
+    const beat = document.createElement("i");
+    beat.className = "hud-beat";
+    if (info.pulse) beat.style.animationDuration = (60 / Math.max(40, info.pulse)).toFixed(2) + "s";
+    status.append(beat, document.createTextNode(info.activity ? info.status + " / " + info.activity : info.status));
+    const rows = document.createElement("div");
+    rows.className = "hud-rows";
+    fillRows(rows, info);
+    tooltip.append(status, rows);
+    if (info.env) {
+      const env = document.createElement("footer");
+      env.className = "hud-env";
+      env.textContent = info.env;
+      tooltip.append(env);
+    }
+  }
+  setInterval(() => {
+    if (tooltip.hidden || !hudId || !placed || !base.entities.getById(hudId)) return;
+    const info = readout(hudId, roverMission);
+    tooltip.dataset.state = info.state;
+    const rows = tooltip.querySelector(".hud-rows");
+    if (rows) fillRows(rows, info);
+    const number = tooltip.querySelector(".hud-bpm b");
+    if (number && info.pulse) number.textContent = info.pulse;
+  }, 1000);
   viewer.screenSpaceEventHandler.setInputAction(({ endPosition }) => {
     const picked = scene.pick(endPosition)?.id;
     const id = typeof picked === "string" ? picked : picked?.id;
     const siteHit = id && sites.find(item => item.id === id);
     if (siteHit) {
+      hudId = "";
       tooltip.dataset.state = "ok";
       tooltip.replaceChildren();
       const head = document.createElement("header");
@@ -234,38 +377,15 @@ export function createScene(onPick) {
       tooltip.hidden = false;
       return;
     }
-    if (!placed || !id || !base.entities.getById(id)) { tooltip.hidden = true; return; }
-    const info = readout(id, roverMission);
-    tooltip.dataset.state = info.state;
-    tooltip.replaceChildren();
-
-    const head = document.createElement("header");
-    const title = document.createElement("strong");
-    title.textContent = info.title;
-    const chip = document.createElement("span");
-    chip.className = "hud-chip";
-    chip.textContent = info.chip;
-    head.append(title, chip);
-
-    const status = document.createElement("p");
-    status.className = "hud-status";
-    if (info.pulse) {
-      const beat = document.createElement("i");
-      beat.className = "hud-beat";
-      // Beat in time with the reported pulse.
-      beat.style.animationDuration = (60 / Math.max(40, info.pulse)).toFixed(2) + "s";
-      status.append(beat);
-    }
-    status.append(document.createTextNode(info.status));
-
-    tooltip.append(head, status);
-    for (const [label, reading, ratio, state] of info.rows) {
-      tooltip.append(statRow(label, reading, ratio, state));
+    if (!placed || !id || !base.entities.getById(id)) { tooltip.hidden = true; hudId = ""; return; }
+    if (hudId !== id || tooltip.hidden) {
+      hudId = id;
+      drawCard(readout(id, roverMission));
     }
     // Keep the card on screen near the right-hand edge.
-    const flip = endPosition.x > viewer.container.clientWidth - 260;
-    tooltip.style.left = (flip ? endPosition.x - 248 : endPosition.x + 18) + "px";
-    tooltip.style.top = Math.max(8, endPosition.y - 70) + "px";
+    const flip = endPosition.x > viewer.container.clientWidth - 300;
+    tooltip.style.left = (flip ? endPosition.x - 288 : endPosition.x + 18) + "px";
+    tooltip.style.top = Math.max(8, Math.min(endPosition.y - 70, viewer.container.clientHeight - tooltip.offsetHeight - 12)) + "px";
     tooltip.hidden = false;
   }, C.ScreenSpaceEventType.MOUSE_MOVE);
   const duration = () =>
@@ -303,13 +423,50 @@ export function createScene(onPick) {
     });
   }
   function preview(s){inspect(s,900);pins.show=false;}
-  const local = (east, north, z = 0) =>
-    pos(
-      site.lon +
-        (layout.east+east*layout.scale) / (111320 * Math.max(0.01, Math.cos((site.lat * Math.PI) / 180))),
-      site.lat + (layout.north+north*layout.scale) / 111320,
-      z,
+  // The settlement stands on the real globe. A grid of terrain heights around
+  // the site lets every building, suit and vehicle sit on the ground it is
+  // actually above instead of on a flat pad.
+  const RELIEF_HALF = 460, RELIEF_N = 31;
+  const RELIEF_STEP = (2 * RELIEF_HALF) / (RELIEF_N - 1);
+  let relief = null;
+  let reliefPending = '';
+  let lastConfig = null;
+  const reliefKey = (s) => s.id + ':' + s.lat + ':' + s.lon;
+  function groundAt(mx, my) {
+    if (!relief || relief.key !== reliefKey(site)) return 0;
+    const u = Math.min(RELIEF_N - 1.001, Math.max(0, (mx + RELIEF_HALF) / RELIEF_STEP));
+    const v = Math.min(RELIEF_N - 1.001, Math.max(0, (my + RELIEF_HALF) / RELIEF_STEP));
+    const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
+    const h = relief.heights, at = (a, b) => h[b * RELIEF_N + a];
+    return (at(i, j) * (1 - fu) + at(i + 1, j) * fu) * (1 - fv)
+      + (at(i, j + 1) * (1 - fu) + at(i + 1, j + 1) * fu) * fv;
+  }
+  async function loadRelief(s) {
+    const provider = await terrainReady;
+    if (!provider || provider instanceof C.EllipsoidTerrainProvider) return null;
+    const cos = Math.max(0.01, Math.cos((s.lat * Math.PI) / 180));
+    const points = [];
+    for (let j = 0; j < RELIEF_N; j++)
+      for (let i = 0; i < RELIEF_N; i++)
+        points.push(C.Cartographic.fromDegrees(
+          s.lon + (-RELIEF_HALF + i * RELIEF_STEP) / (111320 * cos),
+          s.lat + (-RELIEF_HALF + j * RELIEF_STEP) / 111320,
+        ));
+    const sampled = provider.availability
+      ? await C.sampleTerrainMostDetailed(provider, points)
+      : await C.sampleTerrain(provider, 13, points);
+    const heights = sampled.map((p) => p.height);
+    if (!heights.every(Number.isFinite)) return null;
+    return { key: reliefKey(s), heights };
+  }
+  const local = (east, north, z = 0) => {
+    const mx = layout.east + east * layout.scale, my = layout.north + north * layout.scale;
+    return pos(
+      site.lon + mx / (111320 * Math.max(0.01, Math.cos((site.lat * Math.PI) / 180))),
+      site.lat + my / 111320,
+      z + groundAt(mx, my),
     );
+  };
   const actors = crewScene(viewer, base, local);
   function model(id, file, e, n, scale, height = 0) {
     base.entities.add({
@@ -319,8 +476,8 @@ export function createScene(onPick) {
         uri: "/models/mission/" + file + ".glb",
         scale: file === 'crew' || file === 'field-suit' ? (scale||1)
           : (scale||1)*layout.scale*(file.startsWith('passage-') || file === 'rover' || file === 'kestrel' ? 1 : 1.28),
-        minimumPixelSize: file.startsWith("passage-") ? 0 : file === "field-suit" ? 12 : file === "solar" ? 5 : 0,
-        maximumScale: file === "field-suit" ? 9 : undefined,
+        minimumPixelSize: file.startsWith("passage-") ? 0 : file === "field-suit" ? 30 : file === "rover" || file === "space-car" ? 26 : file === "solar" ? 5 : 0,
+        maximumScale: file === "field-suit" ? 9 : file === "rover" || file === "space-car" ? 4 : undefined,
         ...(file === "field-suit"
           ? {
               nodeTransformations: Object.fromEntries(
@@ -402,6 +559,16 @@ export function createScene(onPick) {
       sum + Math.hypot(point[0] - roverPath[index][0], point[1] - roverPath[index][1]),
     0,
   );
+  // A second, lighter vehicle patrols the perimeter west of the habitat.
+  const scoutPath = [
+    [-60, -40], [-95, -20], [-110, 25], [-80, 60], [-45, 45], [-50, 0], [-60, -40],
+  ];
+  const scoutLength = scoutPath.slice(1).reduce(
+    (sum, point, index) =>
+      sum + Math.hypot(point[0] - scoutPath[index][0], point[1] - scoutPath[index][1]),
+    0,
+  );
+  let scoutDistance = 0;
   // The apron beside the habitat, where the rover returns to recharge.
   const DOCK = { x: 26, y: -10 };
   const DOCK_LEG = 7;      // seconds out and back
@@ -440,6 +607,91 @@ export function createScene(onPick) {
     viewer.clock.shouldAnimate = true;
   }
   let placedSignature='';
+  // Wind-blown dust over the settlement and a plume behind each moving
+  // vehicle. Both scale with the weather the simulation reports, so a storm
+  // looks like one and a still lunar day stays clear.
+  const dustSprite = (() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const g = canvas.getContext("2d");
+    const fill = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+    fill.addColorStop(0, "rgba(255,255,255,0.9)");
+    fill.addColorStop(0.45, "rgba(255,255,255,0.32)");
+    fill.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = fill;
+    g.fillRect(0, 0, 64, 64);
+    return canvas;
+  })();
+  let haze = null;
+  const plumes = new Map();
+  const wind = new C.Cartesian3();
+  const gust = new C.Cartesian3();
+  let windSpeed = 0;
+  // Particles advance on the scene clock, which the simulation runs at 600x.
+  // Lifetimes, speeds and rates are written in real seconds and converted, so
+  // dust drifts at a believable pace whatever the clock is doing.
+  const CLOCK = 600;
+  function dustSystem(options) {
+    return scene.primitives.add(new C.ParticleSystem({
+      image: dustSprite,
+      startColor: C.Color.fromCssColorString("#c9a47c").withAlpha(options.alpha),
+      endColor: C.Color.fromCssColorString("#c9a47c").withAlpha(0),
+      startScale: 1,
+      endScale: options.grow,
+      minimumParticleLife: options.life * 0.6 * CLOCK,
+      maximumParticleLife: options.life * CLOCK,
+      minimumSpeed: 0.2 / CLOCK,
+      maximumSpeed: 1.4 / CLOCK,
+      imageSize: new C.Cartesian2(options.size, options.size),
+      emissionRate: 0,
+      lifetime: 16 * CLOCK,
+      loop: true,
+      sizeInMeters: true,
+      emitter: options.emitter,
+      modelMatrix: C.Matrix4.IDENTITY,
+      updateCallback: (particle, dt) => {
+        C.Cartesian3.multiplyByScalar(wind, (dt * options.drag) / (CLOCK * CLOCK), gust);
+        C.Cartesian3.add(particle.velocity, gust, particle.velocity);
+      },
+    }));
+  }
+  function clearDust() {
+    if (haze) { scene.primitives.remove(haze); haze = null; }
+    for (const system of plumes.values()) scene.primitives.remove(system);
+    plumes.clear();
+  }
+  function buildDust() {
+    clearDust();
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    haze = dustSystem({ alpha: 0.16, grow: 2.6, life: 9, size: 26, drag: 0.5,
+      emitter: new C.BoxEmitter(new C.Cartesian3(520, 520, 3)) });
+    haze.modelMatrix = C.Transforms.eastNorthUpToFixedFrame(local(0, 0, 2));
+    // Wind from the west-south-west, in the fixed frame the particles live in.
+    C.Matrix4.multiplyByPointAsVector(haze.modelMatrix, new C.Cartesian3(0.92, 0.38, 0.02), wind);
+  }
+  function plume(id, world, moving) {
+    let system = plumes.get(id);
+    if (!system) {
+      if (!haze) return;
+      system = dustSystem({ alpha: 0.34, grow: 3.4, life: 2.6, size: 3.2, drag: 0.15,
+        emitter: new C.ConeEmitter(C.Math.toRadians(38)) });
+      plumes.set(id, system);
+    }
+    system.modelMatrix = C.Transforms.eastNorthUpToFixedFrame(world);
+    system.emissionRate = moving ? 16 / CLOCK : 0;
+  }
+  function setDust(m) {
+    if (!haze) return;
+    const w = weather(m);
+    windSpeed = m.environment?.wind ?? 0;
+    const storm = m.active?.storm ? 1 : 0;
+    const quality = renderQuality === "Performance" ? 0.4 : renderQuality === "High" ? 1.3 : 1;
+    haze.emissionRate = windSpeed <= 0 ? 0
+      : Math.min(70, (4 + windSpeed * 0.9 + w.tau * 26 + storm * 30) * quality) / CLOCK;
+    const length = C.Cartesian3.magnitude(wind) || 1;
+    C.Cartesian3.multiplyByScalar(wind, Math.max(0.6, windSpeed * 0.35) / length, wind);
+  }
+  let placedReal=false;
   function place(s, c) {
     const signature=JSON.stringify(c.addedFacilities||[]);
     if (
@@ -449,9 +701,11 @@ export function createScene(onPick) {
       site.lon === s.lon &&
       base.entities.getById("crew" + (c.crew - 1)) &&
       !base.entities.getById("crew" + c.crew) &&
-      Boolean(base.entities.getById("Rover")) === c.rover && placedSignature===signature
+      Boolean(base.entities.getById("Rover")) === c.rover && placedSignature===signature &&
+      placedReal === (relief?.key === reliefKey(s))
     )
       return;
+    lastConfig = c;
     camera.cancelFlight();
     if (groundLayer) groundLayer.show = false;
     startClock(s);
@@ -466,12 +720,41 @@ export function createScene(onPick) {
     roverDriving = false;
     roverLastFrame = performance.now();
     site = s;
-    scene.globe.show = false;
-    scene.skyAtmosphere.show = false;
-    scene.sun.show = false;
+    const key = reliefKey(s);
+    const real = relief?.key === key;
+    placedReal = real;
     scene.highDynamicRange = false;
     viewer.shadows = false;
-    loadSettlementPhoto(s);
+    if (real) {
+      // Same globe as the map, zoomed in: real imagery to the horizon and the
+      // terrain the site actually has.
+      surface.entities.removeAll();
+      scene.globe.show = true;
+      scene.skyAtmosphere.show = true;
+      scene.sun.show = true;
+      scene.globe.enableLighting = false;
+      const esri = getLayer("esri");
+      if (esri) esri.show = true;
+      showGroundTile(s, 1);
+      if (groundLayer) groundLayer.show = true;
+    } else {
+      // Until the terrain heights arrive (or if they never do) fall back to
+      // the flat photo pad so the settlement is never buried or floating.
+      scene.globe.show = false;
+      scene.skyAtmosphere.show = false;
+      scene.sun.show = false;
+      loadSettlementPhoto(s);
+      if (reliefPending !== key) {
+        reliefPending = key;
+        loadRelief(s).then((result) => {
+          if (reliefPending !== key) return;
+          reliefPending = '';
+          if (!result || !placed || reliefKey(site) !== key) return;
+          relief = result;
+          place(site, lastConfig);
+        }).catch(() => { if (reliefPending === key) reliefPending = 'failed:' + key; });
+      }
+    }
     placedSignature=signature;
     placed = true;
     pins.show = false;
@@ -534,12 +817,26 @@ export function createScene(onPick) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         // Without a far limit the suits simply vanish once you pull back from
         // the settlement, which read as the crew disappearing.
-        distanceDisplayCondition: new C.DistanceDisplayCondition(30, 60000),
+        distanceDisplayCondition: new C.DistanceDisplayCondition(900, 60000),
       });
     }
     for (let i = 0; i < 4; i++)
       model("Solar " + i, "solar", 6 + (i % 2) * 4.5, 9 + Math.floor(i / 2) * 4.2);
     model("Communications", "comms", -5, 13);
+    // Outlying assets, so the base reads as a working site rather than one
+    // cluster: a vehicle park, a relay, a cargo pad and a far solar field.
+    if (c.rover) {
+      model("Scout buggy", "space-car", scoutPath[0][0], scoutPath[0][1], undefined, 0.6);
+      model("Cargo hauler", "rover", 30, -22, 1.25, 1.05);
+    }
+    model("Relay mast", "comms", 96, 62);
+    model("Cargo lander", "kestrel", -96, -78);
+    model("Supply cache", "logistics", -84, -62);
+    model("Field laboratory", "laboratory", 122, -72);
+    model("Storm shelter", "medical", -70, 82);
+    for (let i = 0; i < 6; i++)
+      model("Solar field " + i, "solar", 64 + (i % 3) * 5, 44 + Math.floor(i / 3) * 5);
+    buildDust();
     view();
     setFacilities(c.facilities || {});
   }
@@ -587,14 +884,27 @@ export function createScene(onPick) {
     if (crew) crew.model.color = m.health ? orange : C.Color.WHITE;
     const w = weather(m);
     scene.light.intensity = 2 * w.transmission;
+    sunlight = Math.max(0, Math.min(1, w.transmission));
     scene.fog.density = 0.0002 + w.tau * 0.0012 + w.cloud * 0.001;
     scene.fog.minimumBrightness = Math.max(0.04, 0.25 * w.transmission);
+    setDust(m);
   }
   scene.preUpdate.addEventListener(() => {
     if (!placed) return;
     const now = performance.now();
     const delta = Math.min((now - roverLastFrame) / 1000, 3);
     roverLastFrame = now;
+    const scout = base.entities.getById("Scout buggy");
+    if (scout && roverDriving) {
+      scoutDistance = (scoutDistance + delta * 5.5) % scoutLength;
+      const at = pointOnRoute(scoutPath, scoutDistance / scoutLength);
+      const where = local(at.x, at.y, 0.6);
+      plume("Scout buggy", where, true);
+      scout.position.setValue(where);
+      scout.orientation ??= new C.ConstantProperty();
+      scout.orientation.setValue(C.Transforms.headingPitchRollQuaternion(
+        where, new C.HeadingPitchRoll(at.heading - Math.PI / 2, 0, 0)));
+    } else if (scout) plume("Scout buggy", local(scoutPath[0][0], scoutPath[0][1], 0.6), false);
     const rover = base.entities.getById("Rover");
     if (!rover) return;
     if (!roverDriving && !roverFollow) return;
@@ -628,6 +938,7 @@ export function createScene(onPick) {
       }
     }
     const world = local(point.x, point.y, 1.05);
+    plume("Rover", world, roverDriving && dockPhase !== "charging");
     rover.position.setValue(world);
     rover.orientation ??= new C.ConstantProperty();
     rover.orientation.setValue(

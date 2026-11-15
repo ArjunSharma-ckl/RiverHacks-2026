@@ -59,11 +59,11 @@ export function crewScene(viewer, base, local) {
       const pose = dutyPose(mission, i, delta),
         clock = mission.duties[i].elapsed + delta;
       const gravityFactor=Math.sqrt(9.81/surfaceGravity(mission.cfg.mode)),
-        phase = clock * 210/gravityFactor,
+        phase = clock * 130/gravityFactor,
         walk = pose.walking ? Math.sin(phase) : 0;
       const point = local(pose.x, pose.y);
       const cart = C.Cartographic.fromCartesian(point),
-        terrain = 0;
+        terrain = cart.height;
       const job = mission.duties[i].key;
       const heavy = job === "mine" || job === "build";
       const stroke = Math.sin(phase * (heavy ? 0.33 : 0.51));
@@ -104,7 +104,7 @@ export function crewScene(viewer, base, local) {
       const destination = local(
         pose.x - Math.sin(pose.heading) * distance,
         pose.y - Math.cos(pose.heading) * distance,
-        terrain + (follow ? 2.6 : 1.68),
+        follow ? 2.6 : 1.68,
       );
       camera.setView({
         destination,

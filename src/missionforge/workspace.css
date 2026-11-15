@@ -206,3 +206,108 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 .analog-list li b{display:block;font-size:12.5px}
 .analog-list li small{display:block;color:#a9c6b8;font-size:10.5px}
 .analog-error{margin:9px 0 0;color:#ffb3a3;font-size:11px}
+
+/* Tactical hover card. Angled plate, a tag strip, a running trace for the
+   crew and segmented sensor bars, so a suit, vehicle or module reads like a
+   squad readout rather than a tooltip. */
+.scene-entity-tooltip {
+  width: 270px;
+  max-width: 270px;
+  gap: 8px;
+  padding: 0 14px 12px;
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--hud-accent, #6ee7a8) 16%, transparent), transparent 46%),
+    #05090df5;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: none;
+  filter: drop-shadow(0 16px 30px #000000b0);
+  font: 11px/1.4 "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  animation: hud-open 0.16s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.scene-entity-tooltip::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--hud-accent, #6ee7a8);
+}
+@keyframes hud-open {
+  from { opacity: 0; transform: translateX(-8px) scaleY(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.hud-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 -14px;
+  padding: 5px 26px 5px 14px;
+  background: var(--hud-accent, #6ee7a8);
+  color: #05090d;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.scene-entity-tooltip .hud-strip .hud-chip { color: #05090dc4; font-size: 9px; text-transform: uppercase; }
+.scene-entity-tooltip > strong {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.hud-monitor {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 4px 8px;
+  background:
+    linear-gradient(#ffffff0d 1px, transparent 1px) 0 0 / 100% 8px,
+    linear-gradient(90deg, #ffffff0d 1px, transparent 1px) 0 0 / 12px 100%,
+    #ffffff08;
+}
+.hud-ecg { width: 100%; height: 38px; overflow: hidden; }
+.hud-ecg path {
+  fill: none;
+  stroke: var(--hud-accent, #6ee7a8);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px var(--hud-accent, #6ee7a8));
+  animation: hud-sweep var(--beat, 3.4s) linear infinite;
+}
+@keyframes hud-sweep { to { transform: translateX(-200px); } }
+.hud-bpm { display: grid; justify-items: end; padding-right: 8px; line-height: 1; }
+.hud-bpm b { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--hud-accent, #6ee7a8); }
+.hud-bpm small { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #9fb6c4; }
+.scene-entity-tooltip .hud-status { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.hud-rows { display: grid; gap: 6px; }
+.scene-entity-tooltip .hud-stat { grid-template-columns: 70px 1fr 52px; }
+.scene-entity-tooltip .hud-stat label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.scene-entity-tooltip .hud-stat b { text-align: right; font-size: 11px; }
+.scene-entity-tooltip .hud-bar {
+  height: 7px;
+  border-radius: 0;
+  background: #ffffff14;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 9px, transparent 9px 11px);
+  mask: repeating-linear-gradient(90deg, #000 0 9px, transparent 9px 11px);
+  transform: skewX(-18deg);
+}
+.scene-entity-tooltip .hud-bar i { border-radius: 0; transition: width 0.5s ease; }
+.hud-env {
+  padding-top: 7px;
+  border-top: 1px solid #ffffff1f;
+  color: #9fb6c4;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-entity-tooltip, .hud-ecg path { animation: none; }
+}
+.scene-entity-tooltip > header { padding-top: 11px; }
+.scene-entity-tooltip .hud-strip span { color: #05090d; }
+.scene-entity-tooltip .hud-strip .hud-chip { color: #05090dc4; }

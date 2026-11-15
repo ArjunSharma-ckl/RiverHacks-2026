@@ -4,6 +4,7 @@ import { thermalPoints } from './thermal.js';
 import { weatherMap } from './weather-map.js';
 import { report } from './reports.js';
 import { siteRankings } from './site-rankings.js';
+import { AnalogRequestError, selectEarthAnalogAttribute } from './analog-attribute.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
 // talks to /api/*.
@@ -293,7 +294,24 @@ export function createApi(env = {}, extras = {}) {
   const routes = {
     '/earth-analogs': p => proxyMissionBackend('/earth-analogs', p),
     '/mars-analogs': p => proxyMissionBackend('/mars-analogs', p),
-    '/earth-analog-attribute': p => proxyMissionBackend('/earth-analog-attribute', p),
+    // Ask the Python service when one is reachable; otherwise rank the bundled
+    // match files here, so the endpoint answers on every deployment.
+    '/earth-analog-attribute': async p => {
+      const local = () => {
+        try {
+          return selectEarthAnalogAttribute(p);
+        } catch (error) {
+          if (error instanceof AnalogRequestError) return { features: [], error: error.message, __proxyStatus: 400 };
+          throw error;
+        }
+      };
+      if (onWorkers && LOOPBACK.test(missionBackend)) return local();
+      const remote = await proxyMissionBackend('/earth-analog-attribute', p);
+      // A 4xx is the backend rejecting the input and is worth passing on. An
+      // unreachable or failing backend is not the visitor's problem.
+      if (Number.isInteger(remote?.__proxyStatus) && remote.__proxyStatus >= 500) return local();
+      return remote;
+    },
     '/analog/site-rankings': p => {
       let target = {};
       try {
@@ -521,7 +539,7 @@ export function createApi(env = {}, extras = {}) {
           return {
             latitude: Number(record.latitude),
             longitude: Number(record.longitude),
-            brightness: Number(record.bright_ti4),
+            brightness: Number(record.bright_ti4 ?? record.brightness),
             sensor: sensor, date: record.acq_date, time: record.acq_time, confidence: record.confidence
           };
         });
@@ -567,7 +585,8 @@ export function createApi(env = {}, extras = {}) {
       console.error('api error', url.pathname, error);
       res.statusCode = 503;
       const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
-      res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));
+      const firmsRoute=url.pathname==='/nasa/fires';
+      res.end(JSON.stringify({error:(!serpKey&&serpRoute)||(!firmsKey&&firmsRoute)?'missing_key':'upstream_unavailable'}));
     }
   };
 }

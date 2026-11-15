@@ -66,12 +66,18 @@ function research(row, event) {
     answer.replaceChildren(node('p','Asking SerpApi…'));
     try {
       const response = await fetch('/api/analog/ask?' + new URLSearchParams({q:(event.title + ': ' + question).slice(0,200)}));
-      const data = await response.json();
-      if (!response.ok) throw new Error();
-      answer.replaceChildren(node('p', data.answer || 'SerpApi returned no answer text.'));
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        // Say why. A missing key is a deployment setting, not a bad question.
+        answer.replaceChildren(node('p', data.error === 'missing_key'
+          ? 'Follow-ups need a SerpApi key, and this server does not have SERPAPI_KEY set.'
+          : 'SerpApi did not return an answer for that. Try rewording the question.'));
+        return;
+      }
+      answer.replaceChildren(node('p', data.answer || 'SerpApi found sources but no summary for that question.'));
       for (const source of (data.sources || []).slice(0,3)) answer.append(link(source.title, source.link));
     } catch {
-      answer.replaceChildren(node('p','SerpApi could not answer that just now.'));
+      answer.replaceChildren(node('p','The request did not reach the server. Check the connection and ask again.'));
     }
   };
   fetch(endpoint).then(async r => {

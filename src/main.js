@@ -17,6 +17,7 @@ import { createControls, HOME } from './controls.js';
 import { mountMissionControls } from './mission.js';
 import { createEventList } from './event-list.js';
 import { createQuality } from './quality.js';
+import { landingMotion } from './landing-motion.js';
 import { STARS, PLANET_NAMES } from './ephemeris.js';
 import { SUBJECTS, describe } from './catalog.js';
 
@@ -183,27 +184,77 @@ scene.preRender.addEventListener(() => {
 // is what makes the first screen feel alive rather than a still; the first
 // deliberate input from the viewer ends it. Clicking through flies the camera
 // in, and that push-in is the one piece of motion the page spends boldness on.
+// Landing view. The Earth is shown leaning on its real axial tilt and turns a
+// quarter of a degree a second, slow enough to read as a planet rather than a
+// spinner. It arrives from deep space over the first three seconds.
 let introDrift = true;
 let driftFrame = performance.now();
-const stopDrift = () => { introDrift = false; };
-for (const type of ['pointerdown', 'wheel', 'keydown']) {
-  window.addEventListener(type, stopDrift, { once: true, passive: true });
-}
+let tourActive = false;
+const stopDrift = () => {};
 const calmMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const AXIAL_TILT = -C.Math.toRadians(23.4);
+const SPIN_RATE = C.Math.toRadians(0.25);
+const ARRIVAL_SECONDS = 3;
+const ARRIVAL_HEIGHT = HOME.height * 4.2;
+let arrival = document.body.classList.contains('intro-open') && !calmMotion() ? 0 : ARRIVAL_SECONDS;
+if (document.body.classList.contains('intro-open')) {
+  camera.setView({
+    destination: C.Cartesian3.fromDegrees(HOME.longitude, HOME.latitude,
+      arrival < ARRIVAL_SECONDS ? ARRIVAL_HEIGHT : HOME.height),
+    orientation: { heading: AXIAL_TILT, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+  });
+}
 
 scene.preUpdate.addEventListener(() => {
   const now = performance.now();
   const elapsed = Math.min((now - driftFrame) / 1000, 0.1);
   driftFrame = now;
-  if (!introDrift || calmMotion()) return;
   if (!document.body.classList.contains('intro-open')) return;
-  camera.constrainedAxis = C.Cartesian3.UNIT_Z;
-  camera.rotateRight(0.016 * elapsed);
+  if (arrival < ARRIVAL_SECONDS) {
+    arrival = Math.min(ARRIVAL_SECONDS, arrival + elapsed);
+    const t = arrival / ARRIVAL_SECONDS;
+    const eased = 1 - Math.pow(1 - t, 4);
+    const here = camera.positionCartographic;
+    camera.setView({
+      destination: C.Cartesian3.fromRadians(here.longitude, here.latitude,
+        ARRIVAL_HEIGHT + (HOME.height - ARRIVAL_HEIGHT) * eased),
+      orientation: { heading: AXIAL_TILT, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    });
+  }
+  if (!introDrift || calmMotion() || tourActive) return;
+  camera.rotate(C.Cartesian3.UNIT_Z, SPIN_RATE * elapsed);
 });
 
+// Spin and render quality are reachable from the first screen.
+{
+  const spinButton = document.getElementById('intro-spin');
+  if (spinButton) spinButton.onclick = () => {
+    introDrift = !introDrift;
+    spinButton.setAttribute('aria-pressed', String(introDrift));
+    spinButton.textContent = introDrift ? 'Spin on' : 'Spin off';
+  };
+  const qualityButton = document.getElementById('intro-quality');
+  if (qualityButton) {
+    const label = () => { qualityButton.textContent = 'Quality: ' + quality.level.label; };
+    label();
+    qualityButton.onclick = () => {
+      quality.apply((quality.index + 1) % quality.levels.length);
+      label();
+      const slider = document.getElementById('quality-slider');
+      if (slider) { slider.value = String(quality.index); slider.dispatchEvent(new Event('input')); }
+    };
+  }
+}
+
 document.addEventListener('orbit:enter', () => {
-  stopDrift();
-  if (calmMotion()) return;
+  arrival = ARRIVAL_SECONDS;
+  if (calmMotion()) {
+    camera.setView({
+      destination: C.Cartesian3.fromDegrees(HOME.longitude, HOME.latitude, HOME.height),
+      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+    });
+    return;
+  }
   camera.flyTo({
     destination: C.Cartesian3.fromDegrees(HOME.longitude, HOME.latitude, HOME.height * 0.78),
     orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
@@ -229,6 +280,11 @@ if (story) {
   story.addEventListener('scroll', () => {
     const span = story.scrollHeight - story.clientHeight;
     const progress = span > 0 ? story.scrollTop / span : 0;
+    story.style.setProperty('--progress', progress.toFixed(4));
+    // Back at the top the planet is left to turn on its own again.
+    if (progress < 0.004) { tourTarget = null; tourActive = false; return; }
+    tourActive = true;
+    arrival = ARRIVAL_SECONDS;
     const scaled = progress * (KEYFRAMES.length - 1);
     const index = Math.min(KEYFRAMES.length - 2, Math.floor(scaled));
     const t = scaled - index;
@@ -259,7 +315,7 @@ if (story) {
         lat + (tourTarget.lat - lat) * ease,
         here.height + (tourTarget.height - here.height) * ease,
       ),
-      orientation: { heading: 0, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
+      orientation: { heading: AXIAL_TILT, pitch: -C.Math.PI_OVER_TWO, roll: 0 },
     });
   });
 
@@ -272,3 +328,5 @@ if (story) {
     for (const panel of story.querySelectorAll('.story-panel')) panel.classList.add('in');
   }
 }
+
+landingMotion(document.getElementById('orbit-story'));
