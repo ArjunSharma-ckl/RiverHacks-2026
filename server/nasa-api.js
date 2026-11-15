@@ -477,9 +477,12 @@ export function createApi(env = {}, extras = {}) {
 
 // Vite plugin for `npm run dev` and `npm run preview`.
 export function nasaApiPlugin(loadEnv, extras = {}) {
-  const env = { ...loadEnv('development', process.cwd(), ''), ...process.env };
-  const handle = createApi(env, extras);
   const configure = (server) => {
+    // Only the local dev/preview server reads .env.local. The deployed Worker
+    // builds its API from Cloudflare's env, so GroundTruth's SerpApi calls use
+    // the SERPAPI_KEY secret, never a key from a local file.
+    const env = { ...loadEnv('development', process.cwd(), ''), ...process.env };
+    const handle = createApi(env, extras);
     server.middlewares.use('/api', (req, res, next) => {
       handle(req, res).catch(next);
     });

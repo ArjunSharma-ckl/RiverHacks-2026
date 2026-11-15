@@ -210,12 +210,7 @@ export function createWeather(viewer, { onStatus, eventList } = {}) {
       const icons = new Map();
       eventItems = payload.events.sort((a,b)=>b.date.localeCompare(a.date));
       eventList.populate(eventItems);
-      events.clustering.enabled = true;
-      // Cesium labels every cluster with its member count. Those numbers sat
-      // over the globe; the pins alone are the map, so hide the label.
-      events.clustering.clusterEvent.addEventListener((clustered, cluster) => {
-        if (cluster.label) cluster.label.show = false;
-      });
+      // EONET pins are never clustered, so every event stays visible on the globe.
       for (const event of payload.events ?? []) {
         const color = EVENT_COLORS[event.category] ?? '#9aa7b8';
         if (!icons.has(color)) icons.set(color, pin(color, event.category));

@@ -16,11 +16,13 @@ import { createHud } from './hud.js';
 import { createControls } from './controls.js';
 import { mountMissionControls } from './mission.js';
 import { createEventList } from './event-list.js';
+import { createQuality } from './quality.js';
 import { STARS, PLANET_NAMES } from './ephemeris.js';
 import { SUBJECTS, describe } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
 const spin = enableGlobeSpin(viewer);
+const quality = createQuality(viewer);
 
 initLayers(viewer, [
   'bluemarble',
@@ -75,6 +77,7 @@ createHud(document.getElementById('hud'), {
   weather,
   lensFlare,
   spin,
+  quality,
   pointMode,
   chooseContact(contact) { trackContact(contact); pointList.open(contact.norad,'Satellites'); },
   controls,

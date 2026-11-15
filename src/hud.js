@@ -19,7 +19,7 @@ function toggle(label, checked, onChange, note) {
 }
 
 export function createHud(root, context) {
-  const { viewer, scene, sky, satellites, weather, lensFlare, controls, spin } = context;
+  const { viewer, scene, sky, satellites, weather, lensFlare, controls, spin, quality } = context;
   const sections = element('div', 'hud-body');
 
   function section(heading) {
@@ -194,6 +194,24 @@ export function createHud(root, context) {
     spinButton.textContent = on ? 'Spin: on' : 'Spin: off';
   };
   hideButton.after(spinButton);
+
+  const qualityWrap = document.createElement('label');
+  qualityWrap.id = 'quality-control';
+  const qualityLabel = document.createElement('span');
+  qualityLabel.textContent = 'Quality: ' + quality.level.label;
+  const qualityRange = document.createElement('input');
+  qualityRange.type = 'range';
+  qualityRange.min = '0';
+  qualityRange.max = String(quality.levels.length - 1);
+  qualityRange.step = '1';
+  qualityRange.value = String(quality.index);
+  qualityRange.setAttribute('aria-label', 'Render quality');
+  qualityRange.oninput = () => {
+    const level = quality.apply(Number(qualityRange.value));
+    qualityLabel.textContent = 'Quality: ' + level.label;
+  };
+  qualityWrap.append(qualityLabel, qualityRange);
+  spinButton.after(qualityWrap);
 
   window.addEventListener('keydown', (event) => {
     if (event.target instanceof HTMLInputElement) return;

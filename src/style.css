@@ -87,6 +87,12 @@ button { font: inherit; cursor: pointer; }
   border-radius: 7px;
 }
 #hud footer button + button { margin-top: 6px; }
+#hud footer #quality-control {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; color: var(--dim); font: var(--mono); font-size: 11px;
+}
+#hud footer #quality-control span { min-width: 78px; }
+#hud footer #quality-control input { flex: 1; min-width: 0; accent-color: var(--accent); }
 
 /* Detail panel */
 #details {
