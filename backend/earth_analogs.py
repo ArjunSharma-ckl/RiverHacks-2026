@@ -15,6 +15,11 @@ from backend.earth_mineral_matches import (
     _normalized as _normalize_minerals,
     build_match_collection as _build_mineral_matches,
 )
+from backend.earth_chemical_matches import (
+    EARTHCHEM_FORMULAS,
+    build_formula_match_collection as _build_formula_matches,
+    is_oxide_analysis_csv as _is_oxide_analysis_csv,
+)
 from backend.image_roughness import (
     ROUGHNESS_LIMITATIONS,
     credentials_available as roughness_credentials_available,
@@ -27,6 +32,7 @@ LUNAR_TEMPERATURE_FILE = DATA_DIR / "lunar_temperatures.json"
 LUNAR_MINERAL_FILE = DATA_DIR / "lunar_minerals.json"
 EARTH_TEMPERATURE_MATCH_FILE = DATA_DIR / "earth_temperature_matches.geojson"
 EARTH_MINERAL_MATCH_FILE = DEFAULT_EARTH_MINERAL_MATCHES
+DEFAULT_EARTHCHEM_CSV_FILE = DATA_DIR / "earthchem_data" / "earthchem_export_nov14_26_21815.csv"
 DEFAULT_TOP_N = 10
 MAX_TOP_N = 10
 DEFAULT_JOIN_RADIUS_KM = 25.0
@@ -105,8 +111,10 @@ def _load_earth_mineral_features(path_string, modified_ns, file_size, lunar_stam
             raise ValueError("Earth mineral matches must be a GeoJSON FeatureCollection.")
         return payload
 
-    rows = _load_earth_mineral_rows(path)
     lunar_records = _read_json(LUNAR_MINERAL_FILE).get("records", [])
+    if _is_oxide_analysis_csv(path):
+        return _build_formula_matches(lunar_records, path, top_n=DEFAULT_TOP_N)
+    rows = _load_earth_mineral_rows(path)
     return _build_mineral_matches(lunar_records, rows, top_n=DEFAULT_TOP_N)
 
 
@@ -116,20 +124,27 @@ def _earth_mineral_collection():
         path = Path(configured)
         if not path.is_file():
             raise FileNotFoundError(f"EARTH_MINERAL_MATCH_FILE does not exist: {path}")
-    else:
-        path = EARTH_MINERAL_MATCH_FILE
-    if path.is_file():
         stat = path.stat()
         return _load_earth_mineral_features(str(path), stat.st_mtime_ns, stat.st_size, "saved")
 
     configured_data = os.environ.get("EARTH_MINERAL_DATA_FILE", "").strip()
-    if not configured_data:
-        return None
-    path = Path(configured_data)
-    if not path.is_file():
-        raise FileNotFoundError(f"EARTH_MINERAL_DATA_FILE does not exist: {path}")
-    stat = path.stat()
-    return _load_earth_mineral_features(str(path), stat.st_mtime_ns, stat.st_size, "source-export")
+    if configured_data:
+        path = Path(configured_data)
+        if not path.is_file():
+            raise FileNotFoundError(f"EARTH_MINERAL_DATA_FILE does not exist: {path}")
+        stat = path.stat()
+        return _load_earth_mineral_features(str(path), stat.st_mtime_ns, stat.st_size, "source-export")
+
+    if DEFAULT_EARTHCHEM_CSV_FILE.is_file():
+        stat = DEFAULT_EARTHCHEM_CSV_FILE.stat()
+        return _load_earth_mineral_features(
+            str(DEFAULT_EARTHCHEM_CSV_FILE), stat.st_mtime_ns, stat.st_size, "source-export"
+        )
+
+    if EARTH_MINERAL_MATCH_FILE.is_file():
+        stat = EARTH_MINERAL_MATCH_FILE.stat()
+        return _load_earth_mineral_features(str(EARTH_MINERAL_MATCH_FILE), stat.st_mtime_ns, stat.st_size, "saved")
+    return None
 
 
 def _features_for_site(collection, site):
@@ -198,6 +213,18 @@ def _raw_lunar_minerals(site):
 
 
 def _mineral_score(site, properties):
+    if properties.get("earth_ideal_formula_family") or properties.get("earth_mineral_matches"):
+        lunar_values = _raw_lunar_minerals(site)
+        component_scores = _mineral_component_scores(site, properties)
+        if lunar_values is None:
+            return None
+        scores = [
+            component_scores[mineral]
+            for mineral, abundance in lunar_values.items()
+            if abundance > 0 and mineral in component_scores
+        ]
+        return sum(scores) / len(scores) if scores else None
+
     lunar_values = _raw_lunar_minerals(site)
     earth_values = properties.get("earth_mineral_modes")
     if not isinstance(earth_values, dict):
@@ -218,14 +245,89 @@ def _mineral_score(site, properties):
     return score
 
 
+def _mineral_component_scores(site, properties):
+    """Score each shared mineral proportion independently on a 0–100 scale."""
+    formula_matches = properties.get("earth_mineral_matches")
+    formula_scores = {}
+    if isinstance(formula_matches, dict):
+        for mineral, match in formula_matches.items():
+            if isinstance(match, dict) and match.get("match_percentage") is not None:
+                try:
+                    formula_scores[mineral] = round(float(match["match_percentage"]), 2)
+                except (TypeError, ValueError):
+                    continue
+    direct_class = properties.get("earth_mineral_class")
+    direct_score = properties.get("earth_formula_match_percentage")
+    if direct_class and direct_score is not None:
+        try:
+            formula_scores[direct_class] = round(float(direct_score), 2)
+        except (TypeError, ValueError):
+            pass
+    if formula_scores:
+        return formula_scores
+
+    lunar_values = _raw_lunar_minerals(site)
+    earth_values = properties.get("earth_mineral_modes")
+    if not isinstance(earth_values, dict):
+        earth_values = properties.get("earth_normalized_composition")
+    if lunar_values is None or not isinstance(earth_values, dict):
+        return {}
+    try:
+        earth_values = {key: float(earth_values[key]) for key in lunar_values}
+    except (KeyError, TypeError, ValueError):
+        return {}
+    if any(not math.isfinite(value) or value < 0 for value in earth_values.values()):
+        return {}
+    lunar_normalized = _normalize_minerals(lunar_values)
+    earth_normalized = _normalize_minerals(earth_values)
+    if lunar_normalized is None or earth_normalized is None:
+        return {}
+    return {
+        mineral: round(max(0.0, 100.0 * (1.0 - abs(lunar_normalized[mineral] - earth_normalized[mineral]))), 2)
+        for mineral in lunar_normalized
+    }
+
+
 def _candidate_key(candidate):
     props = candidate["properties"]
     identity = props.get("earth_grid_id") or props.get("earth_sample_id") or props.get("earth_sample_name")
     coords = candidate.get("geometry", {}).get("coordinates", [])
-    return str(identity or coords).casefold()
+    mineral_class = props.get("earth_mineral_class")
+    return f"{identity or coords}|{mineral_class or ''}".casefold()
 
 
-def _merge_site_candidates(site, temperature_features, mineral_features, include_roughness, candidate_limit):
+def _store_formula_match(properties, source, sample_coords=None, distance_km=None):
+    mineral_class = source.get("earth_mineral_class")
+    score = source.get("earth_formula_match_percentage")
+    if not mineral_class or score is None:
+        return
+    try:
+        score = round(float(score), 2)
+    except (TypeError, ValueError):
+        return
+    matches = properties.setdefault("earth_mineral_matches", {})
+    previous = matches.get(mineral_class)
+    if previous is None or score > float(previous.get("match_percentage", -1)):
+        matches[mineral_class] = {
+            "match_percentage": score,
+            "sample_id": source.get("earth_sample_id"),
+            "sample_name": source.get("earth_sample_name"),
+            "material": source.get("earth_material"),
+            "sample_coordinates": list(sample_coords) if sample_coords else None,
+            "best_fit_formula": source.get("earth_best_fit_formula"),
+            "formula_family": source.get("earth_ideal_formula_family"),
+            "formula_match_basis": source.get("earth_formula_match_basis"),
+            "oxide_wt_percent": source.get("earth_mineral_chemistry_oxide_wt_percent"),
+            "source_mineral_class": source.get("earth_source_mineral_class"),
+            "sample_distance_km": round(distance_km, 3) if distance_km is not None else None,
+        }
+    properties[f"{mineral_class}_match_percentage"] = max(
+        score, float(previous.get("match_percentage", -1)) if previous else -1
+    )
+    properties["earth_mineral_data_source"] = source.get("earth_data_source", "EarthChem PetDB")
+
+
+def _merge_site_candidates(site, temperature_features, mineral_features, include_roughness, candidate_limit=None):
     candidates = {}
     for feature in temperature_features:
         coords = _coordinates(feature)
@@ -258,24 +360,29 @@ def _merge_site_candidates(site, temperature_features, mineral_features, include
         if nearest is not None and nearest[0] <= DEFAULT_JOIN_RADIUS_KM:
             distance, candidate = nearest
             props = mineral_feature["properties"]
-            candidate["properties"].update({
-                "earth_sample_id": props.get("earth_sample_id"),
-                "earth_sample_name": props.get("earth_sample_name"),
-                "earth_material": props.get("earth_material"),
-                "earth_sample_latitude": mineral_coords[1],
-                "earth_sample_longitude": mineral_coords[0],
-                "earth_mineral_modes": props.get("earth_mineral_modes"),
-                "earth_normalized_composition": props.get("earth_normalized_composition"),
-                "mineral_match_percentage": props.get("match_percentage"),
-                "mineral_sample_distance_km": round(distance, 3),
-                "earth_mineral_data_source": props.get("earth_data_source", "EarthChem PetDB"),
-            })
+            if props.get("earth_ideal_formula_family"):
+                _store_formula_match(candidate["properties"], props, mineral_coords, distance)
+            else:
+                candidate["properties"].update({
+                    "earth_sample_id": props.get("earth_sample_id"),
+                    "earth_sample_name": props.get("earth_sample_name"),
+                    "earth_material": props.get("earth_material"),
+                    "earth_sample_latitude": mineral_coords[1],
+                    "earth_sample_longitude": mineral_coords[0],
+                    "earth_mineral_modes": props.get("earth_mineral_modes"),
+                    "earth_normalized_composition": props.get("earth_normalized_composition"),
+                    "mineral_match_percentage": props.get("match_percentage"),
+                    "mineral_sample_distance_km": round(distance, 3),
+                    "earth_mineral_data_source": props.get("earth_data_source", "EarthChem PetDB"),
+                })
             joined_mineral_keys.add(_candidate_key(mineral_feature))
     for mineral_coords, mineral_feature in parsed_minerals:
         key = _candidate_key(mineral_feature)
         if key in joined_mineral_keys:
             continue
         properties = dict(mineral_feature["properties"])
+        if properties.get("earth_ideal_formula_family"):
+            _store_formula_match(properties, properties, mineral_coords)
         properties["temperature_match_percentage"] = None
         properties["earth_temperature_kelvin"] = None
         properties["temperature_unavailable_reason"] = "No nearby MODIS temperature-match cell within the join radius."
@@ -318,8 +425,13 @@ def _merge_site_candidates(site, temperature_features, mineral_features, include
 
         temperature_score = props.get("temperature_match_percentage")
         mineral_score = _mineral_score(site, props)
-        if mineral_score is None:
+        if mineral_score is None and not (
+            props.get("earth_ideal_formula_family") or props.get("earth_mineral_matches")
+        ):
             mineral_score = props.get("mineral_match_percentage")
+        component_scores = _mineral_component_scores(site, props)
+        for mineral, score in component_scores.items():
+            props[f"{mineral}_match_percentage"] = score
         roughness_match = props.get("roughness_match_percentage")
         metrics = {
             "temperature": temperature_score,
@@ -340,7 +452,35 @@ def _merge_site_candidates(site, temperature_features, mineral_features, include
         -(item["properties"].get("combined_match_percentage") or 0),
         str(item["properties"].get("earth_sample_id") or item["properties"].get("earth_grid_id") or ""),
     ))
-    return values[:candidate_limit], lunar_roughness
+    return (values[:candidate_limit] if candidate_limit is not None else values), lunar_roughness
+
+
+def _ranked_feature_copies(features, metric, score_key, top_n, *, combined=False):
+    eligible = [
+        feature for feature in features
+        if feature["properties"].get(score_key) is not None
+    ]
+    if combined:
+        eligible.sort(key=lambda feature: (
+            -len(feature["properties"].get("match_metrics_available", [])),
+            -(feature["properties"].get(score_key) or 0),
+            _candidate_key(feature),
+        ))
+    else:
+        eligible.sort(key=lambda feature: (
+            -float(feature["properties"].get(score_key)),
+            _candidate_key(feature),
+        ))
+    ranked = []
+    for rank, feature in enumerate(eligible[:top_n], start=1):
+        copy = {
+            "type": "Feature",
+            "geometry": dict(feature["geometry"]),
+            "properties": dict(feature["properties"]),
+        }
+        copy["properties"].update({"match_rank": rank, "ranking_metric": metric})
+        ranked.append(copy)
+    return ranked
 
 
 def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None):
@@ -357,13 +497,15 @@ def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None)
     temperature_collection = _earth_temperature_collection()
     mineral_collection = _earth_mineral_collection()
     all_features = []
+    all_candidates = []
     site_summaries = []
+    environment_rankings = []
     for site in sites:
         temperature_features = _features_for_site(temperature_collection, site)
         mineral_features = _features_for_site(mineral_collection, site)
         candidates, lunar_roughness = _merge_site_candidates(
             site, temperature_features, mineral_features,
-            include_roughness=roughness_performed, candidate_limit=max(top_n, min(30, top_n * 3)),
+            include_roughness=roughness_performed,
         )
         if roughness_requested and not roughness_keys:
             lunar_roughness = {
@@ -372,14 +514,40 @@ def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None)
             }
             for candidate in candidates:
                 candidate["properties"]["lunar_surface_roughness"] = lunar_roughness
-        for rank, candidate in enumerate(candidates[:top_n], start=1):
+        for candidate in candidates:
             candidate["properties"].update({
                 "lunar_site_id": site.get("landing_site_id"),
                 "lunar_site_name": site.get("site_name"),
                 "mission": site.get("mission"),
-                "match_rank": rank,
             })
+        all_candidates.extend(candidates)
+
+        mineral_rankings = {
+            mineral: _ranked_feature_copies(
+                candidates, f"{mineral}_match_percentage", f"{mineral}_match_percentage", top_n
+            )
+            for mineral in ("olivine", "plagioclase", "low_calcium_pyroxene", "high_calcium_pyroxene", "iron")
+        }
+        temperature_rankings = _ranked_feature_copies(
+            candidates, "temperature", "temperature_match_percentage", top_n
+        )
+        roughness_rankings = _ranked_feature_copies(
+            candidates, "roughness", "roughness_match_percentage", top_n
+        )
+        combined_rankings = _ranked_feature_copies(
+            candidates, "combined", "combined_match_percentage", top_n, combined=True
+        )
+        for candidate in combined_rankings:
+            candidate["properties"].pop("ranking_metric", None)
             all_features.append(candidate)
+        environment_rankings.append({
+            "lunar_site_id": site.get("landing_site_id"),
+            "lunar_site_name": site.get("site_name"),
+            "minerals": mineral_rankings,
+            "temperature": temperature_rankings,
+            "roughness": roughness_rankings,
+            "combined": combined_rankings,
+        })
         site_summaries.append({
             "lunar_site_id": site.get("landing_site_id"),
             "lunar_site_name": site.get("site_name"),
@@ -391,7 +559,7 @@ def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None)
 
     available_metrics = set()
     missing_metrics = set()
-    for feature in all_features:
+    for feature in all_candidates:
         available_metrics.update(feature["properties"].get("match_metrics_available", []))
         missing_metrics.update(feature["properties"].get("match_metrics_missing", []))
     return {
@@ -399,17 +567,23 @@ def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None)
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": {"body": "Moon", "site_name": name or "all saved lunar environments"},
         "features": all_features,
+        "rankings": {"by_lunar_environment": environment_rankings},
         "matching": {
             "top_n_per_lunar_environment": top_n,
             "lunar_environments": site_summaries,
             "metrics_used_when_available": [key for key in ("temperature", "minerals", "roughness") if key in available_metrics],
             "metrics_missing": [key for key in ("temperature", "minerals", "roughness") if key in missing_metrics],
-            "combined_match_percentage": "Arithmetic mean of available temperature, normalized mineral, and roughness similarity scores.",
+            "combined_match_percentage": "Arithmetic mean of available temperature, mineral, and roughness similarity scores. For the current oxide dataset, the mineral score averages ideal-formula-family fits only for mineral groups present in the lunar pixel.",
+            "individual_mineral_match_percentage": "For oxide chemistry, 100 × (1 − normalized elemental-vector L1 distance / 2) against the closest fixed end-member formula. Silicate formulas compare cation proportions; iron formulas include oxygen. For modal files, it is normalized abundance similarity.",
             "ranking_note": "Complete three-metric matches rank ahead of partial matches. Partial candidates are ranked only over available dimensions and are not directly equivalent to complete scores.",
             "temperature_method": "100 × min(lunar K, Earth K) / max(lunar K, Earth K), from the saved NASA MODIS match grid.",
-            "mineral_method": "Normalized L1 compositional similarity, using the same four PetDB mineral groups as the existing Earth mineral matcher.",
+            "mineral_method": "Converts reported oxide wt% values to atom proportions and compares each EarthChem analysis with fixed ideal end-member formulas. The closest end-member is selected; intermediate solid-solution compositions score between end-members, and unclassified pyroxenes are assigned to the closer low- or high-calcium family.",
             "roughness_method": "100 × min(lunar visual-proxy µm, Earth visual-proxy µm) / max(...); requires one Gemini image estimate per site and candidate.",
-            "earth_mineral_input": str(os.environ.get("EARTH_MINERAL_DATA_FILE") or os.environ.get("EARTH_MINERAL_MATCH_FILE") or EARTH_MINERAL_MATCH_FILE),
+            "earth_mineral_input": str(
+                os.environ.get("EARTH_MINERAL_MATCH_FILE")
+                or os.environ.get("EARTH_MINERAL_DATA_FILE")
+                or (DEFAULT_EARTHCHEM_CSV_FILE if DEFAULT_EARTHCHEM_CSV_FILE.is_file() else EARTH_MINERAL_MATCH_FILE)
+            ),
             "earth_temperature_input": str(os.environ.get("EARTH_TEMPERATURE_MATCH_FILE", EARTH_TEMPERATURE_MATCH_FILE)),
             "roughness_analysis_requested": roughness_requested,
             "roughness_analysis_performed": roughness_performed,
@@ -417,7 +591,7 @@ def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None)
             "roughness_limitations": list(ROUGHNESS_LIMITATIONS),
             "data_limitations": [
                 "The committed Earth MODIS match grid is based on one monthly composite, not a full-year climatology.",
-                "The current EarthChem CSV in this repository contains mineral chemistry, not the four modal mineral fields. Set EARTH_MINERAL_DATA_FILE to a valid PetDB modal export or provide an Earth mineral match GeoJSON to enable mineral scoring.",
+                "Current EarthChem CSV contains georeferenced mineral oxide analyses, so mineral percentages are formula-family chemistry-fit scores, not Earth modal abundance percentages. Lunar map values only mark which mineral families occur; they are not lunar oxide chemistry for a direct chemical comparison.",
                 "MODIS candidate cells and PetDB sample coordinates are joined only when within 25 km; this is a regional association, not a co-located measurement.",
             ],
         },

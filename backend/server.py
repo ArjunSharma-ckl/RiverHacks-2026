@@ -264,7 +264,7 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                         {"method": "GET", "path": "/api/landing-sites", "description": "Saved Moon and Mars targets and candidate regions."},
                         {"method": "GET", "path": "/api/lunar-location?name=Mons%20Mouton", "description": "Resolve a lunar feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/surface-roughness?name=Haworth&body=Moon", "description": "Find a location image with SerpAPI and request Gemini's visual roughness proxy in micrometers."},
-                        {"method": "GET", "path": "/api/earth-analogs?name=Haworth&top=10", "description": "Rank Earth analog locations for saved lunar environments by available temperature, mineral, and visual-roughness matches."},
+                        {"method": "GET", "path": "/api/earth-analogs?name=Haworth&top=10", "description": "Return top-ten Earth rankings for formula-fit mineral chemistry, temperature, roughness, and combined match score."},
                         {"method": "GET", "path": "/api/mars-location?name=Jezero", "description": "Resolve a Mars feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/lunar-temperatures", "description": "Saved lunar temperature samples."},
                         {"method": "GET", "path": "/api/lunar-minerals", "description": "Saved lunar mineral samples."},
