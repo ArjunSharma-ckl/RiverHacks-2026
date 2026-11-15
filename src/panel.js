@@ -18,9 +18,11 @@ export function createPanel(root) {
   const gallery = element('div', 'gallery');
   root.append(close, title, subtitle, body, extra, gallery);
 
+  const credit = document.getElementById('detail-credit');
   let token = 0;
   function hide() {
     root.hidden = true;
+    credit.textContent = '';
     token += 1;
   }
   close.onclick = hide;
@@ -31,6 +33,7 @@ export function createPanel(root) {
   function reset(name, sub) {
     const current = ++token;
     root.hidden = false;
+    credit.textContent = '';
     root.classList.remove('place-mode');
     root.scrollTop = 0;
     title.textContent = name;
@@ -118,6 +121,7 @@ export function createPanel(root) {
       status.remove();
       extra.append(element('p', 'muted',
         `${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}° · ${data.date}`));
+      credit.textContent = 'NASA POWER';
       extra.append(definitionList(data.values.map((value) => [value.label, `${value.value} ${value.unit}`])));
     } catch {
       if (current === token) status.textContent = 'NASA POWER did not answer for this point.';
@@ -132,6 +136,7 @@ export function createPanel(root) {
       const data = await spaceWeather();
       if (current !== token) return;
       status.remove();
+      credit.textContent = 'NASA DONKI';
       if (!data.items?.length) {
         extra.append(element('p', 'muted', 'No flares, CMEs or geomagnetic storms reported.'));
         return;
@@ -170,6 +175,7 @@ export function createPanel(root) {
       if (!response.ok) throw new Error('place unavailable');
       const place = await response.json();
       if (current !== token) return;
+      credit.textContent = place.provider || '';
       title.textContent = place.name || 'Selected Earth point';
       subtitle.textContent = [place.subtitle, place.provider].filter(Boolean).join(' · ');
       body.textContent = place.description || 'No description returned for this point.';
@@ -244,6 +250,7 @@ export function createPanel(root) {
 
   return { show, showPlace, showEvent, hide, showContact(contact) {
     const current = reset(contact.name, 'Satellite tracking');
+    credit.textContent = 'CelesTrak';
     loadArticle(contact.name,current);
     if (contact.speed) extra.append(definitionList([
       ['Mission',contact.job],['Ground position',contact.lat.toFixed(2)+'°, '+contact.lon.toFixed(2)+'°'],

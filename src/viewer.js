@@ -10,9 +10,10 @@ export function createViewer(container) {
   const viewer = new C.Viewer(container, {
     // A bundled single tile means the globe is never bare, even offline.
     baseLayer: C.ImageryLayer.fromProviderAsync(
-      C.SingleTileImageryProvider.fromUrl('/textures/earth.jpg'),
+      C.SingleTileImageryProvider.fromUrl('/textures/earth.jpg', { credit: new C.Credit('Earth basemap', true) }),
       { brightness: 0.9, saturation: 0.9 }
     ),
+    creditContainer: document.getElementById('map-credits') ?? undefined,
     timeline: false, animation: false, fullscreenButton: false, homeButton: false,
     geocoder: false, sceneModePicker: false, navigationHelpButton: false,
     baseLayerPicker: false, infoBox: false, selectionIndicator: false,
@@ -73,7 +74,7 @@ export function createViewer(container) {
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
   viewer.targetFrameRate = 30;
-  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.25);
+  viewer.resolutionScale = 1;
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.
@@ -92,7 +93,7 @@ export function createViewer(container) {
   });
 
   let terrainReady = Promise.resolve(viewer.terrainProvider);
-  {
+  function loadTerrain() {
     const options = { requestWaterMask: false, requestVertexNormals: true };
     terrainReady = (ION_TOKEN ? C.createWorldTerrainAsync(options)
       : C.ArcGISTiledElevationTerrainProvider.fromUrl(
@@ -105,13 +106,37 @@ export function createViewer(container) {
       .catch(() => viewer.terrainProvider);
   }
 
+  if (container === 'cesiumContainer' && !ION_TOKEN) {
+    // ArcGIS uses Mercator terrain. Keep the full ellipsoid at orbital and polar views.
+    const ellipsoid = viewer.terrainProvider;
+    const elevationCredit = new C.Credit('Esri World Elevation', true);
+    const display = scene.frameState.creditDisplay;
+    let detail;
+    let requested = false;
+    function updateTerrain() {
+      const { height, latitude } = camera.positionCartographic;
+      const nearSurface = height < 100000 && Math.abs(latitude) < C.Math.toRadians(80);
+      if (nearSurface && !requested) {
+        requested = true;
+        loadTerrain();
+        terrainReady.then(provider => { detail = provider; updateTerrain(); });
+      }
+      const terrain = nearSurface && detail ? detail : ellipsoid;
+      if (viewer.terrainProvider !== terrain) viewer.terrainProvider = terrain;
+      display.removeStaticCredit(elevationCredit);
+      if (terrain !== ellipsoid) display.addStaticCredit(elevationCredit);
+    }
+    camera.moveEnd.addEventListener(updateTerrain);
+  } else {
+    loadTerrain();
+  }
   return { viewer, scene, camera, lensFlare, terrainReady };
 }
 
 // Shaded-relief Blue Marble is the cleanest global basemap; Esri imagery takes
 // over once you are close enough for it to matter.
-export function addBaseImagery() {
-  setLayer('bluemarble', new C.ImageryLayer(
+export function addBaseImagery({ blueMarble = true } = {}) {
+  if (blueMarble) setLayer('bluemarble', new C.ImageryLayer(
     gibsWms({
       layer: 'BlueMarble_ShadedRelief_Bathymetry',
       time: '2004-01-01',
@@ -125,7 +150,7 @@ export function addBaseImagery() {
   setLayer('esri', new C.ImageryLayer(
     new C.UrlTemplateImageryProvider({
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      credit: 'Esri World Imagery and imagery contributors',
+      credit: new C.Credit('Esri World Imagery and imagery contributors', true),
       maximumLevel: 19
     }),
     { minimumTerrainLevel: 6, brightness: 0.86, saturation: 0.78, contrast: 1.06 }

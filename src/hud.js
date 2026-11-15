@@ -149,11 +149,11 @@ export function createHud(root, context) {
       scene.skyAtmosphere.show = on;
       scene.globe.showGroundAtmosphere = on;
     }],
-    ['Sun glare', true, (on) => {
+    ['Sun glare', false, (on) => {
       if (lensFlare) lensFlare.enabled = on;
       scene.postProcessStages.bloom.enabled = on;
     }],
-    ['Shadows', true, (on) => { viewer.shadows = on; }]
+    ['Shadows', false, (on) => { viewer.shadows = on; }]
   ];
   for (const [label, initial, handler] of sceneToggles) {
     sceneSection.append(toggle(label, initial, handler).wrapper);
@@ -168,6 +168,7 @@ export function createHud(root, context) {
       viewer.clock.currentTime = hours === 0
         ? C.JulianDate.now()
         : C.JulianDate.addHours(C.JulianDate.now(), -hours, new C.JulianDate());
+      weather.setTimeMode(hours === 0);
       for (const node of buttons.children) node.classList.remove('active');
       button.classList.add('active');
     };

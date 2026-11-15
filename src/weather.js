@@ -7,29 +7,24 @@ import { setLayer, dropLayer, getLayer } from './layers.js';
 // the requested timestamp always lands on an image that actually exists.
 export const WEATHER_LAYERS = [
   {
-    id: 'geocolor-east', label: 'Cloud cover — GOES-East GeoColor', layer: 'GOES-East_ABI_GeoColor',
-    stepMinutes: 10, latencyMinutes: 75, alpha: 0.92, maxLevel: 7, on: true,
-    note: 'Ten-minute full disk: true colour by day, multispectral infrared at night.'
+    id: 'clouds', label: 'Cloud fraction — MODIS Terra', layer: 'MODIS_Terra_Cloud_Fraction_Day',
+    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.68, maxLevel: 5, on: true,
+    note: 'Daily global daytime observations. Clear gaps can indicate missing measurements.'
   },
   {
-    id: 'geocolor-west', label: 'Cloud cover — GOES-West GeoColor', layer: 'GOES-West_ABI_GeoColor',
-    stepMinutes: 10, latencyMinutes: 75, alpha: 0.92, maxLevel: 7, on: true,
-    note: 'The Pacific-hemisphere companion to GOES-East.'
+    id: 'precip', label: 'Precipitation rate — GPM IMERG', layer: 'IMERG_Precipitation_Rate_30min',
+    stepMinutes: 30, latencyMinutes: 360, alpha: 0.8, maxLevel: 6, on: true,
+    note: 'Global half-hour precipitation estimate.'
   },
   {
-    id: 'precip', label: 'Precipitation rate — GPM IMERG', layer: 'IMERG_Precipitation_Rate',
-    stepMinutes: 30, latencyMinutes: 340, alpha: 0.8, maxLevel: 6, on: true,
-    note: 'Half-hourly rain and snow rate from the GPM satellite constellation.'
+    id: 'cloudtop', label: 'Cloud-top temperature — MODIS Terra', layer: 'MODIS_Terra_Cloud_Top_Temp_Night',
+    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
+    note: 'Global nighttime cloud-top observations.'
   },
   {
-    id: 'cloudtop', label: 'Cloud-top temperature — GOES clean IR', layer: 'GOES-East_ABI_Band13_Clean_Infrared',
-    stepMinutes: 10, latencyMinutes: 75, alpha: 0.72, maxLevel: 7,
-    note: 'Cold tops mark deep convection and thunderstorm anvils.'
-  },
-  {
-    id: 'airmass', label: 'Air mass — GOES RGB', layer: 'GOES-East_ABI_Air_Mass',
-    stepMinutes: 10, latencyMinutes: 75, alpha: 0.72, maxLevel: 7,
-    note: 'Picks out jet streams, dry slots and cyclone structure.'
+    id: 'vapor', label: 'Atmospheric water vapor — MODIS Aqua', layer: 'MODIS_Aqua_Water_Vapor_5km_Day',
+    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
+    note: 'Daily global daytime water vapor observations.'
   },
   {
     id: 'sst', label: 'Sea-surface temperature — MUR L4', layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature',
@@ -52,10 +47,10 @@ export const WEATHER_LAYERS = [
     note: 'Normalised difference snow index.'
   },
   {
-    id: 'truecolor', label: 'True colour today — VIIRS', layer: 'VIIRS_SNPP_CorrectedReflectance_TrueColor',
+    id: 'truecolor', label: 'Daily true colour — VIIRS', layer: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor',
     stepMinutes: 1440, latencyMinutes: 1440, alpha: 1, maxLevel: 8,
-    format: 'image/jpeg', transparent: false,
-    note: 'Today’s 250 m global mosaic, swath gaps and all.'
+
+    note: 'Global daytime mosaic. Areas without observations show the basemap.'
   }
 ];
 
@@ -112,12 +107,13 @@ export function createWeather(viewer, { onStatus } = {}) {
   events.show = false;
   viewer.dataSources.add(events);
   let eventsLoaded = false;
+  let live = true;
 
   function report() {
     if (!onStatus) return;
     onStatus([...state.values()]
       .filter((entry) => entry.enabled)
-      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: entry.stamp, failing: entry.failures > 6 })));
+      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: live && (entry.spec.stepMinutes < 1440 || entry.spec.id === 'sst') ? 'Latest available' : entry.stamp, failing: entry.failures > 6 })));
   }
 
   function build(entry) {
@@ -127,7 +123,8 @@ export function createWeather(viewer, { onStatus } = {}) {
     entry.failures = 0;
     const provider = gibsWms({
       layer: spec.layer,
-      time: stamp,
+      time: live && (spec.stepMinutes < 1440 || spec.id === 'sst') ? undefined : stamp,
+      credit: 'NASA GIBS · ' + spec.label,
       format: spec.format ?? 'image/png',
       transparent: spec.transparent ?? true,
       maximumLevel: spec.maxLevel ?? 7
@@ -206,6 +203,11 @@ export function createWeather(viewer, { onStatus } = {}) {
 
   return {
     layers: WEATHER_LAYERS,
+    setTimeMode(isLive) {
+      live = isLive;
+      for (const entry of state.values()) if (entry.enabled) build(entry);
+      report();
+    },
     setEnabled,
     setAlpha,
     isEnabled: (id) => Boolean(state.get(id)?.enabled),
@@ -215,8 +217,9 @@ export function createWeather(viewer, { onStatus } = {}) {
       }
     },
     async setEvents(show) {
-      if (show) await loadEvents();
       events.show = show;
+      if (show) await loadEvents();
+      document.getElementById('event-credit').textContent = events.show && events.entities.values.length ? 'NASA EONET' : '';
     },
     eventsSource: events
   };

@@ -23,7 +23,10 @@ self.onmessage = async ({ data }) => {
     if (!state?.position) return;
     const p = eciToEcf(state.position, sidereal);
     speeds[index] = Math.hypot(state.velocity.x,state.velocity.y,state.velocity.z);
-    xyz.set([p.x * 1000, p.y * 1000, p.z * 1000], index * 3);
+    const offset = index * 3;
+    xyz[offset] = p.x * 1000;
+    xyz[offset + 1] = p.y * 1000;
+    xyz[offset + 2] = p.z * 1000;
   });
   self.postMessage({ xyz, speeds }, [xyz.buffer,speeds.buffer]);
 };
