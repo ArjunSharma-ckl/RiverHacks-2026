@@ -1,0 +1,4 @@
+backend/data/earthchem_export_nov14_26_21815.zip filter=lfs diff=lfs merge=lfs -text
+backend/data/earthchem_data/earthchem_export_nov14_26_21815.csv filter=lfs diff=lfs merge=lfs -text
+backend/data/MOD11C3.A2026274.061.2026307175827.hdf filter=lfs diff=lfs merge=lfs -text
+public/cinematics/mission-launch-1080p.mp4 filter=lfs diff=lfs merge=lfs -text

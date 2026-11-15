@@ -193,6 +193,18 @@ export function createApi(env = {}, extras = {}) {
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
 
+  // Planetary analog endpoints are served by the local Python API in backend/.
+  const missionBackend = String(env.MISSION_BACKEND_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+  const proxyMissionBackend = async (path, params) => {
+    const query = params.toString();
+    const response = await fetch(`${missionBackend}/api${path}${query ? `?${query}` : ''}`, {
+      signal: AbortSignal.timeout(300000),
+      headers: { accept: 'application/json' }
+    });
+    const result = await response.json().catch(() => ({}));
+    return response.ok ? result : { ...result, __proxyStatus: response.status };
+  };
+
   async function pointResearch(q, subject) {
         async function search(engine) {
           if (!serpKey) throw new Error('Search unavailable');
@@ -211,6 +223,9 @@ export function createApi(env = {}, extras = {}) {
           searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
   }
   const routes = {
+    '/earth-analogs': p => proxyMissionBackend('/earth-analogs', p),
+    '/mars-analogs': p => proxyMissionBackend('/mars-analogs', p),
+    '/earth-analog-attribute': p => proxyMissionBackend('/earth-analog-attribute', p),
     '/cities': async p => {
       const input=(p.get('q')||'').trim().slice(0,80);
       if(!/^[\p{L}\p{M} .,'-]{2,80}$/u.test(input)) throw Error('bad city');
@@ -466,7 +481,12 @@ export function createApi(env = {}, extras = {}) {
       return res.end('{}');
     }
     try {
-      res.end(JSON.stringify(await route(url.searchParams)));
+      const result = await route(url.searchParams);
+      if (Number.isInteger(result?.__proxyStatus)) {
+        res.statusCode = result.__proxyStatus;
+        delete result.__proxyStatus;
+      }
+      res.end(JSON.stringify(result));
     } catch {
       res.statusCode = 503;
       const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);

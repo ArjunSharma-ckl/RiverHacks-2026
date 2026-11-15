@@ -21,3 +21,5 @@ services:
         sync: false
       - key: FIRMS_MAP_KEY           # optional FIRMS active-fire detections
         sync: false
+      - key: MISSION_BACKEND_URL     # Python mission API used by planetary analog search
+        sync: false

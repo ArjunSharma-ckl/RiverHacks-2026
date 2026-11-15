@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-11-14T16:55:18Z",
+  "targets": [
+    {
+      "id": "mars-89b186ac5a0140b6",
+      "record_type": "mission_target",
+      "body": "Mars",
+      "mission": "SkyFall",
+      "status": "site-selection-pending",
+      "site_name": null,
+      "coordinates": null,
+      "notes": "NASA states the landing site is to be determined following community workshops.",
+      "source_urls": [
+        "https://science.nasa.gov/mission/skyfall/"
+      ],
+      "source_as_of": "2026-11-04"
+    },
+    {
+      "id": "moon-575595884d93ed63",
+      "record_type": "mission_target",
+      "body": "Moon",
+      "mission": "Artemis IV",
+      "status": "target-region",
+      "site_name": "Lunar South Pole region",
+      "coordinates": null,
+      "notes": "NASA names the lunar South Pole region; an exact landing site has not been published.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/"
+      ],
+      "source_as_of": "2026-03-16"
+    }
+  ],
+  "candidate_sites": [
+    {
+      "id": "moon-eb0cbb9caa4360e9",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Haworth",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-27f5fc933e31a87a",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Malapert Massif",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-420b0d35a4597c65",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-586e518e5cb84605",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Mons Mouton Plateau",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-19fc147c0ee85741",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 1",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-af94d3339a8a4fec",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Nobile Rim 2",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-18aeec26e30a3c89",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Peak near Cabeus B",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-657cd16355c8d9d6",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "Slater Plain",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    },
+    {
+      "id": "moon-d481c6b41533915c",
+      "record_type": "candidate_site",
+      "body": "Moon",
+      "mission": "Artemis campaign",
+      "status": "candidate-region",
+      "site_name": "de Gerlache Rim 2",
+      "coordinates": null,
+      "notes": "NASA-published lunar South Pole candidate region; not a selected landing site.",
+      "source_urls": [
+        "https://www.nasa.gov/mission/artemis-iv/",
+        "https://www.nasa.gov/news-release/nasa-provides-update-on-artemis-iii-moon-landing-regions/"
+      ],
+      "source_as_of": "2024-10-28"
+    }
+  ]
+}

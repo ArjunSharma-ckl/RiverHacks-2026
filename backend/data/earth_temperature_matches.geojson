@@ -1,0 +1,2829 @@
+{
+  "type": "FeatureCollection",
+  "generated_at": "2026-11-14T21:07:19Z",
+  "source": {
+    "name": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+    "product_id": "MOD11C3.061",
+    "doi_url": "https://doi.org/10.5067/MODIS/MOD11C3.061",
+    "earthdata_url": "https://search.earthdata.nasa.gov/search?q=C2565788897-LPCLOUD",
+    "nominal_grid_spacing_degrees": 0.05,
+    "input_files": [
+      "backend\\data\\MOD11C3.A2026274.061.2026307175827.hdf"
+    ],
+    "annualized": false,
+    "has_all_calendar_months": false,
+    "annualization_note": "A grid-cell value has full-year coverage only when earth_months_observed is 12.",
+    "input_note": "Monthly MODIS day/night LST values were quality filtered, averaged by channel, then averaged across available months per grid cell."
+  },
+  "matching": {
+    "top_n_per_lunar_site": 10,
+    "lunar_sites_compared": 9,
+    "earth_grid_cells_scanned": 25920000,
+    "earth_grid_cells_eligible": 2519526,
+    "earth_monthly_granules": 1,
+    "earth_months_included": [
+      "2026-10"
+    ],
+    "minimum_months_per_cell": 1,
+    "temperature_match_percentage": "100 × min(lunar K, Earth K) / max(lunar K, Earth K)",
+    "interpretation": "100 means equal temperatures; lower percentages indicate a larger relative difference. This is a similarity score, not a probability.",
+    "limitations": [
+      "Earth values are clear-sky satellite surface temperatures; lunar inputs are modeled annual averages 2 cm below the surface.",
+      "The provided MODIS grid contains monthly composites. With fewer than 12 months, the Earth value is a partial-year mean, not an annual mean.",
+      "The monthly composites use mandatory good-quality MODIS QA (QC bits 0–1 equal zero); a cell can use day, night, or both channels depending on valid observations.",
+      "Earth results are cell centers at approximately 0.05-degree spacing, not station locations or 1-km observations."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 60.95,
+        "absolute_temperature_difference_kelvin": 78.309,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 60.79,
+        "absolute_temperature_difference_kelvin": 78.819,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 60.79,
+        "absolute_temperature_difference_kelvin": 78.819,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 60.79,
+        "absolute_temperature_difference_kelvin": 78.819,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-eb0cbb9caa4360e9",
+        "lunar_site_name": "Haworth",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 60.79,
+        "absolute_temperature_difference_kelvin": 78.819,
+        "lunar_annual_average_kelvin": 122.201,
+        "lunar_annual_average_celsius": -150.949,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 87.32,
+        "absolute_temperature_difference_kelvin": 25.425,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 87.1,
+        "absolute_temperature_difference_kelvin": 25.935,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 87.1,
+        "absolute_temperature_difference_kelvin": 25.935,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 87.1,
+        "absolute_temperature_difference_kelvin": 25.935,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-27f5fc933e31a87a",
+        "lunar_site_name": "Malapert Massif",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 87.1,
+        "absolute_temperature_difference_kelvin": 25.935,
+        "lunar_annual_average_kelvin": 175.085,
+        "lunar_annual_average_celsius": -98.065,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 49.75,
+        "absolute_temperature_difference_kelvin": 100.76,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 49.62,
+        "absolute_temperature_difference_kelvin": 101.27,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 49.62,
+        "absolute_temperature_difference_kelvin": 101.27,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 49.62,
+        "absolute_temperature_difference_kelvin": 101.27,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-420b0d35a4597c65",
+        "lunar_site_name": "Mons Mouton",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 49.62,
+        "absolute_temperature_difference_kelvin": 101.27,
+        "lunar_annual_average_kelvin": 99.75,
+        "lunar_annual_average_celsius": -173.4,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 91.75,
+        "absolute_temperature_difference_kelvin": 16.542,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 91.52,
+        "absolute_temperature_difference_kelvin": 17.052,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 91.52,
+        "absolute_temperature_difference_kelvin": 17.052,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 91.52,
+        "absolute_temperature_difference_kelvin": 17.052,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-586e518e5cb84605",
+        "lunar_site_name": "Mons Mouton Plateau",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 91.52,
+        "absolute_temperature_difference_kelvin": 17.052,
+        "lunar_annual_average_kelvin": 183.968,
+        "lunar_annual_average_celsius": -89.182,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 53.32,
+        "absolute_temperature_difference_kelvin": 93.603,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 53.18,
+        "absolute_temperature_difference_kelvin": 94.113,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 53.18,
+        "absolute_temperature_difference_kelvin": 94.113,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 53.18,
+        "absolute_temperature_difference_kelvin": 94.113,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-19fc147c0ee85741",
+        "lunar_site_name": "Nobile Rim 1",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 53.18,
+        "absolute_temperature_difference_kelvin": 94.113,
+        "lunar_annual_average_kelvin": 106.907,
+        "lunar_annual_average_celsius": -166.243,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 70.47,
+        "absolute_temperature_difference_kelvin": 59.216,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 70.29,
+        "absolute_temperature_difference_kelvin": 59.726,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 70.29,
+        "absolute_temperature_difference_kelvin": 59.726,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 70.29,
+        "absolute_temperature_difference_kelvin": 59.726,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-af94d3339a8a4fec",
+        "lunar_site_name": "Nobile Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 70.29,
+        "absolute_temperature_difference_kelvin": 59.726,
+        "lunar_annual_average_kelvin": 141.294,
+        "lunar_annual_average_celsius": -131.856,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 73.92,
+        "absolute_temperature_difference_kelvin": 52.287,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 73.74,
+        "absolute_temperature_difference_kelvin": 52.797,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 73.74,
+        "absolute_temperature_difference_kelvin": 52.797,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 73.74,
+        "absolute_temperature_difference_kelvin": 52.797,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-18aeec26e30a3c89",
+        "lunar_site_name": "Peak near Cabeus B",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 73.74,
+        "absolute_temperature_difference_kelvin": 52.797,
+        "lunar_annual_average_kelvin": 148.223,
+        "lunar_annual_average_celsius": -124.927,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 42.51,
+        "absolute_temperature_difference_kelvin": 115.267,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 42.41,
+        "absolute_temperature_difference_kelvin": 115.777,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 42.41,
+        "absolute_temperature_difference_kelvin": 115.777,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 42.41,
+        "absolute_temperature_difference_kelvin": 115.777,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-657cd16355c8d9d6",
+        "lunar_site_name": "Slater Plain",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 42.41,
+        "absolute_temperature_difference_kelvin": 115.777,
+        "lunar_annual_average_kelvin": 85.243,
+        "lunar_annual_average_celsius": -187.907,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.97500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 1,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5080",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.025,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 2,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5081",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.07500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 3,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5082",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.125,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 4,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5083",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.17500000000001,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 5,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5084",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          74.22500000000002,
+          -81.92500000000001
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 6,
+        "match_percentage": 76.61,
+        "absolute_temperature_difference_kelvin": 46.898,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 200.51,
+        "earth_temperature_celsius": -72.64,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3439c5085",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.525,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 7,
+        "match_percentage": 76.42,
+        "absolute_temperature_difference_kelvin": 47.408,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5071",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.57500000000002,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 8,
+        "match_percentage": 76.42,
+        "absolute_temperature_difference_kelvin": 47.408,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5072",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.625,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 9,
+        "match_percentage": 76.42,
+        "absolute_temperature_difference_kelvin": 47.408,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5073",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          73.67500000000001,
+          -81.47500000000002
+        ]
+      },
+      "properties": {
+        "lunar_site_id": "moon-d481c6b41533915c",
+        "lunar_site_name": "de Gerlache Rim 2",
+        "mission": "Artemis campaign",
+        "lunar_site_status": "candidate-region",
+        "match_rank": 10,
+        "match_percentage": 76.42,
+        "absolute_temperature_difference_kelvin": 47.408,
+        "lunar_annual_average_kelvin": 153.612,
+        "lunar_annual_average_celsius": -119.538,
+        "lunar_depth_below_surface_m": 0.02,
+        "earth_temperature_kelvin": 201.02,
+        "earth_temperature_celsius": -72.13,
+        "earth_temperature_period": "2026 monthly MODIS composites (1 month(s))",
+        "earth_months_observed": 1,
+        "earth_full_year_coverage": false,
+        "earth_grid_id": "r3430c5074",
+        "earth_data_source": "NASA MODIS Terra Land Surface Temperature/Emissivity Monthly L3 Global 0.05 Degree CMG V061",
+        "earth_data_product": "MOD11C3.061",
+        "earth_data_source_url": "https://doi.org/10.5067/MODIS/MOD11C3.061"
+      }
+    }
+  ]
+}
