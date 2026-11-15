@@ -1,0 +1,5 @@
+# Facility asset catalog
+
+The optional facility search exposes only modules with a local `.glb` in `public/models/mission`. The choices are storage, communications, descent vehicle, water recycler, laboratory, habitat, medical module, and solar array. Each selected pressurized module gets a corridor to the core settlement. Communications, descent and solar assets remain outside.
+
+The habitat models are adapted from NASA's [Habitat Demonstration Unit](https://science.nasa.gov/3d-resources/habitat-demonstration-unit/); [NASA 3D Resources](https://science.nasa.gov/3d-resources/) lists free downloadable assets. NASA's [Moon Base Systems](https://www.nasa.gov/moonbase-systems/) describes a future architecture of connected 100 m³ class modules, airlocks and aggregation nodes. The current settlement is a visual training scenario, not an engineering layout or verified vendor quote. Keep new search options hidden until a corresponding local model has been inspected, licensed, scaled, and connected.

@@ -129,20 +129,20 @@ export function createHud(root, context) {
   // Scene
   const sceneSection = section('Scene');
   const sceneToggles = [
-    ['Planets', true, (on) => sky.setPlanets(on)],
-    ['Stars', true, (on) => sky.setStars(on)],
+    ['Planets', true, (on) => { sky.setPlanets(on); context.pointMode('Planets',on); }],
+    ['Stars', true, (on) => { sky.setStars(on); context.pointMode('Stars',on); }],
     ['Star names', true, (on) => sky.setStarLabels(on)],
-    ['Satellites', true, (on) => satellites.setFleet(on)],
+    ['Satellites', true, (on) => { satellites.setFleet(on); context.pointMode('Satellites',on); }],
     ['Satellite labels', true, (on) => satellites.setLabels(on)],
     ['Atmosphere', true, (on) => {
       scene.skyAtmosphere.show = on;
       scene.globe.showGroundAtmosphere = on;
     }],
-    ['Sun glare', true, (on) => {
+    ['Sun glare', false, (on) => {
       if (lensFlare) lensFlare.enabled = on;
       scene.postProcessStages.bloom.enabled = on;
     }],
-    ['Shadows', true, (on) => { viewer.shadows = on; }]
+    ['Shadows', false, (on) => { viewer.shadows = on; }]
   ];
   for (const [label, initial, handler] of sceneToggles) {
     sceneSection.append(toggle(label, initial, handler).wrapper);
@@ -157,6 +157,7 @@ export function createHud(root, context) {
       viewer.clock.currentTime = hours === 0
         ? C.JulianDate.now()
         : C.JulianDate.addHours(C.JulianDate.now(), -hours, new C.JulianDate());
+      weather.setTimeMode(hours === 0);
       for (const node of buttons.children) node.classList.remove('active');
       button.classList.add('active');
     };

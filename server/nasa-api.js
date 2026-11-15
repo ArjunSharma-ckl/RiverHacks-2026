@@ -1,4 +1,7 @@
-import { research } from './analog-api.js';
+import { answerQuestion, research } from './analog-api.js';
+import { sourceLink } from './serp-links.js';
+import { thermalPoints } from './thermal.js';
+import { weatherMap } from './weather-map.js';
 import { report } from './reports.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
@@ -119,12 +122,13 @@ async function placeCard(latitude, longitude, key) {
     engine: 'google_maps', q: coordinateText, ll: `@${latitude},${longitude},14z`, type: 'search', hl: 'en', api_key: key
   });
   const [search, maps] = await Promise.all([
-    getJson('https://serpapi.com/search.json?' + query).catch(() => ({})),
+    getJson('https://serpapi.com/search.json?' + query),
     getJson('https://serpapi.com/search.json?' + mapParams).catch(() => ({}))
   ]);
+  if(search.error)throw Error('Place search unavailable');
   const graph = search.knowledge_graph || {};
   const local = maps.local_results?.[0] || maps.place_results || {};
-  const organic = search.organic_results?.[0] || {};
+  const organic = search.organic_results?.find(r=>/https:\/\/[^\s]*(?:nasa\.gov|usgs\.gov|gov\.is|wikipedia\.org)/i.test(r.displayed_link||r.link||'')) || {};
   const localTitle = local.title || '';
   const coordinateTitle = !localTitle || /^[\s\d°'".,+\-NSEW]+$/i.test(localTitle) || /^(gps|coordinates?|latitude)/i.test(localTitle);
   const name = (!coordinateTitle ? localTitle : '') || location.locality || graph.title || `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
@@ -133,11 +137,7 @@ async function placeCard(latitude, longitude, key) {
     const result = await getJson('https://serpapi.com/search.json?' + imageParams).catch(() => ({}));
     return result.images_results || [];
   };
-  let imageResultsRaw = await imageResults(`${name} landmark`);
-  if (!imageResultsRaw.length && location.region)
-    imageResultsRaw = await imageResults(`${name} ${location.region}`);
-  if (!imageResultsRaw.length)
-    imageResultsRaw = await imageResults(`${name} skyline`);
+  const imageResultsRaw = await imageResults(`${name} ${location.region} landscape`);
   const imageSearch = { images_results: imageResultsRaw };
   const useful = (text) =>
     typeof text === 'string' && text.trim().length > 24 && !/^no information|not available|cookie|consent/i.test(text.trim());
@@ -146,17 +146,20 @@ async function placeCard(latitude, longitude, key) {
     (useful(graph.description) && graph.description) ||
     (useful(organic.snippet) && organic.snippet) ||
     `An Earth observation point ${location.region ? 'near ' + location.region : 'at the selected coordinates'}${local.type ? ' · ' + local.type : ''}.`;
-  const images = (imageSearch.images_results || [])
+  const images = await Promise.all((imageSearch.images_results || [])
     .filter((image) => /^https:\/\//.test(image.thumbnail || image.original || ''))
     .slice(0, 6)
-    .map((image) => ({
+    .map(async (image) => ({
       src: image.thumbnail || image.original,
       title: image.title || name,
-      link: image.link || image.original
-    }));
+      link: await sourceLink({link:image.link || image.original || image.thumbnail}) || image.original || image.thumbnail
+    })));
   if (local.thumbnail && /^https:\/\//.test(local.thumbnail) && !images.some((image) => image.src === local.thumbnail)) {
     images.unshift({ src: local.thumbnail, title: local.title || name, link: mapsUrl });
   }
+  const sourceLinkResolved=await sourceLink({link:local.website || graph.source?.link || organic.link || mapsUrl});
+  const source=sourceLinkResolved && !/(?:facebook|instagram|tiktok|pinterest)\.com$/i.test(new URL(sourceLinkResolved).hostname)
+    ? sourceLinkResolved : mapsUrl;
   return {
     name,
     subtitle: [local.type || graph.type, location.region].filter(Boolean).join(' · ') || 'Earth observation point',
@@ -166,325 +169,10 @@ async function placeCard(latitude, longitude, key) {
     reviews: local.reviews || null,
     coordinates: { latitude, longitude },
     images: images.slice(0, 6),
-    source: local.website || graph.source?.link || organic.link || mapsUrl,
+    source,
     mapsUrl,
     provider: 'SerpApi',
     configured: true
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Natural-event intelligence. EONET supplies the timeline and the agency
-// sources; SerpApi supplies the wider web and the pictures; the NASA Image and
-// Video Library supplies official imagery. Nothing here needs a model to
-// explain an event, so every sentence is traceable to one of those sources.
-// ---------------------------------------------------------------------------
-
-const EVENT_EXPLAINERS = {
-  Wildfires: 'An open wildfire: active burning confirmed by satellite thermal detections and by the agencies managing the fire.',
-  'Severe Storms': 'An open severe-storm event — a named tropical cyclone or a destructive frontal system, tracked from formation to dissipation.',
-  Volcanoes: 'An open volcanic event: an eruption, ash emission or lava flow reported by volcano observatories and satellite instruments.',
-  Floods: 'An open flood event, from river flooding to coastal inundation, assembled from response agencies and satellite observations.',
-  'Sea and Lake Ice': 'An open ice event: sea-ice extent, iceberg calving or lake freeze-up observed from orbit.',
-  Drought: 'A drought event, tracked from precipitation deficits and vegetation stress.',
-  'Dust and Haze': 'An atmospheric dust or haze event, mapped from aerosol optical depth and satellite imagery.',
-  Earthquakes: 'A seismic event reported by the USGS and partner monitoring networks.',
-  'Temperature Extremes': 'A temperature-extreme event — a heatwave or cold snap outside the normal range for the region.',
-  Snow: 'A significant snowfall event reported by weather agencies.',
-  'Water Color': 'A water-colour anomaly, usually an algal bloom or sediment plume seen from orbit.',
-  Manmade: 'A human-caused event tracked by NASA EONET, such as an industrial fire or an oil spill.'
-};
-
-function ago(date) {
-  const then = new Date(date).getTime();
-  if (!Number.isFinite(then)) return '';
-  const minutes = Math.round((Date.now() - then) / 60000);
-  if (minutes < 90) return `${Math.max(1, minutes)} minutes ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 36) return `${hours} hours ago`;
-  const days = Math.round(hours / 24);
-  return `${days} day${days === 1 ? '' : 's'} ago`;
-}
-
-async function eonetEvents() {
-  return cached('events', 5 * MINUTE, async () => {
-    const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=200&days=45');
-    const events = [];
-    for (const event of data.events ?? []) {
-      const last = event.geometry?.[event.geometry.length - 1];
-      const point = coordinate(last);
-      if (!point) continue;
-      events.push({
-        id: event.id,
-        title: event.title,
-        description: event.description ?? '',
-        category: event.categories?.[0]?.title ?? 'Event',
-        date: last.date,
-        firstSeen: event.geometry?.[0]?.date ?? last.date,
-        longitude: point[0],
-        latitude: point[1],
-        sources: (event.sources ?? []).slice(0, 3).map((source) => ({ id: source.id, url: source.url }))
-      });
-    }
-    events.sort((a, b) => new Date(b.date) - new Date(a.date));
-    return { events };
-  });
-}
-
-async function nasaPhotos(term) {
-  const query = new URLSearchParams({ q: term, media_type: 'image', page_size: '6' });
-  const data = await getJson(`https://images-api.nasa.gov/search?${query}`);
-  return (data?.collection?.items ?? [])
-    .map((item) => {
-      const thumbnail = item.links?.find((link) => link.rel === 'preview')?.href ?? item.links?.[0]?.href;
-      const meta = item.data?.[0];
-      if (!thumbnail || !meta?.nasa_id) return undefined;
-      return {
-        thumbnail,
-        title: meta.title ?? term,
-        link: `https://images.nasa.gov/details/${encodeURIComponent(meta.nasa_id)}`
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 4);
-}
-
-async function serpBundle(query, key) {
-  const web = new URLSearchParams({ engine: 'google', q: query, hl: 'en', num: '6', api_key: key });
-  const images = new URLSearchParams({ engine: 'google_images', q: query, hl: 'en', num: '8', api_key: key });
-  const [search, pictures] = await Promise.all([
-    getJson('https://serpapi.com/search.json?' + web).catch(() => ({})),
-    getJson('https://serpapi.com/search.json?' + images).catch(() => ({}))
-  ]);
-  return {
-    description: search.knowledge_graph?.description
-      || search.answer_box?.snippet
-      || search.organic_results?.[0]?.snippet
-      || '',
-    links: (search.organic_results ?? [])
-      .filter((result) => /^https:\/\//.test(result.link ?? ''))
-      .slice(0, 5)
-      .map((result) => ({ title: result.title, link: result.link, snippet: result.snippet ?? '' })),
-    images: (pictures.images_results ?? [])
-      .filter((image) => /^https:\/\//.test(image.thumbnail || image.original || ''))
-      .slice(0, 5)
-      .map((image) => ({
-        src: image.thumbnail || image.original,
-        title: image.title || query,
-        link: image.link || image.original,
-        source: 'SerpApi'
-      }))
-  };
-}
-
-async function eventDetail(id, key) {
-  let event;
-  try {
-    const data = await getJson(`https://eonet.gsfc.nasa.gov/api/v3/events/${encodeURIComponent(id)}`);
-    // The single-event endpoint returns the event at the top level; the list
-    // endpoint wraps it in `events`. Accept either shape.
-    event = data?.events?.[0] ?? (data?.id ? data : undefined);
-  } catch {
-    event = undefined;
-  }
-  const geometry = event?.geometry ?? [];
-  const latest = geometry[geometry.length - 1];
-  const point = coordinate(latest);
-  const title = event?.title ?? 'Natural event';
-  const category = event?.categories?.[0]?.title ?? 'Event';
-  const first = geometry[0]?.date ?? latest?.date;
-  const query = `${title} ${category}`.trim().slice(0, 180);
-
-  const [serp, photos] = await Promise.all([
-    key ? serpBundle(query, key).catch(() => undefined) : Promise.resolve(undefined),
-    nasaPhotos(query).catch(() => [])
-  ]);
-
-  const explainer = EVENT_EXPLAINERS[category]
-    ?? 'An open natural event tracked by NASA EONET from satellite and agency reports.';
-  const where = point ? `${point[1].toFixed(1)}°, ${point[0].toFixed(1)}°` : 'an unmapped position';
-  const recency = ago(latest?.date);
-  const timing = recency ? `The latest update was ${recency}` : 'No update time is published';
-  const magnitude = latest?.magnitudeValue
-    ? `${latest.magnitudeValue}${latest.magnitudeUnit ? ' ' + latest.magnitudeUnit : ''}`
-    : '';
-
-  return {
-    id,
-    title,
-    category,
-    summary: `${explainer} ${timing}, at ${where}.`,
-    webSummary: serp?.description || event?.description || '',
-    facts: [
-      ['Category', category],
-      ['Latest update', latest?.date ? new Date(latest.date).toUTCString() : 'Not reported'],
-      ['First reported', first ? new Date(first).toUTCString() : 'Not reported'],
-      ['Position', point ? `${point[1].toFixed(2)}°, ${point[0].toFixed(2)}°` : 'Unmapped'],
-      ...(magnitude ? [['Reported intensity', magnitude]] : []),
-      ['Agencies', (event?.sources ?? []).map((source) => source.id).join(', ')]
-    ],
-    links: serp?.links ?? [],
-    images: [
-      ...(serp?.images ?? []),
-      ...photos.map((photo) => ({ src: photo.thumbnail, title: photo.title, link: photo.link, source: 'NASA' }))
-    ].slice(0, 8),
-    sources: (event?.sources ?? []).slice(0, 4).map((source) => ({ id: source.id, url: source.url })),
-    eonetUrl: `https://eonet.gsfc.nasa.gov/api/v3/events/${encodeURIComponent(id)}`,
-    serpapi: { enabled: Boolean(key), query }
-  };
-}
-
-async function hotspotDetail(latitude, longitude, query, key, source, frp) {
-  const place = `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`;
-  const term = (query || 'wildfire thermal anomaly').slice(0, 140);
-  const search = `${term} ${place}`;
-  const firms = /firms/i.test(source);
-
-  const [serp, photos] = await Promise.all([
-    key ? serpBundle(search, key).catch(() => undefined) : Promise.resolve(undefined),
-    nasaPhotos(term).catch(() => [])
-  ]);
-
-  return {
-    summary: firms
-      ? `A NASA FIRMS thermal detection at ${place}: a VIIRS pixel reporting a heat source far above the surrounding land, captured in the last 24 hours. These are the raw satellite detections behind the thermal-anomaly layer, before any agency turns them into a named fire.`
-      : `A thermal anomaly at ${place}: a hotspot far warmer than the surrounding land. In NASA's EONET wildfire record these coincide with active burning, which is why the satellite thermal layer and these dots line up.`,
-    webSummary: serp?.description ?? '',
-    facts: [
-      ['Position', place],
-      ['Source', firms ? 'NASA FIRMS · VIIRS NOAA-20' : 'NASA EONET wildfire detections'],
-      ...(frp ? [['Radiative power', `${Math.round(frp)} MW`]] : []),
-      ['Layer', 'VIIRS thermal anomalies, 375 m'],
-      ['Reading', 'Brightness, not fire size']
-    ],
-    links: serp?.links ?? [],
-    images: [
-      ...(serp?.images ?? []),
-      ...photos.map((photo) => ({ src: photo.thumbnail, title: photo.title, link: photo.link, source: 'NASA' }))
-    ].slice(0, 8),
-    sources: [],
-    serpapi: { enabled: Boolean(key), query: search }
-  };
-}
-
-// Fire detections. NASA FIRMS publishes the global VIIRS NOAA-20 24-hour
-// bundle as a plain CSV, so the dots are real satellite detections and need no
-// key. EONET's named wildfire events ride on top of them.
-const FIRMS_GLOBAL_CSV =
-  'https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_24h.csv';
-
-async function firmsDetections(limit = 900) {
-  const response = await fetch(FIRMS_GLOBAL_CSV, { signal: AbortSignal.timeout(30000) });
-  if (!response.ok) throw new Error(`firms ${response.status}`);
-  const text = await response.text();
-  const [header, ...rows] = text.trim().split('\n');
-  const columns = header.trim().split(',');
-  const index = (name) => columns.indexOf(name);
-  const iLat = index('latitude'), iLon = index('longitude'), iFrp = index('frp'),
-    iBright = index('bright_ti4'), iDate = index('acq_date'), iTime = index('acq_time'),
-    iConfidence = index('confidence');
-  if (iLat < 0 || iLon < 0) throw new Error('firms schema');
-  const detections = [];
-  for (const row of rows) {
-    const cells = row.split(',');
-    const latitude = Number(cells[iLat]), longitude = Number(cells[iLon]);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
-    detections.push({
-      latitude: Number(latitude.toFixed(3)),
-      longitude: Number(longitude.toFixed(3)),
-      frp: Number(cells[iFrp]) || 0,
-      brightness: Number(cells[iBright]) || 0,
-      date: cells[iDate] ?? '',
-      time: cells[iTime] ?? '',
-      confidence: cells[iConfidence] ?? ''
-    });
-  }
-  detections.sort((a, b) => b.frp - a.frp);
-  return detections.slice(0, limit);
-}
-
-async function thermalDots() {
-  const [{ events }, detections] = await Promise.all([
-    eonetEvents(),
-    cached('firms-global', 15 * MINUTE, () => firmsDetections(900)).catch(() => [])
-  ]);
-  const dots = [];
-  for (const event of events) {
-    if (!/wildfire/i.test(event.category)) continue;
-    dots.push({
-      key: `eonet:${event.id}`,
-      id: event.id,
-      title: event.title,
-      category: event.category,
-      latitude: event.latitude,
-      longitude: event.longitude,
-      date: event.date,
-      source: 'NASA EONET'
-    });
-  }
-  for (const detection of detections) {
-    const clock = String(detection.time).padStart(4, '0');
-    dots.push({
-      key: `firms:${detection.latitude}:${detection.longitude}:${detection.date}:${detection.time}`,
-      id: `firms:${detection.latitude}:${detection.longitude}`,
-      title: `VIIRS hotspot${detection.frp ? ' · ' + Math.round(detection.frp) + ' MW' : ''}`,
-      category: 'Wildfires',
-      latitude: detection.latitude,
-      longitude: detection.longitude,
-      date: detection.date ? `${detection.date}T${clock.slice(0, 2)}:${clock.slice(2, 4)}:00Z` : '',
-      source: 'NASA FIRMS',
-      frp: detection.frp,
-      brightness: detection.brightness,
-      confidence: detection.confidence
-    });
-  }
-  return {
-    dots,
-    counts: { events: dots.length - detections.length, detections: detections.length },
-    source: 'NASA FIRMS VIIRS NOAA-20, last 24 hours, plus NASA EONET wildfire events'
-  };
-}
-
-// One satellite, expanded: CelesTrak orbital facts plus the SerpApi report.
-async function satelliteDetail(params, key) {
-  const name = (params.get('name') ?? '')
-    .replace(/[^\p{L}\p{M}\w .'()\[\]+\-/]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 70);
-  if (!name) throw new Error('bad name');
-  const norad = (params.get('norad') ?? '').replace(/\D/g, '').slice(0, 9);
-  const job = (params.get('job') ?? '').slice(0, 40);
-  const altitude = Number(params.get('alt'));
-  const speed = Number(params.get('speed'));
-  const latitude = Number(params.get('lat'));
-  const longitude = Number(params.get('lon'));
-
-  const query = `${name} satellite mission`;
-  const [serp, photos] = await Promise.all([
-    key ? serpBundle(query, key).catch(() => undefined) : Promise.resolve(undefined),
-    nasaPhotos(name).catch(() => [])
-  ]);
-
-  const clauses = [];
-  if (Number.isFinite(altitude) && altitude > 0) clauses.push(`about ${Math.round(altitude)} km above the ground`);
-  if (Number.isFinite(speed) && speed > 0) clauses.push(`moving at ${speed.toFixed(2)} km/s`);
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-    clauses.push(`currently over ${latitude.toFixed(1)}°, ${longitude.toFixed(1)}°`);
-  }
-  const orbit = clauses.length ? ` It is ${clauses.join(', ')}.` : '';
-  const label = job ? job.toLowerCase() : 'tracked';
-  const article = /^[aeiou]/i.test(label) ? 'an' : 'a';
-  return {
-    name,
-    summary: `${name} is ${article} ${label} satellite in the CelesTrak catalogue${norad ? `, NORAD ${norad}` : ''}.${orbit} Orbital position is propagated from its published two-line elements.`,
-    webSummary: serp?.description ?? '',
-    links: serp?.links ?? [],
-    images: [
-      ...(serp?.images ?? []),
-      ...photos.map((photo) => ({ src: photo.thumbnail, title: photo.title, link: photo.link, source: 'NASA' }))
-    ].slice(0, 8),
-    serpapi: { enabled: Boolean(key), query }
   };
 }
 
@@ -505,6 +193,23 @@ export function createApi(env = {}, extras = {}) {
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
 
+  async function pointResearch(q, subject) {
+        async function search(engine) {
+          if (!serpKey) throw new Error('Search unavailable');
+          const params = new URLSearchParams({engine, q, api_key: serpKey});
+          const data = await getJson('https://serpapi.com/search.json?' + params);
+          if (data.error) throw new Error('Search unavailable');
+          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
+            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
+            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+        }
+        const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
+        const [web, images, nasa] = await Promise.allSettled([
+          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+        ]);
+        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
+          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+  }
   const routes = {
     '/cities': async p => {
       const input=(p.get('q')||'').trim().slice(0,80);
@@ -522,7 +227,7 @@ export function createApi(env = {}, extras = {}) {
       const matching=region?candidates.filter(x=>[x.admin1,x.country,x.country_code].some(v=>v?.toLowerCase().includes(region))):candidates;
       const sorted=matching.sort((a,b)=>(b.population||0)-(a.population||0));
       let serpMatch=false;
-      if(serpKey&&sorted.length)try{
+      if(serpKey&&sorted.length>1&&sorted[0].name.toLowerCase()===sorted[1].name.toLowerCase())try{
         const q=new URLSearchParams({engine:'google',q:`${city} ${region} city municipality`,num:'3',api_key:serpKey});
         const evidence=await cached('city-serp:'+input.toLowerCase(),60*MINUTE,()=>getJson('https://serpapi.com/search.json?'+q));
         serpMatch=[evidence.knowledge_graph?.title,...(evidence.organic_results||[]).slice(0,3).map(x=>x.title)].some(title=>title?.toLowerCase().includes(city.toLowerCase()));
@@ -539,7 +244,8 @@ export function createApi(env = {}, extras = {}) {
         const params=new URLSearchParams({engine:'google',q,num:'8',api_key:serpKey});
         const data=await getJson('https://serpapi.com/search.json?'+params);
         if(data.error)throw Error('Vendor search unavailable');
-        return {results:(data.organic_results||[]).filter(r=>/^https:\/\//.test(r.link||'')).slice(0,8).map(({title,link,snippet})=>({title,link,snippet})),source:'SerpAPI Google search',category};
+        const links=await Promise.all((data.organic_results||[]).slice(0,12).map(async r=>({r,link:await sourceLink(r)})));
+        return {results:links.filter(({r,link})=>r.title&&link).slice(0,8).map(({r,link})=>({title:r.title,link,snippet:r.snippet||''})),source:'SerpAPI Google search',category};
       });
     },
     '/analog/climate': p => {
@@ -547,7 +253,8 @@ export function createApi(env = {}, extras = {}) {
       const q = new URLSearchParams({latitude:lat.toFixed(4), longitude:lon.toFixed(4), community:'RE', format:'JSON', parameters:'T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS'});
       return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
     },
-    '/analog/research': p => cached('research:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/analog/research': p => cached('research:v2:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/analog/ask': p => cached('ask:v2:' + (p.get('q') ?? '').slice(0,200).toLowerCase(), 60 * MINUTE, () => answerQuestion(p, serpKey)),
     '/place': p => {
       const latitude = number(p, 'lat', -90, 90), longitude = number(p, 'lon', -180, 180);
       const key = `place:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
@@ -562,38 +269,54 @@ export function createApi(env = {}, extras = {}) {
       return response.json();
     },
     // Open natural events: storms, wildfires, floods, volcanoes, ice.
-    '/nasa/events': () => eonetEvents(),
+    '/nasa/events': () => cached('events', 5 * MINUTE, async () => {
+      const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
+      const events = [];
+      for (const event of data.events ?? []) {
+        const last = event.geometry?.[event.geometry.length - 1];
+        const point = coordinate(last);
+        if (!point) continue;
+        events.push({
+          id: event.id,
+          title: event.title,
+          category: event.categories?.[0]?.title ?? 'Event',
+          date: last.date,
+          longitude: point[0],
+          latitude: point[1],
+          sources: (event.sources ?? []).slice(0, 3).map((source) => ({ id: source.id, url: source.url }))
+        });
+      }
+      return { events };
+    }),
 
-    // One event, expanded: the EONET timeline plus a SerpApi and NASA briefing.
-    '/nasa/event': (params) => {
-      const id = (params.get('id') ?? '').trim();
-      if (!/^[A-Za-z0-9_-]{3,80}$/.test(id)) throw new Error('bad id');
-      return cached(`event:${id}:${Boolean(serpKey)}`, 20 * MINUTE, () => eventDetail(id, serpKey));
+    '/nasa/thermal-points': params => {
+      const date = params.get('date');
+      return cached('thermal:'+date, 30*MINUTE, () => thermalPoints(date));
     },
-
-    // One thermal dot, expanded with the same briefing.
-    '/nasa/hotspot': (params) => {
-      const latitude = number(params, 'lat', -90, 90);
-      const longitude = number(params, 'lon', -180, 180);
-      const query = (params.get('q') ?? '')
-        .replace(/[^\p{L}\p{M}\w ,.'"-]/gu, ' ')
-        .trim()
-        .slice(0, 120);
-      const source = (params.get('src') ?? '').slice(0, 40);
-      const frp = Number(params.get('frp'));
-      return cached(`hotspot:${latitude.toFixed(2)}:${longitude.toFixed(2)}:${query}:${source}`, 30 * MINUTE,
-        () => hotspotDetail(latitude, longitude, query, serpKey, source, Number.isFinite(frp) ? frp : undefined));
+    '/nasa/point-detail': params => {
+      const kind = params.get('kind');
+      let subject, query;
+      if (kind === 'fires') {
+        const lat = number(params,'lat',-90,90), lon = number(params,'lon',-180,180);
+        const date = params.get('date');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date');
+        subject = 'VIIRS thermal anomalies';
+        query = 'satellite thermal hotspot near '+lat.toFixed(2)+', '+lon.toFixed(2)+' '+date;
+      } else {
+        subject = (params.get('name') || '').slice(0,80);
+        if (!subject || !['Stars','Planets','Satellites'].includes(kind)) throw new Error('Invalid point');
+        query = subject+' '+kind+' NASA';
+      }
+      return cached('point:'+query, 6*60*MINUTE, () => pointResearch(query,subject));
     },
-
-    // The dots behind the thermal-anomaly layer.
-    '/nasa/thermal': () => cached('thermal-dots', 10 * MINUTE, thermalDots),
-
-    // Satellite briefing: CelesTrak facts plus SerpApi coverage.
-    '/nasa/satellite': (params) => {
-      const name = (params.get('name') ?? '').slice(0, 70);
-      const norad = (params.get('norad') ?? '').slice(0, 12);
-      return cached(`satellite:${name}:${norad}:${Boolean(serpKey)}`, 30 * MINUTE,
-        () => satelliteDetail(params, serpKey));
+    '/nasa/event-detail': async params => {
+      const { events } = await routes['/nasa/events']();
+      const event = events.find(item => item.id === params.get('id'));
+      if (!event) throw new Error('Unknown event');
+      return cached('event-detail:' + event.id, 6 * 60 * MINUTE, async () => {
+        const q = event.title + ' ' + event.date.slice(0, 4);
+        return pointResearch(q, event.title);
+      });
     },
 
     // Point meteorology and solar resource from NASA POWER.
@@ -718,11 +441,14 @@ export function createApi(env = {}, extras = {}) {
     '/nasa/apod': () => cached('apod', 60 * MINUTE, () =>
       getJson(`https://api.nasa.gov/planetary/apod?api_key=${nasaKey}`)),
 
-    '/object': params => report(params.get('name'), serpKey)
+    '/object': params => {if(!serpKey)throw Error('SerpAPI key required');return report(params.get('name'), serpKey)}
   };
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname === '/weather/map' && req.method === 'GET') {
+      return weatherMap(url.searchParams, res);
+    }
     if (url.pathname.startsWith('/arcgis/imagery/')) {
       if (!extras.imageryTile) {
         res.statusCode = 404;
@@ -732,7 +458,7 @@ export function createApi(env = {}, extras = {}) {
     }
     const category=url.pathname.match(/^\/research\/(site|incident|logistics|news|medical-support)$/)?.[1];
     if(category)url.searchParams.set("category",category);
-    const route = category ? p=>cached("gt:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
+    const route = category ? p=>cached("gt:v2:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' || !route) {
@@ -743,7 +469,8 @@ export function createApi(env = {}, extras = {}) {
       res.end(JSON.stringify(await route(url.searchParams)));
     } catch {
       res.statusCode = 503;
-      res.end('{}');
+      const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
+      res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));
     }
   };
 }

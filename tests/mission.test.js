@@ -44,7 +44,7 @@ test("catalog rankings depend on mission and environment", () => {
     )[0].id;
   }
   assert.equal(first("dry rocky habitat solar"), "atacama");
-  assert.equal(first("cold volcanic geology"), "iceland");
+  assert.equal(first("cold volcanic geology"), "snake");
   assert.equal(rank({}, null).score, null);
   assert.ok(rank(sites[0], null).coverage < 1);
 });

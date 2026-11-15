@@ -3,36 +3,55 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 
 import { createViewer, addBaseImagery } from './viewer.js';
+import { enableGlobeSpin } from './globe-spin.js';
+import { CLOUD_KEYS } from './cloud-loop.js';
 import { initLayers } from './layers.js';
 import { createSky } from './sky.js';
 import { paintGalaxy } from './galaxy.js';
 import { addCatalog } from './orbit-catalog.js';
 import { createSatellites } from './satellites.js';
-import { createWeather, WEATHER_LAYERS, CLOUD_FRAMES } from './weather.js';
+import { createWeather, WEATHER_LAYERS } from './weather.js';
 import { createPanel } from './panel.js';
 import { createHud } from './hud.js';
 import { createControls } from './controls.js';
 import { mountMissionControls } from './mission.js';
-import { createRail } from './rail.js';
-import { createSatellitePanel } from './satellite-panel.js';
-import { SUBJECTS } from './catalog.js';
+import { createEventList } from './event-list.js';
+import { STARS, PLANET_NAMES } from './ephemeris.js';
+import { SUBJECTS, describe } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
+enableGlobeSpin(viewer);
 
 initLayers(viewer, [
   'bluemarble',
   'esri',
-  ...WEATHER_LAYERS.flatMap((spec) => spec.animated
-    ? Array.from({ length: CLOUD_FRAMES }, (_, index) => `w:${spec.id}:${index}`)
-    : [`w:${spec.id}`])
+  'w:truecolor',
+  ...CLOUD_KEYS,
+  ...WEATHER_LAYERS.filter(spec => !['clouds', 'truecolor'].includes(spec.id)).map((spec) => `w:${spec.id}`)
 ]);
-addBaseImagery();
+addBaseImagery({ blueMarble: true });
+
 
 paintGalaxy(scene);
 
 const sky = createSky(viewer);
 const satellites = createSatellites(viewer);
-const trackContact = addCatalog(viewer, satellites);
+const pointList = createEventList();
+function skyRows(group) {
+  if (group === 'Satellites') return (satellites.contacts || []).map(c => ({
+    sky:true,id:c.norad,title:c.name,category:group,description:() =>
+      'CelesTrak · NORAD '+c.norad+' · '+c.job+(Number.isFinite(c.alt) ? ' · Altitude '+Math.round(c.alt)+' km' : '')
+  }));
+  if (group === 'Stars') return STARS.map(s=>({sky:true,id:s.name,title:s.name,category:group,
+    description:()=>describe(s.name)+' · Right ascension '+s.ra+'° · Declination '+s.dec+'° · Magnitude '+s.mag}));
+  return PLANET_NAMES.map(name=>({sky:true,id:name,title:name,category:group,description:()=>describe(name)}));
+}
+function pointMode(group,on) {
+  pointList.visible(on,group);
+  if (on) pointList.populate(skyRows(group),group);
+}
+for (const group of ['Planets','Stars','Satellites']) pointMode(group,true);
+const trackContact = addCatalog(viewer, satellites, () => pointList.populate(skyRows('Satellites'),'Satellites'));
 
 const controls = createControls(viewer, {
   onEscape: () => {
@@ -43,26 +62,10 @@ const controls = createControls(viewer, {
 
 mountMissionControls(viewer);
 
-const panel = createPanel(document.getElementById('details'));
-const rail = createRail(document.getElementById('rail'), {
-  onSelectEvent: (event) => weather.flyToEvent(event),
-  onSelectDot: (dot) => weather.flyToDot(dot)
-});
-
-const satellitePanel = createSatellitePanel({
-  viewer,
-  satellites,
-  onChoose: (contact) => trackContact(contact)
-});
-rail.panel('satellites')?.body.append(satellitePanel.root);
-
 let statusHandler = () => {};
-const weather = createWeather(viewer, {
-  onStatus: (entries) => statusHandler(entries),
-  onEvents: (events) => rail.setEvents(events),
-  onThermal: (dots) => rail.setHotspots(dots),
-  onLayers: (ids) => rail.setLayers(ids)
-});
+const weather = createWeather(viewer, { eventList:pointList, onStatus: (entries) => statusHandler(entries) });
+
+const panel = createPanel(document.getElementById('details'));
 
 createHud(document.getElementById('hud'), {
   viewer,
@@ -71,79 +74,34 @@ createHud(document.getElementById('hud'), {
   satellites,
   weather,
   lensFlare,
-  chooseContact(contact) { trackContact(contact); panel.showContact(contact); },
+  pointMode,
+  chooseContact(contact) { trackContact(contact); pointList.open(contact.norad,'Satellites'); },
   controls,
   setStatus: (handler) => { statusHandler = handler; }
 });
 
-// Hover card. A dot on the globe answers to the pointer and the same row is
-// highlighted in the right-hand panel, so both read as one object.
-const tip = document.getElementById('map-tip');
-function showTip(annotation, x, y) {
-  const { data, kind } = annotation;
-  const heading = document.createElement('b');
-  heading.textContent = data.title;
-  const meta = document.createElement('span');
-  meta.textContent = kind === 'event'
-    ? `${data.category} · ${new Date(data.date).toUTCString().slice(5, 22)}`
-    : `${data.latitude.toFixed(2)}°, ${data.longitude.toFixed(2)}° · thermal detection`;
-  const hint = document.createElement('em');
-  hint.textContent = 'Click to open its briefing in the panel';
-  tip.replaceChildren(heading, meta, hint);
-  tip.hidden = false;
-  const box = tip.getBoundingClientRect();
-  const pad = 16;
-  let left = x + 18;
-  let top = y + 18;
-  if (left + box.width > window.innerWidth - pad) left = x - box.width - 18;
-  if (top + box.height > window.innerHeight - pad) top = y - box.height - 18;
-  tip.style.left = `${Math.max(pad, left)}px`;
-  tip.style.top = `${Math.max(pad, top)}px`;
-}
-
-let lastHover = 0;
-viewer.screenSpaceEventHandler.setInputAction(({ endPosition }) => {
-  const now = performance.now();
-  if (now - lastHover < 70) return;
-  lastHover = now;
-  const annotation = weather.describe(scene.pick(endPosition, 11, 11)?.id);
-  if (!annotation) {
-    if (!tip.hidden) tip.hidden = true;
-    return;
-  }
-  showTip(annotation, endPosition.x, endPosition.y);
-  rail.highlight(annotation.kind, annotation.id);
-}, C.ScreenSpaceEventType.MOUSE_MOVE);
-
-// Picking: dots first, then primitives and entities, then the Sun and Moon by
-// projecting their real positions, then the globe itself.
+// Picking: primitives and entities first, then the Sun and Moon by projecting
+// their real positions, then the globe itself.
 viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
   const picked = scene.pick(position, 9, 9);
-  const annotation = weather.describe(picked?.id);
 
-  if (annotation?.kind === 'event') {
-    tip.hidden = true;
-    rail.selectEvent(annotation.data);
-    weather.flyToEvent(annotation.data);
-    return;
-  }
-  if (annotation?.kind === 'thermal') {
-    tip.hidden = true;
-    rail.selectHotspot(annotation.data);
-    weather.flyToDot(annotation.data);
-    return;
-  }
-
+  if (picked?.id?.thermal !== undefined) return pointList.open(picked.id.thermal,'Thermal anomalies');
   if (picked?.id?.catalogIndex !== undefined) {
     trackContact(picked.id);
-    return panel.showContact(picked.id);
+    return pointList.open(picked.id.norad,'Satellites');
   }
   if (picked?.id instanceof C.Entity) {
     const entity = picked.id;
-    if (entity.catalogContact) { trackContact(entity.catalogContact); return panel.showContact(entity.catalogContact); }
+    if (entity.catalogContact) { trackContact(entity.catalogContact); return pointList.open(entity.catalogContact.norad,'Satellites'); }
+    if (weather.eventsSource.entities.contains(entity)) {
+      const event = entity.properties?.getValue(viewer.clock.currentTime);
+      if (event) return weather.openEvent(event.id);
+    }
     if (satellites.entities.includes(entity)) satellites.track(entity);
+    if (STARS.some(s => s.name === entity.name)) return pointList.open(entity.name,'Stars');
     if (entity.name && SUBJECTS.has(entity.name)) return panel.show(entity.name);
   }
+  if (PLANET_NAMES.includes(picked?.id)) return pointList.open(picked.id,'Planets');
   if (typeof picked?.id === 'string' && SUBJECTS.has(picked.id)) {
     return panel.show(picked.id, { subtitle: 'Direction is real; distance is compressed' });
   }
@@ -183,3 +141,4 @@ scene.canvas.addEventListener('wheel', event => {
   camera.flyTo({destination:C.Cartesian3.fromRadians(location.longitude,location.latitude,
     location.height + Math.max(160, C.Cartesian3.distance(camera.positionWC,ground)*0.72)), duration:0.65});
 }, {capture:true,passive:false});
+

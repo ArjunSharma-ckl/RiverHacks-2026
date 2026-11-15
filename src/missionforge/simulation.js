@@ -1,4 +1,5 @@
 import { advanceDuties, dutyPose, prepareDuties } from "./duties.js";
+import { habitatThermalFactor } from './material-model.js';
 export const SOL = 24.6597;
 export const roster = [
   "K. Rivera",
@@ -13,6 +14,11 @@ export const roles = [
   "Systems engineer",
   "Medical officer",
   "Geologist",
+  "EVA specialist",
+  "Robotics engineer",
+  "ISRU specialist",
+  "Chemical process engineer",
+  "Geotechnical engineer",
 ];
 export const failures = {
   solar: [
@@ -94,7 +100,7 @@ export function start(cfg) {
 }
 export const log = (s, msg) => s.logs.push({ h: s.h, msg });
 export const surfaceGravity = mode => mode==='Moon projection'?1.62:mode==='Mars projection'?3.71:9.81;
-export function thermalDemand(s){const target=s.cfg.mode==='Moon projection'?-20:s.cfg.mode==='Mars projection'?-15:15;return s.cfg.load*s.load*(1+Math.max(0,Math.abs((s.environment?.temperature??target)-target)-15)*0.012)}
+export function thermalDemand(s){const target=s.cfg.mode==='Moon projection'?-20:s.cfg.mode==='Mars projection'?-15:15;return s.cfg.load*s.load*(1+Math.max(0,Math.abs((s.environment?.temperature??target)-target)-15)*0.012)*habitatThermalFactor(s)}
 export function generation(s) {
   return (
     ((s.cfg.array * s.cfg.sun) / 24) *
@@ -105,6 +111,7 @@ export function generation(s) {
   );
 }
 export function vitals(s, i) {
+  const person=s.cfg.crewMembers?.[i]||{};
   const incident = i === 0 ? s.health : null,
     shift = (s.h + i * 2) % 24,
     fatigue = Math.min(
@@ -119,16 +126,16 @@ export function vitals(s, i) {
   const stress =
     (incident ? 18 : 0) + (activity.walking ? 9 : activity.working ? 4 : 0);
   return {
-    name: roster[i],
+    name: person.name || roster[i] || `Crew ${i+1}`,
     role: s.cfg.roles[i],
-    pulse: Math.round(66 + fatigue * 0.24 + stress),
+    pulse: Math.round((Number.isFinite(person.baselinePulse)?person.baselinePulse:66) + fatigue * 0.24 + stress),
     spo2: incident === "Hypoxia drill" ? 89 : 98,
     temp: (36.6 + stress * 0.025).toFixed(1),
     fatigue: Math.round(fatigue),
     hydration: Math.round(
       92 - shift * 0.4 - (incident === "Dehydration" ? 27 : 0),
     ),
-    sleep: incident === "Sleep deprivation" ? 3 : 7.5,
+    sleep: incident === "Sleep deprivation" ? 3 : (Number.isFinite(person.sleepHours)?person.sleepHours:7.5),
     status: incident || (!i && s.recoverAt > s.h ? "In recovery" : "Nominal"),
   };
 }
