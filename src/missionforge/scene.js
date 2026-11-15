@@ -648,8 +648,10 @@ export function createScene(onPick) {
           ? Math.min(devicePixelRatio, 1.5, Math.sqrt(3600000 / (innerWidth * innerHeight)))
           : mode === "Performance"
             ? 0.7
-            : Math.min(devicePixelRatio||1,1.15,Math.sqrt(3000000/Math.max(1,innerWidth*innerHeight)));
-      viewer.targetFrameRate = 30;
+            : Math.min(devicePixelRatio||1,1.25,Math.sqrt(3200000/Math.max(1,innerWidth*innerHeight)));
+      // A flat 30 fps cap is what made the globe feel sluggish to drag even
+      // when the GPU had room; only the lowest preset needs it.
+      viewer.targetFrameRate = mode === "Performance" ? 30 : 60;
       viewer.shadows = !placed && mode !== "Performance";
       scene.postProcessStages.fxaa.enabled = mode === "High";
       scene.globe.maximumScreenSpaceError =

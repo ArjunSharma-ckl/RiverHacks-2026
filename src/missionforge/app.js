@@ -28,6 +28,15 @@ import {
 const app = document.querySelector("#app"),
   atlas = document.querySelector("#atlas"),
   notice = document.querySelector("#notice");
+function applyQuality(mode) {
+  quality = mode;
+  try { localStorage.setItem("mf-quality", mode); } catch {}
+  scene?.quality(mode);
+  for (const button of document.querySelectorAll(".atlas-quality button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+  }
+}
+
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -84,7 +93,11 @@ try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}
 let facilitySearch='';
 const extraFacilities={storage:'Storage depot',comms:'Communications relay',landing:'Descent vehicle',recycler:'Water recycling module',lab:'Research laboratory',habitat:'Habitat module',medical:'Medical module',solar:'Solar array'};
 let gtAnswer = "",
-  quality = "Performance";
+  // Performance renders at 0.7x resolution, which is what made the globe look
+  // soft the moment the site opened. Start at Balanced and remember whatever
+  // the viewer picks.
+  quality = "Balanced";
+try { quality = localStorage.getItem("mf-quality") || quality; } catch {}
 let crewIndex = 0;
 let cameraPreset = "Overview";
 let site = sites[0],
@@ -923,8 +936,7 @@ app.addEventListener("change", (e) => {
     return;
   }
   if (id === "quality") {
-    quality = value;
-    scene?.quality(value);
+    applyQuality(value);
     return;
   }
   if (id === "camera") {
@@ -1259,7 +1271,24 @@ try {
     update();
   });
   document.querySelector("#map-status")?.remove();
-  scene.quality(quality);
+  const qualityBar = document.createElement("div");
+  qualityBar.className = "atlas-quality";
+  qualityBar.setAttribute("role", "group");
+  qualityBar.setAttribute("aria-label", "Render quality");
+  const qualityLabel = document.createElement("span");
+  qualityLabel.textContent = "Quality";
+  qualityBar.append(qualityLabel);
+  for (const mode of ["Performance", "Balanced", "High"]) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.dataset.mode = mode;
+    option.textContent = mode;
+    option.setAttribute("aria-pressed", String(mode === quality));
+    option.onclick = () => { applyQuality(mode); update(); };
+    qualityBar.append(option);
+  }
+  atlas.append(qualityBar);
+  applyQuality(quality);
   displayScene();
 } catch (err) {
   console.error("Earth initialization", err);
