@@ -124,6 +124,22 @@ RESOURCES = [
         "use": "Planetary terrain visualization and landing-site analysis; services expose body-specific map layers.",
         "integration": "Discover body, layer, projection, and tile-matrix details from the service documentation/capabilities before constructing tile requests.",
     },
+    {
+        "id": "mars-climate-database",
+        "name": "Mars Climate Database (MCD) v6.2",
+        "url": "https://www-mars.lmd.jussieu.fr/mcd_python/",
+        "protocols": ["point-query web interface", "NetCDF database"],
+        "use": "Modeled Mars surface and atmospheric climatology at a requested latitude, east longitude, season, and local time.",
+        "integration": "The Mars API queries surface temperature in kelvin at named or coordinate locations. Results are model climatology, not live observations; season and local time are included in the response.",
+    },
+    {
+        "id": "mars-tes-mineral-maps",
+        "name": "NASA MGS/TES Global Mineral Maps (ASU)",
+        "url": "https://tes.mars.asu.edu/products/",
+        "protocols": ["multiband ENVI raster", "ISIS raster"],
+        "use": "Global spectral abundance estimates for major surface minerals, including plagioclase, olivine, pyroxenes, and hematite.",
+        "integration": "The Mars API samples the 4-pixel-per-degree multiband map at a named feature or coordinate. The four major groups shared with PetDB are returned for normalized comparisons; TES spectral estimates are not PetDB modal percentages.",
+    },
 ]
 
 PHASE_BY_ID = {phase["id"]: phase for phase in PHASES}

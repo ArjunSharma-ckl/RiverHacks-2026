@@ -13,11 +13,120 @@ from backend.landing_sites import load_snapshot
 from backend.lunar_location import lookup_lunar_location
 from backend.lunar_minerals import load_mineral_snapshot, refresh_lunar_minerals
 from backend.lunar_temperature import load_temperature_snapshot, refresh_lunar_temperatures
+from backend.mars_location import feature_location, lookup_mars_location, resolve_mars_feature
+from backend.mars_minerals import MARS_MINERALS_SOURCE, sample_mars_minerals
+from backend.mars_temperature import MCD_SOURCE, query_mars_temperature
 from backend.storage import append_observation, list_observations
 
 
 MAX_BODY_BYTES = 1_000_000
 MAX_LIST_LIMIT = 500
+
+
+def _mars_location_from_query(query):
+    name = query.get("name", [None])[0]
+    if name is not None:
+        feature, matches = resolve_mars_feature(name)
+        if feature is None:
+            status = "not-found" if not matches else "ambiguous"
+            code = 404 if status == "not-found" else 409
+            return None, code, {
+                "schema_version": 1,
+                "status": status,
+                "query": {"body": "Mars", "name": name.strip()},
+                "matches": [
+                    {
+                        "name": item["name"],
+                        "feature_type": item["feature_type"],
+                        "latitude": item["latitude"],
+                        "longitude_east": item["longitude_east"],
+                        "diameter_km": item["diameter_km"],
+                    }
+                    for item in matches[:10]
+                ],
+            }
+        return feature_location(feature), None, None
+
+    latitude = query.get("latitude", [None])[0]
+    longitude_east = query.get("longitude_east", query.get("longitude", [None]))[0]
+    if latitude is None and longitude_east is None:
+        return None, None, None
+    if latitude is None or longitude_east is None:
+        raise RequestError("Both latitude and longitude_east are required for a coordinate query.")
+    try:
+        latitude = float(latitude)
+        longitude_east = float(longitude_east)
+    except (TypeError, ValueError) as error:
+        raise RequestError("Mars latitude and longitude_east must be numeric.") from error
+    if (
+        not (-90.0 <= latitude <= 90.0)
+        or not (-360.0 <= longitude_east <= 720.0)
+        or any(value != value or abs(value) == float("inf") for value in (latitude, longitude_east))
+    ):
+        raise RequestError("Mars coordinates must be finite, with latitude between -90 and 90.")
+    longitude_east %= 360.0
+    return {
+        "name": "Coordinate query",
+        "feature_type": None,
+        "latitude": latitude,
+        "longitude_east": longitude_east,
+        "diameter_km": None,
+        "origin": None,
+        "coordinate_source": "caller-supplied coordinates",
+        "coordinate_source_url": None,
+        "coordinate_type": "point coordinates",
+        "coordinate_system": "Mars planetocentric latitude and east longitude",
+    }, None, None
+
+
+def _mars_pending_snapshot(measurement, source):
+    snapshot = load_snapshot()
+    records = []
+    for target in snapshot.get("targets", []):
+        if target.get("body") != "Mars":
+            continue
+        records.append({
+            "landing_site_id": target.get("id"),
+            "body": "Mars",
+            "mission": target.get("mission"),
+            "status": target.get("status"),
+            "site_name": target.get("site_name"),
+            "reference_point": target.get("coordinates"),
+            measurement: {
+                "status": "unavailable",
+                "value": None,
+                "reason": "The Mars mission target has no published landing-site coordinates. Query a named Mars feature or provide latitude and longitude_east.",
+            },
+        })
+    return {
+        "schema_version": 1,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "source": source,
+        "records": records,
+    }
+
+
+def _mars_point_snapshot(location, measurement, value, source):
+    return {
+        "schema_version": 1,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "source": source,
+        "records": [{
+            "landing_site_id": None,
+            "body": "Mars",
+            "mission": None,
+            "status": "named-feature",
+            "site_name": location["name"],
+            "reference_point": {
+                "latitude": location["latitude"],
+                "longitude_east": location["longitude_east"],
+                "coordinate_type": location["coordinate_type"],
+                "coordinate_source_url": location.get("coordinate_source_url"),
+            },
+            "sample_cell": value.get("sample_cell"),
+            measurement: value,
+        }],
+    }
 
 
 class RequestError(ValueError):
@@ -152,8 +261,11 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                         {"method": "GET", "path": "/api/resources", "description": "Planetary and Earth science data providers."},
                         {"method": "GET", "path": "/api/landing-sites", "description": "Saved Moon and Mars targets and candidate regions."},
                         {"method": "GET", "path": "/api/lunar-location?name=Mons%20Mouton", "description": "Resolve a lunar feature and return available temperature and mineral data."},
+                        {"method": "GET", "path": "/api/mars-location?name=Jezero", "description": "Resolve a Mars feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/lunar-temperatures", "description": "Saved lunar temperature samples."},
                         {"method": "GET", "path": "/api/lunar-minerals", "description": "Saved lunar mineral samples."},
+                        {"method": "GET", "path": "/api/mars-temperature?name=Jezero", "description": "Point surface-temperature estimate from Mars Climate Database v6.2."},
+                        {"method": "GET", "path": "/api/mars-minerals?name=Jezero", "description": "Point mineral estimates from global MGS/TES maps."},
                         {"method": "GET", "path": "/api/observations", "description": "Saved mission observations."},
                         {"method": "POST", "path": "/api/observations", "description": "Validate and save a mission observation."},
                         {"method": "POST", "path": "/api/lunar-temperatures/refresh", "description": "Refresh lunar temperatures from NASA PDS."},
@@ -209,6 +321,68 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                     "not-found": 404,
                 }.get(result["status"], 500)
                 self._send_json(status_code, result)
+                return
+            if parsed.path == "/api/mars-location":
+                name = query.get("name", [None])[0]
+                if name is None or not name.strip():
+                    raise RequestError("name is required and must contain a named Mars surface feature.")
+                try:
+                    result = lookup_mars_location(
+                        name,
+                        solar_longitude=query.get("ls", ["0"])[0],
+                        local_time=query.get("local_time", ["12"])[0],
+                        dust_scenario=query.get("dust_scenario", ["1"])[0],
+                    )
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except (OSError, RuntimeError, URLError) as error:
+                    self._send_json(502, {"error": "Could not resolve the Mars feature.", "detail": str(error)})
+                    return
+                status_code = {"resolved": 200, "ambiguous": 409, "not-found": 404}.get(result["status"], 500)
+                self._send_json(status_code, result)
+                return
+            if parsed.path == "/api/mars-temperature":
+                try:
+                    location, status_code, error_payload = _mars_location_from_query(query)
+                    if error_payload is not None:
+                        self._send_json(status_code, error_payload)
+                        return
+                    if location is None:
+                        self._send_json(200, _mars_pending_snapshot("temperature", MCD_SOURCE))
+                        return
+                    result = query_mars_temperature(
+                        location["latitude"], location["longitude_east"],
+                        solar_longitude=query.get("ls", ["0"])[0],
+                        local_time=query.get("local_time", ["12"])[0],
+                        dust_scenario=query.get("dust_scenario", ["1"])[0],
+                    )
+                except RequestError as error:
+                    raise
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except (OSError, RuntimeError, URLError) as error:
+                    self._send_json(502, {"error": "Could not query Mars surface temperature.", "detail": str(error)})
+                    return
+                self._send_json(200, _mars_point_snapshot(location, "temperature", result, MCD_SOURCE))
+                return
+            if parsed.path == "/api/mars-minerals":
+                try:
+                    location, status_code, error_payload = _mars_location_from_query(query)
+                    if error_payload is not None:
+                        self._send_json(status_code, error_payload)
+                        return
+                    if location is None:
+                        self._send_json(200, _mars_pending_snapshot("mineral_composition", MARS_MINERALS_SOURCE))
+                        return
+                    result = sample_mars_minerals(location["latitude"], location["longitude_east"])
+                except RequestError:
+                    raise
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except (OSError, RuntimeError, URLError) as error:
+                    self._send_json(502, {"error": "Could not query Mars surface minerals.", "detail": str(error)})
+                    return
+                self._send_json(200, _mars_point_snapshot(location, "mineral_composition", result, MARS_MINERALS_SOURCE))
                 return
             if parsed.path == "/api/lunar-temperatures":
                 try:

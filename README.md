@@ -6,7 +6,7 @@ The backend provides a catalog of the four field-test phases, their assigned rol
 
 ### Run locally
 
-Requires Python 3.10 or later. The API uses the standard library; refreshing mineral data also requires `h5py` from `requirements.txt`.
+Requires Python 3.10 or later. Lunar mineral refresh requires `h5py`; Mars mineral sampling uses NumPy. Install optional data dependencies with `python -m pip install -r requirements.txt`.
 
 ```powershell
 python -m backend.server
@@ -22,10 +22,13 @@ The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `
 - `GET /api/landing-sites` — saved NASA Moon and Mars targets plus candidate regions.
 - `GET /api/landing-sites?body=Moon` — filter landing targets by body (`Moon` or `Mars`).
 - `GET /api/lunar-location?name=Tycho` — resolve an IAU-named lunar feature and return coordinates with temperature and mineral composition when available.
+- `GET /api/mars-location?name=Jezero` — resolve a Mars feature and return the same location, temperature, and mineral-composition fields.
 - `GET /api/lunar-temperatures` — saved annual-average Diviner temperature samples for the nine Artemis lunar candidate regions.
 - `POST /api/lunar-temperatures/refresh` — query the NASA PDS Diviner south-polar table and replace the temperature snapshot.
 - `GET /api/lunar-minerals` — saved mineral abundance samples for the nine Artemis lunar candidate regions.
 - `POST /api/lunar-minerals/refresh` — download the published M3-derived south-polar mineral map and refresh the samples.
+- `GET /api/mars-temperature?name=Jezero&ls=0&local_time=12` — query point surface temperature by name or coordinates; `ls` is solar longitude and `local_time` is local Mars hour.
+- `GET /api/mars-minerals?name=Jezero` — query mineral estimates by name or coordinates.
 - `GET /api/observations?phase_id=phase-1&limit=100` — saved observations, newest first.
 - `POST /api/observations` — validate and save an observation as JSON.
 
@@ -81,6 +84,14 @@ python -m backend.lunar_minerals
 ```
 
 The first run downloads about 63 MB and caches it outside the repository. Set `MISSION_MINERAL_CACHE_DIR` to change the cache location. The JSON snapshot `backend/data/lunar_minerals.json` uses the same top-level and site identity/reference-point shape as `lunar_temperatures.json`, with `mineral_composition` in place of `temperature`. It preserves raw source values without interpreting them as percent or fraction. Each value samples one nearest map pixel, not the average composition of the full candidate region. The product covers lunar polar terrain only and does not provide Mars mineral data.
+
+### Mars location, temperature, and mineral data
+
+`GET /api/mars-location?name=Jezero` resolves an IAU-named Mars feature through the USGS Gazetteer-backed GeoCode service and returns the same `location`, `temperature`, and `mineral_composition` structure as the lunar lookup. The separate Mars temperature and mineral endpoints accept a feature `name` or `latitude` plus `longitude_east`. With no location query, they return the Mars mission-target snapshot; SkyFall currently has no published landing coordinates, so its measurements are marked unavailable.
+
+For surface temperature, the backend queries the [Mars Climate Database v6.2](https://www-mars.lmd.jussieu.fr/mcd_python/). It returns modeled surface temperature in kelvin for the requested point, Mars solar longitude (`ls`), and local time. Defaults are `ls=0`, `local_time=12`, and the climatology-average-solar dust scenario. These are climatological model values, not live weather or rover observations. Repeated point requests are cached in memory.
+
+For mineral composition, the backend samples the 4-pixel-per-degree multiband global mineral maps derived from NASA Mars Global Surveyor/TES and distributed by ASU's [TES archive](https://tes.mars.asu.edu/products/). The maps include plagioclase, olivine, low- and high-calcium pyroxene, hematite, and other components. The first query downloads the 51 MB ENVI map to a temporary cache; set `MISSION_MARS_MINERAL_CACHE_DIR` to change the cache directory. The returned four-mineral vector uses the same olivine, plagioclase, and low/high-calcium pyroxene keys as the PetDB Earth matcher; normalize values before comparison. TES spectral estimates are not PetDB modal percentages, and map pixels without source data are reported as unavailable rather than interpolated.
 
 ### Export Earth mineral data from PetDB
 
