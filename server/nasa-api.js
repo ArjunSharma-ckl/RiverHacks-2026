@@ -248,6 +248,23 @@ export function createApi(env = {}, extras = {}) {
     }
   };
 
+  // The analog ranking answers in coordinates. This turns one of those points
+  // into the name of the place it falls in, then searches that name, so the
+  // results read as somewhere real rather than as a grid cell.
+  async function placeName(lat, lon) {
+    const url = 'https://api.bigdatacloud.net/data/reverse-geocode-client?'
+      + new URLSearchParams({ latitude: String(lat), longitude: String(lon), localityLanguage: 'en' });
+    const data = await getJson(url);
+    const parts = [data.locality, data.city, data.principalSubdivision, data.countryName]
+      .map((part) => String(part || '').trim())
+      .filter((part, index, all) => part && all.indexOf(part) === index);
+    return {
+      name: parts[0] || `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'} ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`,
+      detail: parts.slice(1).join(', '),
+      query: parts.slice(0, 3).join(', ') || `${lat.toFixed(3)}, ${lon.toFixed(3)}`,
+    };
+  }
+
   async function pointResearch(q, subject) {
     async function search(engine) {
       if (!serpKey) throw new Error('Search unavailable');
@@ -355,6 +372,41 @@ export function createApi(env = {}, extras = {}) {
         if(data.error)throw Error('Vendor search unavailable');
         const links=await Promise.all((data.organic_results||[]).slice(0,12).map(async r=>({r,link:await sourceLink(r)})));
         return {results:links.filter(({r,link})=>r.title&&link).slice(0,8).map(({r,link})=>({title:r.title,link,snippet:r.snippet||''})),source:'SerpAPI Google search',category};
+      });
+    },
+    // Name an Earth analog match, then show what the web says about it.
+    '/analog/locate': p => {
+      const lat = number(p, 'lat', -90, 90);
+      const lon = number(p, 'lon', -180, 180);
+      return cached(`locate:v1:${lat.toFixed(3)}:${lon.toFixed(3)}`, 360 * MINUTE, async () => {
+        let place;
+        try {
+          place = await placeName(lat, lon);
+        } catch {
+          place = {
+            name: `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'} ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`,
+            detail: '', query: `${lat.toFixed(3)}, ${lon.toFixed(3)}`,
+          };
+        }
+        if (!serpKey) return { ...place, results: [], error: 'missing_key' };
+        const params = new URLSearchParams({ engine: 'google', q: place.query, num: '10', hl: 'en', api_key: serpKey });
+        const data = await getJson('https://serpapi.com/search.json?' + params);
+        if (data.error) throw new Error('Location search unavailable');
+        const rows = await Promise.all((data.organic_results || []).slice(0, 14).map(async (row) => ({
+          row, link: await sourceLink(row),
+        })));
+        const results = rows
+          .filter(({ row, link }) => link && row.title)
+          .slice(0, 10)
+          .map(({ row, link }, index) => ({
+            rank: index + 1,
+            title: plainText(row.title),
+            link,
+            snippet: plainText(row.snippet || ''),
+            source: row.source || new URL(link).hostname.replace(/^www\./, ''),
+            thumbnail: typeof row.thumbnail === 'string' && row.thumbnail.startsWith('https://') ? row.thumbnail : null,
+          }));
+        return { ...place, results, source: 'SerpAPI Google search' };
       });
     },
     '/analog/climate': p => {
@@ -584,7 +636,7 @@ export function createApi(env = {}, extras = {}) {
     } catch (error) {
       console.error('api error', url.pathname, error);
       res.statusCode = 503;
-      const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/object'].includes(url.pathname);
+      const serpRoute=Boolean(category)||['/vendors','/analog/research','/analog/ask','/analog/locate','/object'].includes(url.pathname);
       const firmsRoute=url.pathname==='/nasa/fires';
       res.end(JSON.stringify({error:(!serpKey&&serpRoute)||(!firmsKey&&firmsRoute)?'missing_key':'upstream_unavailable'}));
     }

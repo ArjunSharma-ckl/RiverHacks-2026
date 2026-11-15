@@ -11,6 +11,7 @@ import { vitals } from './simulation.js';
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 import { createQuality } from "../quality.js";
+import { createControls } from "../controls.js";
 export function createScene(onPick) {
   const { viewer, scene, camera, lensFlare, terrainReady } = createViewer("atlas");
   enableGlobeSpin(viewer);
@@ -117,6 +118,21 @@ export function createScene(onPick) {
     clearDust();
     viewer.shadows = renderQuality !== "Performance";
   }
+  // The same keyboard controls as the Earth Viewer: WASD or the arrows move
+  // across the ground, E and Q zoom, Shift accelerates. Typing in a panel is
+  // left alone.
+  const controls = createControls(viewer, { initialView: false });
+  // On the globe, dragging turns the planet. Once a settlement is placed the
+  // left button looks around from where you stand, which is what you want when
+  // the camera is on the ground, and WASD moves you.
+  const ROTATE_DEFAULT = scene.screenSpaceCameraController.rotateEventTypes;
+  function lookMode(on) {
+    const controller = scene.screenSpaceCameraController;
+    controller.enableLook = true;
+    controller.lookEventTypes = on ? [C.CameraEventType.LEFT_DRAG] : [];
+    controller.rotateEventTypes = on ? [] : ROTATE_DEFAULT;
+  }
+  lookMode(false);
   viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
     const ray = groundClick && camera.getPickRay(position);
     const ground = ray && scene.globe.pick(ray, scene);
@@ -176,7 +192,9 @@ export function createScene(onPick) {
   function outside(m) {
     const e = m?.environment;
     if (!e) return "";
-    return "Outside " + Math.round(e.temperature) + " C  /  wind " + Math.round(e.wind ?? 0) + " m/s"
+    const bearing = COMPASS[Math.round(windFrom / 22.5) % 16];
+    const blowing = Math.round(Math.max(m.manualStorm || m.active?.storm ? 35 : 0, e.wind ?? 0));
+    return "Outside " + Math.round(e.temperature) + " C  /  wind " + blowing + " m/s from " + bearing
       + (m.active?.storm ? "  /  storm" : "");
   }
   let sunlight = 1;
@@ -214,7 +232,7 @@ export function createScene(onPick) {
         rows: [
           ["Battery", charge + "%", charge / 100, band(charge, 35, 15, true)],
           ["Survey", Math.round((roverDistance / roverLength) * 100) + "%", roverDistance / roverLength, "ok"],
-          ["Speed", (roverDriving && dockPhase !== "charging" ? "8.5" : "0.0") + " m/s", roverDriving && dockPhase !== "charging" ? 0.7 : 0.02, "ok"],
+          ["Speed", (roverDriving && dockPhase !== "charging" ? "4.2" : "0.0") + " m/s", roverDriving && dockPhase !== "charging" ? 0.7 : 0.02, "ok"],
           ["Odometer", (m?.km ?? 0).toFixed(1) + " km", Math.min(1, (m?.km ?? 0) / 40), "ok"],
           ...wear(m, "rover"),
         ],
@@ -260,7 +278,7 @@ export function createScene(onPick) {
         title: id, chip: "Surface vehicle", tag: id === "Scout buggy" ? "Vehicle 02" : "Vehicle 03",
         status: moving ? "Perimeter patrol" : "Parked", state: "ok",
         rows: [
-          ["Speed", (moving ? "5.5" : "0.0") + " m/s", moving ? 0.45 : 0.02, "ok"],
+          ["Speed", (moving ? "2.8" : "0.0") + " m/s", moving ? 0.45 : 0.02, "ok"],
           ...(id === "Scout buggy" ? [["Patrol", Math.round((scoutDistance / scoutLength) * 100) + "%", scoutDistance / scoutLength, "ok"]] : []),
         ],
         env: outside(m),
@@ -393,6 +411,8 @@ export function createScene(onPick) {
   function overview() {
     actors.reset();
     roverFollow = false;
+    controls.stop();
+    lookMode(false);
     scene.screenSpaceCameraController.enableInputs = true;
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
     itinerary.entities.removeAll();
@@ -406,6 +426,8 @@ export function createScene(onPick) {
   }
   function inspect(s, height=42000) {
     actors.reset();
+    controls.stop();
+    lookMode(false);
     itinerary.entities.removeAll();
     site = s;
     groundClick = null;
@@ -467,7 +489,7 @@ export function createScene(onPick) {
       z + groundAt(mx, my),
     );
   };
-  const actors = crewScene(viewer, base, local);
+  const actors = crewScene(viewer, base, local, layout.scale);
   function model(id, file, e, n, scale, height = 0) {
     base.entities.add({
       id,
@@ -571,14 +593,27 @@ export function createScene(onPick) {
   let scoutDistance = 0;
   // The apron beside the habitat, where the rover returns to recharge.
   const DOCK = { x: 26, y: -10 };
-  const DOCK_LEG = 7;      // seconds out and back
   const DOCK_CHARGE = 16;  // seconds parked
+  // Out and back take as long as the distance does at the rover's own speed.
+  const legSeconds = (a, b) => Math.max(1, Math.hypot(b.x - a.x, b.y - a.y) / ROVER_SPEED);
   function between(a, b, t) {
     return {
       x: a.x + (b.x - a.x) * t,
       y: a.y + (b.y - a.y) * t,
       heading: Math.atan2(b.x - a.x, b.y - a.y),
     };
+  }
+  // Metres per second on the ground, converted into layout units. A survey
+  // rover crawls; it does not drive at motorway speed, and it cannot pivot on
+  // the spot, so its heading is held to a steering rate.
+  const ROVER_SPEED = 4.2 / 1.9;
+  const SCOUT_SPEED = 2.8 / 1.9;
+  const STEER = 0.9; // radians per second
+  let roverHeading = 0;
+  let scoutHeading = 0;
+  const wrapAngle = (angle) => ((angle % C.Math.TWO_PI) + 3 * Math.PI) % C.Math.TWO_PI - Math.PI;
+  function steer(current, wanted, delta) {
+    return current + C.Math.clamp(wrapAngle(wanted - current), -STEER * delta, STEER * delta);
   }
   let dockPhase = "survey";
   let dockClock = 0;
@@ -627,6 +662,14 @@ export function createScene(onPick) {
   const wind = new C.Cartesian3();
   const gust = new C.Cartesian3();
   let windSpeed = 0;
+  // One prevailing bearing per site, so the dust, the plumes and the hover
+  // readout all agree on which way the wind is blowing. Derived from the
+  // site's own coordinates, so it is stable for a given site.
+  const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  let windFrom = 0;
+  function windBearing(s) {
+    return (Math.round((Math.abs(s.lon * 7 + s.lat * 13) % 360) / 22.5) % 16) * 22.5;
+  }
   // Particles advance on the scene clock, which the simulation runs at 600x.
   // Lifetimes, speeds and rates are written in real seconds and converted, so
   // dust drifts at a believable pace whatever the clock is doing.
@@ -666,8 +709,13 @@ export function createScene(onPick) {
     haze = dustSystem({ alpha: 0.16, grow: 2.6, life: 9, size: 26, drag: 0.5,
       emitter: new C.BoxEmitter(new C.Cartesian3(520, 520, 3)) });
     haze.modelMatrix = C.Transforms.eastNorthUpToFixedFrame(local(0, 0, 2));
-    // Wind from the west-south-west, in the fixed frame the particles live in.
-    C.Matrix4.multiplyByPointAsVector(haze.modelMatrix, new C.Cartesian3(0.92, 0.38, 0.02), wind);
+    // Dust travels downwind: a wind *from* 240 degrees blows toward 60.
+    const toward = C.Math.toRadians(windFrom + 180);
+    C.Matrix4.multiplyByPointAsVector(
+      haze.modelMatrix,
+      new C.Cartesian3(Math.sin(toward), Math.cos(toward), 0.02),
+      wind,
+    );
   }
   function plume(id, world, moving) {
     let system = plumes.get(id);
@@ -681,10 +729,10 @@ export function createScene(onPick) {
     system.emissionRate = moving ? 16 / CLOCK : 0;
   }
   function setDust(m) {
-    if (!haze) return;
+    if (!haze) return buildDust();
     const w = weather(m);
-    windSpeed = m.environment?.wind ?? 0;
-    const storm = m.active?.storm ? 1 : 0;
+    windSpeed = Math.max(m.manualStorm ? 35 : 0, m.environment?.wind ?? 0);
+    const storm = m.active?.storm || m.manualStorm ? 1 : 0;
     const quality = renderQuality === "Performance" ? 0.4 : renderQuality === "High" ? 1.3 : 1;
     haze.emissionRate = windSpeed <= 0 ? 0
       : Math.min(70, (4 + windSpeed * 0.9 + w.tau * 26 + storm * 30) * quality) / CLOCK;
@@ -720,6 +768,8 @@ export function createScene(onPick) {
     roverDriving = false;
     roverLastFrame = performance.now();
     site = s;
+    windFrom = windBearing(s);
+    lookMode(true);
     const key = reliefKey(s);
     const real = relief?.key === key;
     placedReal = real;
@@ -896,14 +946,15 @@ export function createScene(onPick) {
     roverLastFrame = now;
     const scout = base.entities.getById("Scout buggy");
     if (scout && roverDriving) {
-      scoutDistance = (scoutDistance + delta * 5.5) % scoutLength;
+      scoutDistance = (scoutDistance + delta * SCOUT_SPEED) % scoutLength;
       const at = pointOnRoute(scoutPath, scoutDistance / scoutLength);
       const where = local(at.x, at.y, 0.6);
       plume("Scout buggy", where, true);
       scout.position.setValue(where);
       scout.orientation ??= new C.ConstantProperty();
+      scoutHeading = steer(scoutHeading, at.heading, delta);
       scout.orientation.setValue(C.Transforms.headingPitchRollQuaternion(
-        where, new C.HeadingPitchRoll(at.heading - Math.PI / 2, 0, 0)));
+        where, new C.HeadingPitchRoll(scoutHeading - Math.PI / 2, 0, 0)));
     } else if (scout) plume("Scout buggy", local(scoutPath[0][0], scoutPath[0][1], 0.6), false);
     const rover = base.entities.getById("Rover");
     if (!rover) return;
@@ -914,7 +965,7 @@ export function createScene(onPick) {
     if (dockPhase === "survey") {
       if (roverDriving) {
         const previous = roverDistance;
-        roverDistance = (roverDistance + delta * 8.5) % roverLength;
+        roverDistance = (roverDistance + delta * ROVER_SPEED) % roverLength;
         if (roverDistance < previous) {
           dockPhase = "inbound";
           dockClock = 0;
@@ -925,14 +976,14 @@ export function createScene(onPick) {
     } else {
       if (roverDriving) dockClock += delta;
       if (dockPhase === "inbound") {
-        const t = Math.min(1, dockClock / DOCK_LEG);
+        const t = Math.min(1, dockClock / legSeconds(dockFrom, DOCK));
         point = between(dockFrom, DOCK, t);
         if (t === 1) { dockPhase = "charging"; dockClock = 0; }
       } else if (dockPhase === "charging") {
         point = { x: DOCK.x, y: DOCK.y, heading: Math.PI };
         if (dockClock > DOCK_CHARGE) { dockPhase = "outbound"; dockClock = 0; }
       } else {
-        const t = Math.min(1, dockClock / DOCK_LEG);
+        const t = Math.min(1, dockClock / legSeconds(DOCK, dockFrom));
         point = between(DOCK, dockFrom, t);
         if (t === 1) dockPhase = "survey";
       }
@@ -941,21 +992,22 @@ export function createScene(onPick) {
     plume("Rover", world, roverDriving && dockPhase !== "charging");
     rover.position.setValue(world);
     rover.orientation ??= new C.ConstantProperty();
+    roverHeading = steer(roverHeading, point.heading, delta);
     rover.orientation.setValue(
       C.Transforms.headingPitchRollQuaternion(
         world,
-        new C.HeadingPitchRoll(point.heading - Math.PI / 2, 0, 0),
+        new C.HeadingPitchRoll(roverHeading - Math.PI / 2, 0, 0),
       ),
     );
     if (!roverFollow) return;
     const ground = 0;
     camera.setView({
       destination: local(
-        point.x - Math.sin(point.heading) * 10,
-        point.y - Math.cos(point.heading) * 10,
+        point.x - Math.sin(roverHeading) * 10,
+        point.y - Math.cos(roverHeading) * 10,
         ground + 4.2,
       ),
-      orientation: { heading: point.heading, pitch: -0.26, roll: 0 },
+      orientation: { heading: roverHeading, pitch: -0.26, roll: 0 },
     });
   });
   overview();
@@ -1042,6 +1094,9 @@ export function createScene(onPick) {
         }),
       );
     },
+    // The prevailing wind at the placed site, so the flat weather overlay can
+    // blow the same way as the dust in the scene.
+    wind: () => ({ from: windFrom, speed: windSpeed }),
     zoom(f) {
       const d = camera.positionCartographic.height * 0.25;
       f > 0 ? camera.zoomIn(d) : camera.zoomOut(d);

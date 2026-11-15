@@ -1,6 +1,4 @@
-import { roverSteel } from './steel-fatigue.js';
-
-const roverFatigueFactor = roverSteel.referenceMpa / roverSteel.predictedMpa;
+import { steelFatigueFactor } from './material-model.js';
 
 // Provisional training coefficients. Damage is a normalized condition index.
 export const equipment = {
@@ -61,7 +59,7 @@ export function exposureRates(m, id, w = weather(m)) {
     deposition: sensitivity * w.dust * (w.moon ? 0.004 : 0.012),
     wear: w.dust * wind * (w.mars ? 0.000012 : 0.000024) * sensitivity,
     fatigue: cycling * (1 + Math.abs(temperature) / 100) * 0.006 *
-      (id === 'rover' ? roverFatigueFactor : 1),
+      steelFatigueFactor(m, id),
     corrosion: Math.max(0, w.humidity - 0.6) * (temperature > 0 ? 0.002 : 0),
   };
 }

@@ -162,10 +162,8 @@ export function prepareDuties(m) {
 }
 export const offDuty = (m, i) =>
   m.active.storm || m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction',bio:'science',chem:'science'}[m.duties?.[i]?.key]]===false || (i === 0 && (m.health || m.recoverAt > m.h));
-// A longer walk and a shorter shift at the station: the same cycle, but the
-// crew cross the yard at a walking pace instead of a jog.
-const travel = 0.3,
-  work = 0.35,
+const travel = 0.2,
+  work = 0.55,
   cycle = travel * 2 + work;
 export function dutyPose(m, i, ahead = 0) {
   const d = m.duties[i],

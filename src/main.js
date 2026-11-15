@@ -193,7 +193,14 @@ let tourActive = false;
 const stopDrift = () => {};
 const calmMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const AXIAL_TILT = -C.Math.toRadians(23.4);
-const SPIN_RATE = C.Math.toRadians(0.25);
+// Degrees of rotation a second. One is a slow, readable turn; the slider on
+// the first screen takes it from a drift to a fast spin.
+const SPIN_RANGE = [0.1, 10];
+let spinRate = 1;
+try {
+  const saved = Number(localStorage.getItem('mf-spin-rate'));
+  if (Number.isFinite(saved) && saved >= SPIN_RANGE[0] && saved <= SPIN_RANGE[1]) spinRate = saved;
+} catch {}
 const ARRIVAL_SECONDS = 3;
 const ARRIVAL_HEIGHT = HOME.height * 4.2;
 let arrival = document.body.classList.contains('intro-open') && !calmMotion() ? 0 : ARRIVAL_SECONDS;
@@ -222,12 +229,31 @@ scene.preUpdate.addEventListener(() => {
     });
   }
   if (!introDrift || calmMotion() || tourActive) return;
-  camera.rotate(C.Cartesian3.UNIT_Z, SPIN_RATE * elapsed);
+  camera.rotate(C.Cartesian3.UNIT_Z, C.Math.toRadians(spinRate) * elapsed);
 });
 
 // Spin and render quality are reachable from the first screen.
 {
   const spinButton = document.getElementById('intro-spin');
+  const spinRange = document.getElementById('intro-spin-rate');
+  const spinValue = document.getElementById('intro-spin-value');
+  const showRate = () => {
+    if (spinValue) spinValue.textContent = spinRate.toFixed(1) + '°/s';
+  };
+  if (spinRange) {
+    spinRange.min = String(SPIN_RANGE[0]);
+    spinRange.max = String(SPIN_RANGE[1]);
+    spinRange.step = '0.1';
+    spinRange.value = String(spinRate);
+    spinRange.oninput = () => {
+      spinRate = C.Math.clamp(Number(spinRange.value) || 1, SPIN_RANGE[0], SPIN_RANGE[1]);
+      showRate();
+      try { localStorage.setItem('mf-spin-rate', String(spinRate)); } catch {}
+      // Moving the slider is a request to see the spin.
+      if (!introDrift) spinButton?.click();
+    };
+  }
+  showRate();
   if (spinButton) spinButton.onclick = () => {
     introDrift = !introDrift;
     spinButton.setAttribute('aria-pressed', String(introDrift));

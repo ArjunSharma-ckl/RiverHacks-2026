@@ -135,6 +135,40 @@ export function createViewer(container) {
   return { viewer, scene, camera, lensFlare, terrainReady };
 }
 
+// Beyond its imagery coverage Esri answers with a flat grey tile reading
+// "Map data not yet available" rather than a 404, so Cesium accepts it and
+// pastes that notice across the ground. The notice is drawn on a background of
+// exactly rgb(204,204,204); real imagery, snow and sea ice included, never is.
+// Discarding those tiles makes Cesium stretch the last real tile instead, so
+// zooming past the coverage blurs rather than breaks.
+class EsriCoverage {
+  constructor() {
+    this._canvas = document.createElement('canvas');
+    this._canvas.width = this._canvas.height = 64;
+    this._context = this._canvas.getContext('2d', { willReadFrequently: true });
+  }
+  isReady() { return true; }
+  shouldDiscardImage(image) {
+    const size = 64;
+    try {
+      this._context.drawImage(image, 0, 0, size, size);
+      const data = this._context.getImageData(0, 0, size, size).data;
+      // Sample away from the centre, where the text sits.
+      for (let y = 1; y < size; y += 4) {
+        for (let x = 1; x < size; x += 4) {
+          if (x > size * 0.2 && x < size * 0.8 && y > size * 0.35 && y < size * 0.65) continue;
+          const i = (y * size + x) * 4;
+          if (data[i] !== 204 || data[i + 1] !== 204 || data[i + 2] !== 204) return false;
+        }
+      }
+      return true;
+    } catch {
+      // A tainted canvas or an undecodable image is not grounds for discarding.
+      return false;
+    }
+  }
+}
+
 // Shaded-relief Blue Marble is the cleanest global basemap; Esri imagery takes
 // over once you are close enough for it to matter.
 export function addBaseImagery({ blueMarble = true } = {}) {
@@ -153,7 +187,8 @@ export function addBaseImagery({ blueMarble = true } = {}) {
     new C.UrlTemplateImageryProvider({
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       credit: new C.Credit('Esri World Imagery and imagery contributors', true),
-      maximumLevel: 19
+      maximumLevel: 20,
+      tileDiscardPolicy: new EsriCoverage()
     }),
     { minimumTerrainLevel: 6, brightness: 0.86, saturation: 0.78, contrast: 1.06 }
   ));

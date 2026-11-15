@@ -314,3 +314,19 @@
   .story-copy h3 .word i { transform: none; transition: none; }
   .magnetic { transition: none; }
 }
+
+.intro-controls .intro-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #ffffff33;
+  border-radius: 3px;
+  background: #0a0f0dc7;
+  color: #e8ebe2;
+  font: 600 11px system-ui;
+  backdrop-filter: blur(8px);
+}
+.intro-controls .intro-slider input { width: 96px; accent-color: #ff8755; }
+.intro-controls .intro-slider output { min-width: 44px; color: #9aa39a; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .intro-controls .intro-slider input { width: 64px; } }

@@ -23,7 +23,7 @@ const KEYS = new Map([
   ['-', 'out'], ['_', 'out'], ['q', 'out']
 ]);
 
-export function createControls(viewer, { onEscape } = {}) {
+export function createControls(viewer, { onEscape, initialView = true } = {}) {
   const { camera, scene } = viewer;
   const held = new Set();
   let previous = performance.now();
@@ -125,7 +125,7 @@ export function createControls(viewer, { onEscape } = {}) {
   // A keyup lost to alt-tab would otherwise leave the camera drifting forever.
   window.addEventListener('blur', () => held.clear());
 
-  homeView();
+  if (initialView) homeView();
 
   return { press, release, home: () => homeView(1.1), stop: () => held.clear() };
 }

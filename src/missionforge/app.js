@@ -1,4 +1,5 @@
-import { roverSteel } from './steel-fatigue.js';
+import { roverSteel, STEEL_SPECS } from './steel-fatigue.js';
+import { STEEL_ASSEMBLIES, selectedSteel, steelFatigueFactor } from './material-model.js';
 import { condition, damage, equipment, equipmentForModel, equipmentIds, exposureRates, maintain, maintenancePlan, unavailable, weather, recordCheckpoint } from './exposure.js';
 import { cue, toggleSound } from "./audio.js";
 import { launchSequence } from "./launch.js";
@@ -350,7 +351,7 @@ function rows() {
     .join("");
 }
 function discover() {
-  return `${siteExplorer()}${backendAnalogPanel()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<div class="ai-bar"><small>${esc(aiRankingStatus)}</small><button type="button" class="ai-refresh" data-act="refresh-ai">Refresh</button></div><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${siteExplorer()}${backendAnalogPanel()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<div class="ai-bar"><small>${esc(aiRankingStatus)}</small><button type="button" class="ai-refresh" data-act="refresh-ai">Refresh</button></div><div id="rankings">${catalogRows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
 function pastMissions(){
   const entries=missionHistory;
@@ -362,6 +363,9 @@ function pastMissions(){
   return `${label('Mission archive')}<h1>Missions</h1><p>Every mission you start is stored here and keeps running while you use other tabs. Each one carries a settlement uptime clock.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${entries.length?entries.map(card).join(''):'<p class="empty-card">Start a mission and it is saved here immediately.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;
 }
 let analogBody='Moon',analogGroups=[],analogLoading=false,analogTimer=null,analogRequest=0;
+// The top match from the planetary backend, named and searched. These search
+// results take the place of the default candidate cards while they are loaded.
+let analogPlace=null,analogPlaceLoading=false,showAnalogCards=true;
 const ANALOG_MINERALS={olivine:'olivine',plagioclase:'plagioclase',lowCalciumPyroxene:'low_calcium_pyroxene',highCalciumPyroxene:'high_calcium_pyroxene',smfe:'iron'};
 // The same inputs that feed the site model also drive the planetary backend.
 function analogQueries(){
@@ -414,6 +418,53 @@ async function runBackendAnalogs(){
   analogLoading=false;
   analogGroups=groups;
   if(page==='discover')update();
+  locateTopAnalog(groups,request);
+}
+// Reverse-geocode the best match and search its name, so the cards at the
+// bottom of the page describe the place the backend actually chose.
+async function locateTopAnalog(groups,request){
+  const top=groups.flatMap(group=>group.items||[])
+    .filter(item=>Number.isFinite(item.lat)&&Number.isFinite(item.lon))
+    .sort((a,b)=>(b.score??0)-(a.score??0))[0];
+  if(!top){analogPlace=null;if(page==='discover')update();return;}
+  if(analogPlace&&analogPlace.lat===top.lat&&analogPlace.lon===top.lon)return;
+  analogPlaceLoading=true;
+  if(page==='discover')update();
+  try{
+    const data=await json('/api/analog/locate?'+new URLSearchParams({lat:String(top.lat),lon:String(top.lon)}));
+    if(request!==analogRequest)return;
+    analogPlace={...data,lat:top.lat,lon:top.lon,score:top.score};
+  }catch(failure){
+    if(request!==analogRequest)return;
+    analogPlace={name:'',results:[],lat:top.lat,lon:top.lon,error:String(failure?.message||'unavailable')};
+  }finally{
+    if(request===analogRequest){analogPlaceLoading=false;if(page==='discover')update();}
+  }
+}
+function analogCards(){
+  const place=analogPlace;
+  const heading=`<div class="headrow"><h2>Around the top Earth match</h2><small>SerpApi · Google</small></div>`;
+  if(analogPlaceLoading&&!place?.results?.length)
+    return heading+'<p class="note">Naming the match and searching it…</p>';
+  if(!place)return '';
+  if(!place.results?.length){
+    const why=place.error==='missing_key'
+      ?'These cards come from SerpApi, and this server has no SERPAPI_KEY set.'
+      :'No search results came back for this location.';
+    return heading+`<p class="note">${esc(place.name?place.name+' · ':'')}${esc(why)}</p>`
+      +`<div class="ai-bar"><small>Showing the default candidate sites instead.</small></div>`+rows();
+  }
+  const coords=Number.isFinite(place.lat)?place.lat.toFixed(2)+'°, '+place.lon.toFixed(2)+'°':'';
+  return heading
+    +`<p class="note">The backend's best match sits in <strong>${esc(place.name)}</strong>${place.detail?' · '+esc(place.detail):''}${coords?' · '+esc(coords):''}. These are the top ten results for it.</p>`
+    +`<div class="ai-bar"><small>Searched: ${esc(place.query||place.name)}</small><button type="button" class="ai-refresh" data-act="analog-cards">${showAnalogCards?'Show default sites':'Show search results'}</button></div>`
+    +(showAnalogCards
+      ?place.results.map(result=>`<a class="site-card" href="${esc(result.link)}" target="_blank" rel="noreferrer noopener"><span class="site-card-content"><small>${esc(String(result.rank).padStart(2,'0'))} · ${esc(result.source||'')}</small><strong>${esc(result.title)}</strong><span class="score-reason">${esc(result.snippet||'')}</span></span></a>`).join('')
+      :rows());
+}
+function catalogRows(){
+  const cards=analogCards();
+  return cards||rows();
 }
 function scheduleAnalogRun(){clearTimeout(analogTimer);analogTimer=setTimeout(runBackendAnalogs,700);}
 function analogItems(group){
@@ -588,6 +639,7 @@ function groundTruth() {
 }
 let inspectedEquipment = 'solar';
 let replayFrame = null;
+const C_RAD = (degrees) => (degrees * Math.PI) / 180;
 function updateWeatherLayer() {
   const layer = app.querySelector('.weather-layer');
   if (!layer) return;
@@ -598,8 +650,20 @@ function updateWeatherLayer() {
   const sample = replayFrame ? { ...mission, environment: replayFrame.environment } : mission;
   const w = weather(sample);
   const wind = w.moon ? 0 : Math.max(sample.manualStorm ? 35 : 0, sample.environment.wind ?? 0);
-  layer.style.opacity = String(Math.min(.8, w.dust * (w.moon ? .28 : .7)));
-  layer.style.animationDuration = Math.max(.4, 3 - wind / 20) + 's';
+  // The overlay blows the same way as the dust in the scene, at a speed set by
+  // the same wind figure, so the flat layer and the 3D view agree.
+  const toward = C_RAD((scene?.wind?.().from ?? 245) + 180);
+  layer.style.setProperty('--wind-angle', Math.round(((scene?.wind?.().from ?? 245) + 270) % 360) + 'deg');
+  layer.style.setProperty('--drift-x', (240 * Math.sin(toward)).toFixed(1) + 'px');
+  layer.style.setProperty('--drift-y', (-240 * Math.cos(toward)).toFixed(1) + 'px');
+  // Lifted dust is what you see; wind is how fast it crosses the view.
+  layer.style.opacity = String(Math.min(.8, (w.dust * .55 + Math.min(1, wind / 35) * .3) * (w.moon ? .4 : 1)));
+  // Rewriting the duration restarts the cycle, so only do it when it moves.
+  const period = Math.max(0.5, Math.min(14, 240 / (6 * wind + 9))).toFixed(1) + 's';
+  if (layer.dataset.period !== period) {
+    layer.dataset.period = period;
+    layer.style.setProperty('--wind-period', period);
+  }
   layer.style.animationPlayState = w.moon || replayFrame ? 'paused' : 'running';
 }
 function replayControls(m) {
@@ -628,6 +692,26 @@ function environmentControls() {
     ${line('Relative solar transmission', fmt(w.transmission * 100, 1) + '%')}
     ${fields.map(([key, title, min, max, step, value]) => `<label class="field">${title}<input type="range" ${replayFrame ? 'disabled' : ''} data-environment="${key}" min="${min}" max="${max}" step="${step}" value="${value}"><output>${value}</output></label>`).join('')}</details>`;
 }
+// The steel model, where it has a claim: the specification chosen for the
+// load-bearing assemblies changes how fast they fatigue, and so how fast their
+// condition falls.
+function steelPanel(m, id, rate) {
+  const spec = selectedSteel(m);
+  const factor = steelFatigueFactor(m, id);
+  const picker = `<label class="field">Steel specification for load-bearing assemblies<select id="material-spec">${
+    STEEL_SPECS.map(x => `<option value="${esc(x.id)}"${x.id === spec.id ? ' selected' : ''}>${esc(x.name)} · ${Math.round(x.predictedMpa)} MPa</option>`).join('')}</select></label>`;
+  const applies = id in STEEL_ASSEMBLIES;
+  return `<div class="steel-model">${picker}
+    <p class="note">${esc(spec.detail)} · specimen from the NIMS rotating-bending fatigue dataset, strength predicted by the trained model.</p>
+    ${line('Predicted fatigue strength', fmt(spec.predictedMpa, 0) + ' MPa')}
+    ${line('Model test R² / RMSE', fmt(roverSteel.testR2, 4) + ' / ' + fmt(roverSteel.testRmseMpa, 1) + ' MPa')}
+    ${line('Applies to', Object.values(STEEL_ASSEMBLIES).join(', '))}
+    ${applies
+      ? line('Fatigue rate on this assembly', '×' + fmt(factor, 2) + ' against the reference specimen') +
+        line('Modelled fatigue per 24 h here', fmt(rate.fatigue * 2400, 4) + ' percentage points')
+      : line('This assembly', 'Not steel · rate unchanged by the specification')}
+    <p class="note">Relative fatigue-resistance proxy, not a service-life calculation.</p></div>`;
+}
 function engineeringControls(m) {
   const ids = equipmentIds(m);
   const id = ids.includes(inspectedEquipment) ? inspectedEquipment : 'solar';
@@ -644,9 +728,7 @@ function engineeringControls(m) {
     ${line('Surface coverage', fmt(100 * c.dust, 1) + '%')}
     ${line('Exposure duration', fmt(c.hours, 1) + ' h')}
     ${line('Damage rate', fmt((rate.wear + rate.fatigue + rate.corrosion) * 100, 4) + ' percentage points/h')}
-    ${id === 'rover' ? line('Steel bearing proxy strength', fmt(roverSteel.predictedMpa, 0) + ' MPa') +
-      line('Laboratory model test R² / RMSE', fmt(roverSteel.testR2, 4) + ' / ' + fmt(roverSteel.testRmseMpa, 1) + ' MPa') +
-      line('Estimated fatigue per 24 h at current temperature', fmt(rate.fatigue * 2400, 4) + ' percentage points') : ''}
+    ${steelPanel(m, id, rate)}
     ${line('Internal fatigue index', fmt(c.fatigue, 4))}
     ${line('Wear / corrosion indices', fmt(c.wear, 4) + ' / ' + fmt(c.corrosion, 4))}
     <p class="note">Provisional engineering estimates. Offline threshold is 80% modeled damage.</p>
@@ -671,7 +753,8 @@ function missionOverview(m){
     const v=vitals(m,i),safe=v.status==='Nominal';
     return `<div class="status-row"><div><strong>${esc(name)}</strong><small>${esc(v.status)} · ${v.pulse} bpm · SpO₂ ${v.spo2}%</small></div>${bar(Math.min(100,v.spo2))}</div>`;
   }).join('');
-  const equipment=[['Habitat',m.integrity??100,m.active.oxygen?'Oxygen failure':'Operational'],['Solar array',Math.round(100*(1-damage(condition(m,"solar")))),unavailable(m,"solar")?'Array failure':'Operational'],['Rover',Math.round(100*(1-damage(condition(m,"rover")))),unavailable(m,"rover")?'Disabled':m.cfg.rover?'Operational':'Not deployed']].filter(([name])=>name!=='Rover'||m.cfg.rover)
+  const structural=id=>Math.round(100*(1-damage(condition(m,id))));
+  const equipment=[['Habitat',Math.min(m.integrity??100,structural('habitat')),m.active.oxygen?'Oxygen failure':'Operational'],['Solar array',structural("solar"),unavailable(m,"solar")?'Array failure':'Operational'],['Airlock seals',structural('oxygen'),unavailable(m,'oxygen')?'Pressure integrity at risk':'Operational'],['Rover',structural("rover"),unavailable(m,"rover")?'Disabled':m.cfg.rover?'Operational':'Not deployed']].filter(([name])=>name!=='Rover'||m.cfg.rover)
     .map(([name,value,status])=>`<div class="status-row"><div><strong>${name}</strong><small>${status}</small></div>${bar(value)}</div>`).join('');
   const facilities=Object.entries(facilityNames).filter(([key])=>m.cfg.facilities?.[key]!==false).map(([key,name])=>`<span class="status-chip">${esc(name)}</span>`).join('');
   return `<section class="mission-status"><h2>Mission status</h2><details open><summary>Health and people · ${m.cfg.crew}</summary>${crew}</details><details open><summary>Buildings and equipment</summary>${equipment}</details><details open><summary>Active facilities</summary><div class="status-chips">${facilities}</div></details></section>`;
@@ -975,7 +1058,7 @@ app.addEventListener("input", (e) => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       const list = document.querySelector("#rankings");
-      if (list) list.innerHTML = rows();
+      if (list) list.innerHTML = catalogRows();
     }, 100);
   }
 });
@@ -983,6 +1066,7 @@ app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
   if(e.target.dataset.crew){const [index,key]=e.target.dataset.crew.split(':');const person=cfg.crewMembers[Number(index)];if(!person)return;if(e.target.type==='number'&&value!==''&&!e.target.checkValidity())return;person[key]=e.target.type==='number'?(value===''?'':Number(value)):value.trim();save();update();return;}
   if(id==='analog-body'){analogBody=value;runBackendAnalogs();update();return;}
+  if(id==='material-spec'&&mission){mission.materialSpec=value;save();update();return;}
   if(id==='sim-speed'){speed=Number(value.replace('×',''));save();update();return;}
   if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));scheduleAiRefresh();scheduleAnalogRun();update();return;}
   if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
@@ -1131,7 +1215,8 @@ app.addEventListener("click", async (e) => {
   if(act==='archive-site'){const archived=missionHistory.find(x=>x.site?.id===id);const selected=sites.find(x=>x.id===id)||archived?.site;if(selected)choose(selected);return;}
   if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));refreshAiRankings();toast('Site inputs saved for AI integration');update();return;}
   if(act==='refresh-ai'){refreshAiRankings();return;}
-  if(act==='refresh-analogs'){runBackendAnalogs();return;}
+  if(act==='refresh-analogs'){analogPlace=null;runBackendAnalogs();return;}
+  if(act==='analog-cards'){showAnalogCards=!showAnalogCards;update();return;}
   if(act==='clear-explorer'){explorerValues={};localStorage.removeItem('mf-explorer-inputs');update();return;}
   if(act==='ask-research'){
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
