@@ -105,25 +105,122 @@ export function createScene(onPick) {
   tooltip.className='scene-entity-tooltip';
   tooltip.hidden=true;
   viewer.container.append(tooltip);
-  viewer.screenSpaceEventHandler.setInputAction(({endPosition})=>{
-    const picked=scene.pick(endPosition)?.id;
-    const id=typeof picked==='string'?picked:picked?.id;
-    if(!placed||!id||!base.entities.getById(id)){tooltip.hidden=true;return;}
-    const m=roverMission;
-    let title=id,detail='Settlement asset · operational';
-    if(/^crew\d+$/.test(id)){
-      const index=Number(id.slice(4)),v=m&&index<m.cfg.crew?vitals(m,index):null;
-      title=v?.name||`Crew ${index+1}`;
-      detail=v?`${v.status} · ${v.pulse} bpm · SpO₂ ${v.spo2}%`:'Crew telemetry pending';
-    } else if(id==='Rover')detail=m?(m.active.rover?'Disabled':'Operational')+` · ${Math.round((m.roverEnergy??2.4)/2.4*100)}% battery`:'Rover telemetry pending';
-    else if(id==='Habitat')detail=m?(m.active.oxygen?'Oxygen system failure':'Operational')+` · ${Math.round(m.integrity??100)}% integrity`:'Habitat telemetry pending';
-    else if(id.startsWith('Solar '))detail=m?.active.solar?'Array failure':'Solar array operational';
+  // Hover readout. Each asset reports the numbers that decide whether it is
+  // healthy, as a bar plus a figure, so state is readable at a glance before
+  // anyone reads the words.
+  function band(value, warn, bad, lowerIsWorse) {
+    if (lowerIsWorse) return value <= bad ? "bad" : value <= warn ? "warn" : "ok";
+    return value >= bad ? "bad" : value >= warn ? "warn" : "ok";
+  }
+  function statRow(label, reading, ratio, state) {
+    const row = document.createElement("div");
+    row.className = "hud-stat";
+    const name = document.createElement("label");
+    name.textContent = label;
+    const track = document.createElement("div");
+    track.className = "hud-bar";
+    track.dataset.state = state || "ok";
+    const fill = document.createElement("i");
+    fill.style.width = Math.max(2, Math.min(100, (ratio || 0) * 100)).toFixed(0) + "%";
+    track.append(fill);
+    const value = document.createElement("b");
+    value.textContent = reading;
+    row.append(name, track, value);
+    return row;
+  }
+  function readout(id, m) {
+    if (/^crew\d+$/.test(id)) {
+      const index = Number(id.slice(4));
+      const v = m && index < m.cfg.crew ? vitals(m, index) : null;
+      if (!v) return { title: "Crew " + (index + 1), chip: "Crew", status: "Telemetry pending", state: "warn", rows: [] };
+      return {
+        title: v.name, chip: v.role || "Crew", status: v.status,
+        state: v.status === "Nominal" ? "ok" : "warn", pulse: v.pulse,
+        rows: [
+          ["Pulse", v.pulse + " bpm", (v.pulse - 40) / 130, band(v.pulse, 105, 135)],
+          ["Blood oxygen", v.spo2 + "%", (v.spo2 - 85) / 15, band(v.spo2, 94, 90, true)],
+          ["Fatigue", v.fatigue + "%", v.fatigue / 100, band(v.fatigue, 60, 85)],
+        ],
+      };
+    }
+    if (id === "Rover") {
+      const charge = Math.round(((m?.roverEnergy ?? 2.4) / 2.4) * 100);
+      const phase = dockPhase === "charging" ? "Charging at the habitat"
+        : dockPhase === "inbound" ? "Returning to the habitat"
+        : dockPhase === "outbound" ? "Leaving the apron"
+        : roverDriving ? "On the survey loop" : "Parked";
+      return {
+        title: "Rover", chip: "Surface vehicle",
+        status: m?.active?.rover ? "Disabled" : phase,
+        state: m?.active?.rover ? "bad" : dockPhase === "charging" ? "warn" : "ok",
+        rows: [
+          ["Battery", charge + "%", charge / 100, band(charge, 35, 15, true)],
+          ["Survey", Math.round((roverDistance / roverLength) * 100) + "%", roverDistance / roverLength, "ok"],
+        ],
+      };
+    }
+    if (["Habitat", "Crew quarters", "Science module"].includes(id) || id.startsWith("Extra habitat")) {
+      const integrity = Math.round(m?.integrity ?? 100);
+      const fault = Boolean(m?.active?.oxygen);
+      return {
+        title: id, chip: "Pressurised module",
+        status: fault ? "Oxygen system failure" : "Life support nominal",
+        state: fault ? "bad" : "ok",
+        rows: [
+          ["Integrity", integrity + "%", integrity / 100, band(integrity, 70, 45, true)],
+          ["Oxygen", fault ? "Fault" : "Nominal", fault ? 0.15 : 1, fault ? "bad" : "ok"],
+          ["Crew aboard", String(m?.cfg?.crew ?? "--"), Math.min(1, (m?.cfg?.crew ?? 0) / 8), "ok"],
+        ],
+      };
+    }
+    if (id.startsWith("Solar")) {
+      const fault = Boolean(m?.active?.solar);
+      return {
+        title: "Solar array", chip: "Power generation",
+        status: fault ? "Array failure" : "Generating",
+        state: fault ? "bad" : "ok",
+        rows: [["Output", fault ? "Offline" : "Nominal", fault ? 0.05 : 0.88, fault ? "bad" : "ok"]],
+      };
+    }
+    return { title: id, chip: "Settlement asset", status: "Operational", state: "ok", rows: [] };
+  }
+  viewer.screenSpaceEventHandler.setInputAction(({ endPosition }) => {
+    const picked = scene.pick(endPosition)?.id;
+    const id = typeof picked === "string" ? picked : picked?.id;
+    if (!placed || !id || !base.entities.getById(id)) { tooltip.hidden = true; return; }
+    const info = readout(id, roverMission);
+    tooltip.dataset.state = info.state;
     tooltip.replaceChildren();
-    const heading=document.createElement('strong'),body=document.createElement('span');
-    heading.textContent=title;body.textContent=detail;tooltip.append(heading,body);
-    tooltip.style.left=`${endPosition.x+18}px`;tooltip.style.top=`${endPosition.y-54}px`;
-    tooltip.hidden=false;
-  },C.ScreenSpaceEventType.MOUSE_MOVE);
+
+    const head = document.createElement("header");
+    const title = document.createElement("strong");
+    title.textContent = info.title;
+    const chip = document.createElement("span");
+    chip.className = "hud-chip";
+    chip.textContent = info.chip;
+    head.append(title, chip);
+
+    const status = document.createElement("p");
+    status.className = "hud-status";
+    if (info.pulse) {
+      const beat = document.createElement("i");
+      beat.className = "hud-beat";
+      // Beat in time with the reported pulse.
+      beat.style.animationDuration = (60 / Math.max(40, info.pulse)).toFixed(2) + "s";
+      status.append(beat);
+    }
+    status.append(document.createTextNode(info.status));
+
+    tooltip.append(head, status);
+    for (const [label, reading, ratio, state] of info.rows) {
+      tooltip.append(statRow(label, reading, ratio, state));
+    }
+    // Keep the card on screen near the right-hand edge.
+    const flip = endPosition.x > viewer.container.clientWidth - 260;
+    tooltip.style.left = (flip ? endPosition.x - 248 : endPosition.x + 18) + "px";
+    tooltip.style.top = Math.max(8, endPosition.y - 70) + "px";
+    tooltip.hidden = false;
+  }, C.ScreenSpaceEventType.MOUSE_MOVE);
   const duration = () =>
     matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1.05;
   function overview() {
@@ -176,7 +273,7 @@ export function createScene(onPick) {
         scale: file === 'crew' || file === 'field-suit' ? (scale||1)
           : (scale||1)*layout.scale*(file.startsWith('passage-') || file === 'rover' || file === 'kestrel' ? 1 : 1.28),
         minimumPixelSize: file.startsWith("passage-") ? 0 : file === "field-suit" ? 12 : file === "solar" ? 5 : 0,
-        maximumScale: file === "field-suit" ? 2 : undefined,
+        maximumScale: file === "field-suit" ? 9 : undefined,
         ...(file === "field-suit"
           ? {
               nodeTransformations: Object.fromEntries(
@@ -258,6 +355,20 @@ export function createScene(onPick) {
       sum + Math.hypot(point[0] - roverPath[index][0], point[1] - roverPath[index][1]),
     0,
   );
+  // The apron beside the habitat, where the rover returns to recharge.
+  const DOCK = { x: 26, y: -10 };
+  const DOCK_LEG = 7;      // seconds out and back
+  const DOCK_CHARGE = 16;  // seconds parked
+  function between(a, b, t) {
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      heading: Math.atan2(b.x - a.x, b.y - a.y),
+    };
+  }
+  let dockPhase = "survey";
+  let dockClock = 0;
+  let dockFrom = { x: roverPath[0][0], y: roverPath[0][1], heading: 0 };
   let roverDistance = 0;
   let roverFollow = false;
   let roverDriving = false;
@@ -361,12 +472,14 @@ export function createScene(onPick) {
     for (let i = 0; i < c.crew; i++) {
       model("crew" + i, "field-suit", -3 + i * 1.6, -5 + (i % 2) * 1.3);
       base.entities.getById("crew" + i).point = new C.PointGraphics({
-        pixelSize: 7,
-        color: C.Color.CYAN,
-        outlineColor: C.Color.BLACK,
+        pixelSize: 9,
+        color: C.Color.fromCssColorString("#7ef0ff"),
+        outlineColor: C.Color.fromCssColorString("#04121a"),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new C.DistanceDisplayCondition(35, 500),
+        // Without a far limit the suits simply vanish once you pull back from
+        // the settlement, which read as the crew disappearing.
+        distanceDisplayCondition: new C.DistanceDisplayCondition(30, 60000),
       });
     }
     for (let i = 0; i < 4; i++)
@@ -427,11 +540,38 @@ export function createScene(onPick) {
     const now = performance.now();
     const delta = Math.min((now - roverLastFrame) / 1000, 3);
     roverLastFrame = now;
-    if (roverDriving) roverDistance = (roverDistance + delta * 8.5) % roverLength;
     const rover = base.entities.getById("Rover");
     if (!rover) return;
     if (!roverDriving && !roverFollow) return;
-    const point = pointOnRoute(roverPath, roverDistance / roverLength);
+    // Survey the loop, then drive back to the habitat and charge before the
+    // next circuit, instead of orbiting the plain forever.
+    let point;
+    if (dockPhase === "survey") {
+      if (roverDriving) {
+        const previous = roverDistance;
+        roverDistance = (roverDistance + delta * 8.5) % roverLength;
+        if (roverDistance < previous) {
+          dockPhase = "inbound";
+          dockClock = 0;
+          dockFrom = pointOnRoute(roverPath, roverDistance / roverLength);
+        }
+      }
+      point = pointOnRoute(roverPath, roverDistance / roverLength);
+    } else {
+      if (roverDriving) dockClock += delta;
+      if (dockPhase === "inbound") {
+        const t = Math.min(1, dockClock / DOCK_LEG);
+        point = between(dockFrom, DOCK, t);
+        if (t === 1) { dockPhase = "charging"; dockClock = 0; }
+      } else if (dockPhase === "charging") {
+        point = { x: DOCK.x, y: DOCK.y, heading: Math.PI };
+        if (dockClock > DOCK_CHARGE) { dockPhase = "outbound"; dockClock = 0; }
+      } else {
+        const t = Math.min(1, dockClock / DOCK_LEG);
+        point = between(DOCK, dockFrom, t);
+        if (t === 1) dockPhase = "survey";
+      }
+    }
     const world = local(point.x, point.y, 1.05);
     rover.position.setValue(world);
     rover.orientation ??= new C.ConstantProperty();
