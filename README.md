@@ -22,6 +22,8 @@ The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `
 - `GET /api/landing-sites` — saved NASA Moon and Mars targets plus candidate regions.
 - `GET /api/landing-sites?body=Moon` — filter landing targets by body (`Moon` or `Mars`).
 - `GET /api/lunar-location?name=Tycho` — resolve an IAU-named lunar feature and return coordinates with temperature and mineral composition when available.
+- `GET /api/surface-roughness?name=Haworth&body=Moon` — search a location image with SerpAPI, pass it to Gemini vision, and return a micrometer-scale visual roughness proxy.
+- `GET /api/earth-analogs?name=Haworth&top=10` — return up to ten Earth analogs for one saved lunar candidate; omit `name` or use `name=all` for ten per saved lunar environment. Temperature, mineral, and roughness scores are combined when their data are available.
 - `GET /api/mars-location?name=Jezero` — resolve a Mars feature and return the same location, temperature, and mineral-composition fields.
 - `GET /api/lunar-temperatures` — saved annual-average Diviner temperature samples for the nine Artemis lunar candidate regions.
 - `POST /api/lunar-temperatures/refresh` — query the NASA PDS Diviner south-polar table and replace the temperature snapshot.
@@ -92,6 +94,16 @@ The first run downloads about 63 MB and caches it outside the repository. Set `M
 For surface temperature, the backend queries the [Mars Climate Database v6.2](https://www-mars.lmd.jussieu.fr/mcd_python/). It returns modeled surface temperature in kelvin for the requested point, Mars solar longitude (`ls`), and local time. Defaults are `ls=0`, `local_time=12`, and the climatology-average-solar dust scenario. These are climatological model values, not live weather or rover observations. Repeated point requests are cached in memory.
 
 For mineral composition, the backend samples the 4-pixel-per-degree multiband global mineral maps derived from NASA Mars Global Surveyor/TES and distributed by ASU's [TES archive](https://tes.mars.asu.edu/products/). The maps include plagioclase, olivine, low- and high-calcium pyroxene, hematite, and other components. The first query downloads the 51 MB ENVI map to a temporary cache; set `MISSION_MARS_MINERAL_CACHE_DIR` to change the cache directory. The returned four-mineral vector uses the same olivine, plagioclase, and low/high-calcium pyroxene keys as the PetDB Earth matcher; normalize values before comparison. TES spectral estimates are not PetDB modal percentages, and map pixels without source data are reported as unavailable rather than interpolated.
+
+### Image roughness and combined Earth analogs
+
+Copy `.env.example` to `.env` and set `SERPAPI_API_KEY` and `GEMINI_API_KEY`. The ignored `.env` is loaded by the backend at startup; exported process environment variables override values from that file. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. You can request one location's visual texture estimate with `GET /api/surface-roughness?name=Haworth&body=Moon` or coordinate hints with `latitude` and `longitude`.
+
+Gemini returns `surface_roughness_um`, a range, confidence, and the selected image's source page. Treat this as a model-generated visual proxy, not physical profilometry: ordinary web images rarely have a calibrated scale, and Gemini cannot establish true micrometer-scale Ra/Rq from an unscaled photograph. The response marks unscaled estimates as low confidence and includes the image provenance and limitations.
+
+`GET /api/earth-analogs?name=Haworth&top=10` ranks saved Earth temperature candidates by the average of available temperature, mineral, and roughness match scores. `name` can be a saved lunar site or `all`; the all-sites query returns up to ten results per lunar environment and does not automatically make image-provider calls. For a selected site, the endpoint requests roughness estimates when both API keys are configured; use `include_roughness=true` to request explicitly. It ranks complete three-factor matches ahead of partial records and identifies missing scoring dimensions in each feature.
+
+Mineral scoring requires either an Earth modal-mineral match file set through `EARTH_MINERAL_MATCH_FILE` or a PetDB modal CSV set through `EARTH_MINERAL_DATA_FILE`. The repository's current EarthChem CSV is mineral oxide chemistry, not the four modal olivine/plagioclase/pyroxene fields, so mineral scores remain unavailable until a compatible `ROCK MODE` / `Whole Rock` export is supplied. The committed MODIS comparison currently uses one monthly composite; full-year temperature comparisons require twelve monthly granules and a refreshed annual match file.
 
 ### Export Earth mineral data from PetDB
 

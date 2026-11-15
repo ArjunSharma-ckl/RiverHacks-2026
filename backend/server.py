@@ -9,6 +9,8 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from backend.catalog import EQUIPMENT_BY_ID, PHASES, PHASE_BY_ID, RESOURCES
+from backend.earth_analogs import select_earth_analogs
+from backend.image_roughness import estimate_surface_roughness
 from backend.landing_sites import load_snapshot
 from backend.lunar_location import lookup_lunar_location
 from backend.lunar_minerals import load_mineral_snapshot, refresh_lunar_minerals
@@ -261,6 +263,8 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                         {"method": "GET", "path": "/api/resources", "description": "Planetary and Earth science data providers."},
                         {"method": "GET", "path": "/api/landing-sites", "description": "Saved Moon and Mars targets and candidate regions."},
                         {"method": "GET", "path": "/api/lunar-location?name=Mons%20Mouton", "description": "Resolve a lunar feature and return available temperature and mineral data."},
+                        {"method": "GET", "path": "/api/surface-roughness?name=Haworth&body=Moon", "description": "Find a location image with SerpAPI and request Gemini's visual roughness proxy in micrometers."},
+                        {"method": "GET", "path": "/api/earth-analogs?name=Haworth&top=10", "description": "Rank Earth analog locations for saved lunar environments by available temperature, mineral, and visual-roughness matches."},
                         {"method": "GET", "path": "/api/mars-location?name=Jezero", "description": "Resolve a Mars feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/lunar-temperatures", "description": "Saved lunar temperature samples."},
                         {"method": "GET", "path": "/api/lunar-minerals", "description": "Saved lunar mineral samples."},
@@ -321,6 +325,70 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                     "not-found": 404,
                 }.get(result["status"], 500)
                 self._send_json(status_code, result)
+                return
+            if parsed.path == "/api/surface-roughness":
+                name = query.get("name", [None])[0]
+                body = query.get("body", ["Moon"])[0]
+                if name is None or not name.strip():
+                    raise RequestError("name is required and must identify a surface location.")
+                latitude = query.get("latitude", [None])[0]
+                longitude = query.get("longitude", query.get("longitude_east", [None]))[0]
+                if (latitude is None) != (longitude is None):
+                    raise RequestError("latitude and longitude must be provided together.")
+                try:
+                    if latitude is not None:
+                        latitude = float(latitude)
+                        longitude = float(longitude)
+                        if (
+                            not (-90 <= latitude <= 90)
+                            or not (-360 <= longitude <= 360)
+                            or any(value != value or abs(value) == float("inf") for value in (latitude, longitude))
+                        ):
+                            raise RequestError("Coordinates must be finite; latitude must be between -90 and 90.")
+                    estimate = estimate_surface_roughness(name, body, latitude, longitude)
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except RuntimeError as error:
+                    detail = str(error).casefold()
+                    status_code = 503 if "configure" in detail or "api_key" in detail else 502
+                    self._send_json(status_code, {"error": "Could not estimate surface roughness.", "detail": str(error)})
+                    return
+                self._send_json(200, {
+                    "status": "estimated",
+                    "body": body.title(),
+                    "location_name": name.strip(),
+                    **estimate,
+                })
+                return
+            if parsed.path == "/api/earth-analogs":
+                name = query.get("name", [None])[0]
+                try:
+                    top = int(query.get("top", ["10"])[0])
+                except ValueError as error:
+                    raise RequestError("top must be an integer from 1 to 10.") from error
+                roughness_query = query.get("include_roughness", [None])[0]
+                if roughness_query is None:
+                    include_roughness = None
+                elif roughness_query.casefold() in {"1", "true", "yes"}:
+                    include_roughness = True
+                elif roughness_query.casefold() in {"0", "false", "no"}:
+                    include_roughness = False
+                else:
+                    raise RequestError("include_roughness must be true or false.")
+                try:
+                    result = select_earth_analogs(name, top_n=top, include_roughness=include_roughness)
+                except KeyError as error:
+                    self._send_json(404, {"error": str(error.args[0]) if error.args else "Lunar environment was not found."})
+                    return
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except FileNotFoundError as error:
+                    self._send_json(503, {"error": "An Earth comparison dataset is unavailable.", "detail": str(error)})
+                    return
+                except (OSError, RuntimeError, json.JSONDecodeError) as error:
+                    self._send_json(502, {"error": "Could not build the Earth analog results.", "detail": str(error)})
+                    return
+                self._send_json(200, result)
                 return
             if parsed.path == "/api/mars-location":
                 name = query.get("name", [None])[0]

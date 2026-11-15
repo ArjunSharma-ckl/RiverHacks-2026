@@ -140,6 +140,22 @@ RESOURCES = [
         "use": "Global spectral abundance estimates for major surface minerals, including plagioclase, olivine, pyroxenes, and hematite.",
         "integration": "The Mars API samples the 4-pixel-per-degree multiband map at a named feature or coordinate. The four major groups shared with PetDB are returned for normalized comparisons; TES spectral estimates are not PetDB modal percentages.",
     },
+    {
+        "id": "serpapi-google-images",
+        "name": "SerpAPI Google Images Results API",
+        "url": "https://serpapi.com/images-results",
+        "protocols": ["HTTPS JSON API"],
+        "use": "Find image-result candidates associated with a named Moon, Earth, or Mars surface location.",
+        "integration": "SERPAPI_API_KEY is read from the environment or ignored .env file. Image links and their source pages are returned for provenance; result relevance is not guaranteed.",
+    },
+    {
+        "id": "gemini-vision-roughness-proxy",
+        "name": "Google Gemini multimodal image understanding",
+        "url": "https://ai.google.dev/gemini-api/docs/image-understanding",
+        "protocols": ["HTTPS generateContent API"],
+        "use": "Describe image-visible terrain texture and return an explicitly uncertain visual roughness proxy.",
+        "integration": "GEMINI_API_KEY and GEMINI_MODEL are read from the environment or ignored .env file. Ordinary unscaled web images cannot provide calibrated micrometer roughness measurements.",
+    },
 ]
 
 PHASE_BY_ID = {phase["id"]: phase for phase in PHASES}
