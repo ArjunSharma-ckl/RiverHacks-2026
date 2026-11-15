@@ -658,7 +658,8 @@ export function createScene(onPick) {
           : mode === "Performance"
             ? 1
             : Math.min(devicePixelRatio || 1, 1.5);
-      viewer.targetFrameRate = 30;
+      // Only the lowest preset needs the flat cap; the globe should feel smooth.
+      viewer.targetFrameRate = mode === "Performance" ? 30 : 60;
       viewer.shadows = !placed && mode !== "Performance";
       scene.postProcessStages.fxaa.enabled = mode === "High";
       scene.globe.maximumScreenSpaceError =
