@@ -490,7 +490,7 @@ def hazy_ground_material(name, base_a, base_b, haze, far_start, far_end, tex=Non
     t.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
     if tex:
         mapping = t.nodes.new('ShaderNodeMapping')
-        mapping.inputs['Scale'].default_value = (0.004, 0.004, 0.004)
+        mapping.inputs['Scale'].default_value = (0.0006, 0.0006, 0.0006)
         img = t.nodes.new('ShaderNodeTexImage')
         img.image = tex
         mix = t.nodes.new('ShaderNodeMixRGB')
@@ -545,8 +545,8 @@ for i in range(45):
            (d * math.cos(a), d * math.sin(a), -0.6), random.uniform(4, 9), lamp, 6)
     light.parent = LAUNCH_GROUND
 key_scale(LAUNCH_GROUND, 1, 1)
-key_scale(LAUNCH_GROUND, 280, 1)
-key_scale(LAUNCH_GROUND, 300, 0.001)   # ground falls away once the stack is in space
+key_scale(LAUNCH_GROUND, 430, 1)
+key_scale(LAUNCH_GROUND, 450, 0.001)   # ground stays under the falling boosters
 
 # ------------------------------------------------------------------- flight
 key_loc(ROOT_EMPTY, 1, (0, 0, -1))
@@ -686,6 +686,9 @@ for f, loc, rot in [
 
 # ------------------------------------------------------------------ Mars set
 SITE = add_empty('MARS_LANDING_SITE', (0, -2600, 0), None, MARS)
+key_scale(SITE, 1, 0.001)
+key_scale(SITE, 605, 0.001)
+key_scale(SITE, 606, 1.0)      # the wide Mars plain must not reach the launch site
 
 
 def mars_height(x, y):
@@ -697,12 +700,12 @@ def mars_height(x, y):
     return flat * dunes - 0.03
 
 
-terrain = disk_terrain('Rocky Martian terrain', MARS, 1200, 64, 160, mars_height)
+terrain = disk_terrain('Rocky Martian terrain', MARS, 12000, 80, 160, mars_height)
 terrain.parent = SITE
 mimg = bpy.data.images.load(os.path.join(ASSETS, 'mars-ground.png'), check_existing=True)
 MREG = hazy_ground_material('Mars regolith from NASA texture',
                             (0.24, 0.10, 0.05), (0.42, 0.19, 0.10),
-                            (0.55, 0.29, 0.17), 420, 1050, tex=mimg)
+                            (0.55, 0.29, 0.17), 5000, 11500, tex=mimg)
 terrain.data.materials.append(MREG)
 
 rng = random.Random(2026)
@@ -713,18 +716,7 @@ for i in range(150):
            (d * math.cos(q), d * math.sin(q), mars_height(d * math.cos(q), d * math.sin(q)) + rng.uniform(-0.1, 0.4)),
            rng.uniform(0.2, 2.2), REGOLITH, 12, SITE)
 
-mars_planet = sphere('Mars (planet)', MARS, (0, -30000, 1400), 2400, REGOLITH, 96)
-mars_planet.data.materials.clear()
-MP = bpy.data.materials.new('Mars map')
-MP.use_nodes = True
-mpt = MP.node_tree
-mptex = mpt.nodes.new('ShaderNodeTexImage')
-mptex.image = mimg
-mpt.links.new(mptex.outputs['Color'], mpt.nodes['Principled BSDF'].inputs['Base Color'])
-mars_planet.data.materials.append(MP)
-key_scale(mars_planet, 1, 1)
-key_scale(mars_planet, 636, 1)
-key_scale(mars_planet, 642, 0.001)   # landing sky is haze only
+# No Mars globe: the 12 km descender plain and haze carry the horizon.
 
 # Orion arriving at Mars (same NASA mesh, deployed arrays, separate path).
 MARS_ORION_E = add_empty('ORION_MARS_APPROACH', (0, -4850, 210), None, MARS)
@@ -888,7 +880,7 @@ A2, J2 = sim_astronaut('ASTRONAUT_2', (0.95, -2.7, 0.05), 770,
 FLAG = add_empty('SPACE_INVADERS_FLAG', (10.4, -12.0, 0), SITE, EVA)
 flag_pole = cyl('Flag support pole', EVA, (0, 0, 1.55), 0.05, 3.1, METAL, 12, FLAG)
 flag_pole.visible_shadow = False   # keeps its shadow off the thin dust haze
-box('Flag cross rod', EVA, (1.3, 0, 2.45), (2.6, 0.05, 0.05), METAL, FLAG)
+box('Flag cross rod', EVA, (1.3, 0, 3.05), (2.6, 0.05, 0.05), METAL, FLAG)
 fabric = prim('primitive_plane_add', 'Flag fabric', EVA, None, size=1, location=(1.3, 0, 1.85))
 fabric.scale = (2.6, 1.3, 1.0)
 fabric.rotation_euler = (D(90), 0, 0)
@@ -903,6 +895,9 @@ ut.links.new(utex.outputs['Color'], ut.nodes['Principled BSDF'].inputs['Base Col
 ut.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.8
 fabric.data.materials.clear()
 fabric.data.materials.append(USAM)
+key_loc(fabric, 1, (1.3, 0, 1.85))
+key_loc(fabric, 852, (1.3, 0, 1.85))
+key_loc(fabric, 868, (1.3, 0, 2.45))   # hoisted so its top corner meets the pole tip
 key_scale(fabric, 1, (0.156, 1.3, 1))
 key_scale(fabric, 852, (0.156, 1.3, 1))
 key_scale(fabric, 868, (2.6, 1.3, 1))    # unfurls to full size
@@ -917,6 +912,12 @@ key_rot(FLAG, 880, (0, 0, 0))
 for f, rot in ((846, (0, 0, 0)), (856, (D(20), 0, 0)), (868, (D(4), 0, 0)), (880, (0, 0, 0))):
     if J1.get('r_arm'):
         key_rot(J1['r_arm'], f, rot)
+# Both astronauts turn to face the flag while it is planted.
+for rig, endf, pos in ((A1, 854, (8.4, -10.8)), (A2, 868, (5.4, -8.4))):
+    fx, fy = 10.4, -12.0
+    face = math.atan2(-(fx - pos[0]), -(fy - pos[1]))
+    key_rot(rig, endf, (0, 0, face))
+    key_rot(rig, 880, (0, 0, face))
 
 # -------------------------------------------------------------- cameras
 def follow_target(name, target, offset):
@@ -1145,18 +1146,24 @@ def sky_material(name, color=(1, 1, 1), tex=None, strength=1.6):
 
 
 SKY_BODIES = [
-    ('Sun', 131, 9, 32000, 1200, sky_material('Sky sun', (1.0, 0.93, 0.78), strength=40)),
-    ('Earth', 133, -55, 24000, 6000, sky_material('Sky earth', tex='earth.jpg', strength=7.0)),
-    ('Mars', 127, 10, 27000, 360, sky_material('Sky mars', tex='mars.jpg', strength=1.4)),
-    ('Jupiter', 104, 15, 35000, 700, sky_material('Sky jupiter', (0.60, 0.48, 0.34), strength=1.0)),
-    ('Saturn', 141, 17, 40000, 520, sky_material('Sky saturn', (0.58, 0.53, 0.42), strength=1.0)),
+    ('Sun', 131, 9, 32000, 1200, sky_material('Sky sun', (1.0, 0.93, 0.78), strength=40),
+     [(1, 1.0)]),
+    ('Sky earth far', 133, -55, 24000, 6000, sky_material('Sky earth far', tex='earth.jpg', strength=7.0),
+     [(1, 1.0), (430, 1.0), (450, 0.001)]),
+    ('Sky earth near', 120, -7, 20000, 4500, sky_material('Sky earth near', tex='earth.jpg', strength=7.0),
+     [(1, 0.001), (435, 0.001), (455, 1.0)]),
+    ('Mars', 127, 10, 27000, 360, sky_material('Sky mars', tex='mars.jpg', strength=1.4), [(1, 1.0)]),
+    ('Jupiter', 104, 15, 35000, 700, sky_material('Sky jupiter', (0.60, 0.48, 0.34), strength=1.0), [(1, 1.0)]),
+    ('Saturn', 141, 17, 40000, 520, sky_material('Sky saturn', (0.58, 0.53, 0.42), strength=1.0), [(1, 1.0)]),
 ]
-for name, az, elev, dist, radius, mat in SKY_BODIES:
+for name, az, elev, dist, radius, mat, windows in SKY_BODIES:
     a, e = D(az), D(elev)
     pos = (dist * math.cos(e) * math.cos(a), dist * math.cos(e) * math.sin(a), dist * math.sin(e))
     body = sphere(name, CAMS, pos, radius, mat, 64, SKY_ROOT)
     body.visible_shadow = False
     body['celestial_body'] = 'background sphere at %d km' % round(dist / 1000)
+    for f, v in windows:
+        key_scale(body, f, v)
 
 key_scale(SKY_ROOT, 1, 1)
 key_scale(SKY_ROOT, 600, 1)
