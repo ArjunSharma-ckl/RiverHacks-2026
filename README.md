@@ -14,6 +14,8 @@ python -m backend.server
 
 The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `MISSION_API_PORT`, or `MISSION_DATA_FILE` to override the bind address, port, or observation file path.
 
+For the browser interface, also start the web app with `npm run dev`. The web server proxies planetary analog requests to `MISSION_BACKEND_URL` (defaults to `http://127.0.0.1:8000`). Set this to the reachable Python API URL for a deployed web app.
+
 ### API
 
 - `GET /api/health` — service status.
@@ -24,6 +26,8 @@ The API listens on `http://127.0.0.1:8000` by default. Set `MISSION_API_HOST`, `
 - `GET /api/lunar-location?name=Tycho` — resolve an IAU-named lunar feature and return coordinates with temperature and mineral composition when available.
 - `GET /api/surface-roughness?name=Haworth&body=Moon` — search a location image with SerpAPI, pass it to Gemini vision, and return a micrometer-scale visual roughness proxy.
 - `GET /api/earth-analogs?name=Haworth&top=10` — return up to ten combined Earth analogs for one saved lunar candidate, plus separate top-ten lists for each mineral, temperature, roughness, and combined score. Omit `name` or use `name=all` for lists per saved lunar environment.
+- `GET /api/mars-analogs?name=Jezero&top=10` — return separate top-ten Earth rankings for Mars mineral families, temperature, image-derived roughness, and combined available scores.
+- `GET /api/earth-analog-attribute?body=Mars&attribute=temperature&value=220&unit=K` — return only the top ten for one selected Moon/Mars attribute (`temperature`, `mineral`, or `roughness`). Mineral searches also require `mineral=olivine`, `plagioclase`, `low_calcium_pyroxene`, `high_calcium_pyroxene`, or `iron`.
 - `GET /api/mars-location?name=Jezero` — resolve a Mars feature and return the same location, temperature, and mineral-composition fields.
 - `GET /api/lunar-temperatures` — saved annual-average Diviner temperature samples for the nine Artemis lunar candidate regions.
 - `POST /api/lunar-temperatures/refresh` — query the NASA PDS Diviner south-polar table and replace the temperature snapshot.
@@ -97,11 +101,17 @@ For mineral composition, the backend samples the 4-pixel-per-degree multiband gl
 
 ### Image roughness and combined Earth analogs
 
+Open `/analog-search.html` for the text-only Moon/Mars analog finder. Choose a named location to return the mineral, temperature, roughness, and combined lists, or select one attribute to receive only that ranking.
+
 Copy `.env.example` to `.env` and set `SERPAPI_API_KEY` and `GEMINI_API_KEY`. The ignored `.env` is loaded by the backend at startup; exported process environment variables override values from that file. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. You can request one location's visual texture estimate with `GET /api/surface-roughness?name=Haworth&body=Moon` or coordinate hints with `latitude` and `longitude`.
 
 Gemini returns `surface_roughness_um`, a range, confidence, and the selected image's source page. Treat this as a model-generated visual proxy, not physical profilometry: ordinary web images rarely have a calibrated scale, and Gemini cannot establish true micrometer-scale Ra/Rq from an unscaled photograph. The response marks unscaled estimates as low confidence and includes the image provenance and limitations.
 
 `GET /api/earth-analogs?name=Haworth&top=10` returns a `rankings.by_lunar_environment` list with separate top-ten GeoJSON feature lists for olivine, plagioclase, low-calcium pyroxene, high-calcium pyroxene, iron-bearing minerals, temperature, roughness, and all available metrics combined. The top-level `features` array is the combined top ten for each requested environment. Each ranked feature includes its `match_rank` and the corresponding match percentage. `name` can be a saved lunar site or `all`; the all-sites query returns lists per lunar environment and does not automatically make image-provider calls. For a selected site, the endpoint requests roughness estimates when both API keys are configured; use `include_roughness=true` to request explicitly. It ranks records with more available dimensions ahead of partial records and identifies missing scoring dimensions in each feature.
+
+`GET /api/mars-analogs?name=Jezero&top=10` resolves the Mars feature, samples the Mars Climate Database and TES mineral map, asks SerpAPI for a Mars location image, and passes that image to Gemini for a micrometer roughness proxy when both provider keys are configured. It returns separate top-ten mineral, temperature, roughness, and combined lists under `rankings.by_environment`. The temperature ranking uses the saved Earth MODIS candidate grid; the mineral ranking uses the same EarthChem end-member formula fits described below. The Mars mineral map reports TES spectral abundance estimates, not EarthChem oxide chemistry, so mineral formula matches indicate family fit rather than a direct Mars-to-Earth chemical comparison. Without roughness credentials, that list is empty and the response marks roughness unavailable.
+
+`GET /api/earth-analog-attribute` takes one temperature, one mineral family, or one roughness value and returns only the selected ranking. It ignores the other dimensions. Temperature accepts `K` or `C`; roughness is in micrometers. A mineral query ranks EarthChem samples by the closest fixed formula end-member for that family.
 
 The endpoint uses the current EarthChem PetDB oxide-analysis CSV by default. It converts reported oxide weight percentages to atom proportions, then compares each Earth sample with fixed mineral end-members: olivine `Mg2SiO4` / `Fe2SiO4`, plagioclase `NaAlSi3O8` / `CaAl2Si2O8`, low-calcium pyroxene `Mg2Si2O6` / `Fe2Si2O6`, and high-calcium pyroxene `CaMgSi2O6` / `CaFeSi2O6`; iron-bearing analyses are compared with Fe, FeO, and Fe2O3. The closest formula is returned as `earth_best_fit_formula`, and `earth_formula_match_percentage` measures its normalized elemental-vector similarity. Silicate scores use cation proportions, while iron scores include oxygen to distinguish native iron from oxides. Intermediate solid-solution compositions score between their end-members. Incomplete formula inputs are skipped; unclassified pyroxene analyses are assigned to whichever low- or high-calcium end-member family fits better. A candidate's combined mineral score averages formula-fit scores only for mineral groups present in the selected lunar abundance pixel. These are Earth-side ideal-formula fit scores, not direct Lunar-to-Earth chemistry scores: the lunar map contains mineral abundance values, not lunar oxide analyses. The PetDB results are georeferenced sample points, and formula fit does not imply regional abundance. Set `EARTH_MINERAL_DATA_FILE` for another oxide-analysis CSV or `EARTH_MINERAL_MATCH_FILE` for a precomputed match FeatureCollection. The committed MODIS comparison currently uses one monthly composite; full-year temperature comparisons require twelve monthly granules and a refreshed annual match file.
 

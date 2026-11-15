@@ -65,8 +65,21 @@ export function createApi(env = {}) {
   const nasaKey = env.NASA_API_KEY || 'DEMO_KEY';
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
+  const missionBackend = String(env.MISSION_BACKEND_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+  const proxyMissionBackend = async (path, params) => {
+    const query = params.toString();
+    const response = await fetch(`${missionBackend}/api${path}${query ? `?${query}` : ''}`, {
+      signal: AbortSignal.timeout(300000),
+      headers: { accept: 'application/json' }
+    });
+    const result = await response.json().catch(() => ({}));
+    return response.ok ? result : { ...result, __proxyStatus: response.status };
+  };
 
   const routes = {
+    '/earth-analogs': p => proxyMissionBackend('/earth-analogs', p),
+    '/mars-analogs': p => proxyMissionBackend('/mars-analogs', p),
+    '/earth-analog-attribute': p => proxyMissionBackend('/earth-analog-attribute', p),
     '/analog/climate': p => {
       const lat = number(p, 'lat', -90, 90), lon = number(p, 'lon', -180, 180);
       const q = new URLSearchParams({latitude:lat.toFixed(4), longitude:lon.toFixed(4), community:'RE', format:'JSON', parameters:'T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS'});
@@ -240,10 +253,15 @@ export function createApi(env = {}) {
       return res.end('{}');
     }
     try {
-      res.end(JSON.stringify(await route(url.searchParams)));
+      const result = await route(url.searchParams);
+      if (Number.isInteger(result?.__proxyStatus)) {
+        res.statusCode = result.__proxyStatus;
+        delete result.__proxyStatus;
+      }
+      res.end(JSON.stringify(result));
     } catch {
       res.statusCode = 503;
-      res.end('{}');
+      res.end(JSON.stringify({ error: 'Planetary analog backend unavailable. Check MISSION_BACKEND_URL and the Python API.' }));
     }
   };
 }

@@ -9,7 +9,11 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from backend.catalog import EQUIPMENT_BY_ID, PHASES, PHASE_BY_ID, RESOURCES
-from backend.earth_analogs import select_earth_analogs
+from backend.earth_analogs import (
+    select_earth_analog_attribute,
+    select_earth_analogs,
+    select_earth_analogs_for_location,
+)
 from backend.image_roughness import estimate_surface_roughness
 from backend.landing_sites import load_snapshot
 from backend.lunar_location import lookup_lunar_location
@@ -265,6 +269,8 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                         {"method": "GET", "path": "/api/lunar-location?name=Mons%20Mouton", "description": "Resolve a lunar feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/surface-roughness?name=Haworth&body=Moon", "description": "Find a location image with SerpAPI and request Gemini's visual roughness proxy in micrometers."},
                         {"method": "GET", "path": "/api/earth-analogs?name=Haworth&top=10", "description": "Return top-ten Earth rankings for formula-fit mineral chemistry, temperature, roughness, and combined match score."},
+                        {"method": "GET", "path": "/api/mars-analogs?name=Jezero&top=10", "description": "Return top-ten Earth mineral, temperature, Gemini roughness, and combined rankings for a Mars location."},
+                        {"method": "GET", "path": "/api/earth-analog-attribute?body=Mars&attribute=temperature&value=220&unit=K", "description": "Return top-ten Earth matches for only the requested Moon or Mars attribute."},
                         {"method": "GET", "path": "/api/mars-location?name=Jezero", "description": "Resolve a Mars feature and return available temperature and mineral data."},
                         {"method": "GET", "path": "/api/lunar-temperatures", "description": "Saved lunar temperature samples."},
                         {"method": "GET", "path": "/api/lunar-minerals", "description": "Saved lunar mineral samples."},
@@ -378,8 +384,25 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                 try:
                     result = select_earth_analogs(name, top_n=top, include_roughness=include_roughness)
                 except KeyError as error:
-                    self._send_json(404, {"error": str(error.args[0]) if error.args else "Lunar environment was not found."})
-                    return
+                    if name is None:
+                        self._send_json(404, {"error": str(error.args[0]) if error.args else "Lunar environment was not found."})
+                        return
+                    try:
+                        location_result = lookup_lunar_location(name)
+                    except (OSError, RuntimeError, URLError) as lookup_error:
+                        self._send_json(502, {"error": "Could not resolve the lunar feature or sample its data.", "detail": str(lookup_error)})
+                        return
+                    if location_result.get("status") != "resolved":
+                        status_code = 409 if location_result.get("status") == "ambiguous" else 404
+                        self._send_json(status_code, location_result)
+                        return
+                    try:
+                        result = select_earth_analogs_for_location(
+                            "Moon", name, location_result, top_n=top, include_roughness=include_roughness
+                        )
+                    except (ValueError, FileNotFoundError) as location_error:
+                        self._send_json(503 if isinstance(location_error, FileNotFoundError) else 400, {"error": str(location_error)})
+                        return
                 except ValueError as error:
                     raise RequestError(str(error)) from error
                 except FileNotFoundError as error:
@@ -387,6 +410,68 @@ class MissionRequestHandler(BaseHTTPRequestHandler):
                     return
                 except (OSError, RuntimeError, json.JSONDecodeError) as error:
                     self._send_json(502, {"error": "Could not build the Earth analog results.", "detail": str(error)})
+                    return
+                self._send_json(200, result)
+                return
+            if parsed.path == "/api/mars-analogs":
+                name = query.get("name", [None])[0]
+                if name is None or not name.strip():
+                    raise RequestError("name is required and must identify a Mars crater, mountain, or other surface feature.")
+                try:
+                    top = int(query.get("top", ["10"])[0])
+                except ValueError as error:
+                    raise RequestError("top must be an integer from 1 to 10.") from error
+                roughness_query = query.get("include_roughness", [None])[0]
+                if roughness_query is None:
+                    include_roughness = None
+                elif roughness_query.casefold() in {"1", "true", "yes"}:
+                    include_roughness = True
+                elif roughness_query.casefold() in {"0", "false", "no"}:
+                    include_roughness = False
+                else:
+                    raise RequestError("include_roughness must be true or false.")
+                try:
+                    location_result = lookup_mars_location(
+                        name,
+                        solar_longitude=query.get("ls", ["0"])[0],
+                        local_time=query.get("local_time", ["12"])[0],
+                        dust_scenario=query.get("dust_scenario", ["1"])[0],
+                    )
+                    if location_result.get("status") != "resolved":
+                        status_code = 409 if location_result.get("status") == "ambiguous" else 404
+                        self._send_json(status_code, location_result)
+                        return
+                    result = select_earth_analogs_for_location(
+                        "Mars", name, location_result, top_n=top, include_roughness=include_roughness
+                    )
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except FileNotFoundError as error:
+                    self._send_json(503, {"error": "An Earth comparison dataset is unavailable.", "detail": str(error)})
+                    return
+                except (OSError, RuntimeError, URLError, json.JSONDecodeError) as error:
+                    self._send_json(502, {"error": "Could not build the Mars analog results.", "detail": str(error)})
+                    return
+                self._send_json(200, result)
+                return
+            if parsed.path == "/api/earth-analog-attribute":
+                try:
+                    top = int(query.get("top", ["10"])[0])
+                    result = select_earth_analog_attribute(
+                        query.get("body", ["Moon"])[0],
+                        query.get("attribute", [None])[0],
+                        value=query.get("value", [None])[0],
+                        unit=query.get("unit", ["K"])[0],
+                        mineral=query.get("mineral", [None])[0],
+                        top_n=top,
+                    )
+                except ValueError as error:
+                    raise RequestError(str(error)) from error
+                except FileNotFoundError as error:
+                    self._send_json(503, {"error": "An Earth comparison dataset is unavailable.", "detail": str(error)})
+                    return
+                except (OSError, RuntimeError, json.JSONDecodeError) as error:
+                    self._send_json(502, {"error": "Could not build the attribute-only Earth analog results.", "detail": str(error)})
                     return
                 self._send_json(200, result)
                 return

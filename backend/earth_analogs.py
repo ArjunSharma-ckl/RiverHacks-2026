@@ -16,7 +16,6 @@ from backend.earth_mineral_matches import (
     build_match_collection as _build_mineral_matches,
 )
 from backend.earth_chemical_matches import (
-    EARTHCHEM_FORMULAS,
     build_formula_match_collection as _build_formula_matches,
     is_oxide_analysis_csv as _is_oxide_analysis_csv,
 )
@@ -198,8 +197,11 @@ def _roughness_score(lunar_um, earth_um):
     return 100.0 * min(lunar_um, earth_um) / max(lunar_um, earth_um)
 
 
-def _raw_lunar_minerals(site):
-    abundance = (site.get("mineral_composition") or {}).get("abundance_values")
+def _raw_environment_minerals(site):
+    composition = site.get("mineral_composition") or {}
+    if isinstance(composition.get("mineral_composition"), dict):
+        composition = composition["mineral_composition"]
+    abundance = composition.get("abundance_values")
     if not isinstance(abundance, dict):
         return None
     keys = ("olivine", "plagioclase", "low_calcium_pyroxene", "high_calcium_pyroxene")
@@ -209,12 +211,37 @@ def _raw_lunar_minerals(site):
         return None
     if any(not math.isfinite(value) or value < 0 for value in values.values()):
         return None
+    iron = composition.get("iron_oxide_hematite")
+    try:
+        if iron is not None and math.isfinite(float(iron)) and float(iron) > 0:
+            values["iron"] = float(iron)
+    except (TypeError, ValueError):
+        pass
     return values
+
+
+def _raw_lunar_minerals(site):
+    values = _raw_environment_minerals(site)
+    if values is None:
+        return None
+    return {key: values[key] for key in ("olivine", "plagioclase", "low_calcium_pyroxene", "high_calcium_pyroxene")}
+
+
+def _environment_temperature_kelvin(site):
+    temperature = site.get("temperature") or {}
+    for key in ("annual_average_kelvin", "surface_temperature_kelvin", "temperature_kelvin"):
+        try:
+            value = float(temperature[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(value) and value > 0:
+            return value
+    return None
 
 
 def _mineral_score(site, properties):
     if properties.get("earth_ideal_formula_family") or properties.get("earth_mineral_matches"):
-        lunar_values = _raw_lunar_minerals(site)
+        lunar_values = _raw_environment_minerals(site)
         component_scores = _mineral_component_scores(site, properties)
         if lunar_values is None:
             return None
@@ -327,16 +354,33 @@ def _store_formula_match(properties, source, sample_coords=None, distance_km=Non
     properties["earth_mineral_data_source"] = source.get("earth_data_source", "EarthChem PetDB")
 
 
-def _merge_site_candidates(site, temperature_features, mineral_features, include_roughness, candidate_limit=None):
+def _merge_site_candidates(
+    site,
+    temperature_features,
+    mineral_features,
+    include_roughness,
+    candidate_limit=None,
+    body="Moon",
+    target_roughness_um=None,
+):
+    target_temperature = _environment_temperature_kelvin(site)
     candidates = {}
     for feature in temperature_features:
         coords = _coordinates(feature)
         if coords is None:
             continue
         candidate = {"type": "Feature", "geometry": {"type": "Point", "coordinates": list(coords)}, "properties": dict(feature["properties"])}
-        candidate["properties"]["temperature_match_percentage"] = _temperature_score(
-            float(candidate["properties"].get("lunar_annual_average_kelvin", 0) or 0),
-            float(candidate["properties"].get("earth_annual_average_kelvin", candidate["properties"].get("earth_temperature_kelvin", 0)) or 0),
+        earth_temperature = candidate["properties"].get(
+            "earth_annual_average_kelvin", candidate["properties"].get("earth_temperature_kelvin")
+        )
+        try:
+            earth_temperature = float(earth_temperature)
+        except (TypeError, ValueError):
+            earth_temperature = None
+        candidate["properties"]["environment_temperature_kelvin"] = target_temperature
+        candidate["properties"]["temperature_match_percentage"] = (
+            _temperature_score(target_temperature, earth_temperature)
+            if target_temperature is not None and earth_temperature is not None else None
         )
         candidates[_candidate_key(candidate)] = candidate
 
@@ -390,12 +434,18 @@ def _merge_site_candidates(site, temperature_features, mineral_features, include
         candidates[key] = candidate
 
     values = list(candidates.values())
-    if include_roughness:
-        lunar_point = site.get("reference_point") or {}
+    if target_roughness_um is not None:
+        lunar_roughness = {
+            "status": "provided",
+            "surface_roughness_um": target_roughness_um,
+            "source": "caller-supplied attribute",
+        }
+    elif include_roughness:
+        target_point = site.get("reference_point") or {}
         try:
             lunar_roughness = estimate_surface_roughness(
-                site.get("site_name"), "Moon",
-                lunar_point.get("latitude"), lunar_point.get("longitude_east"),
+                site.get("site_name"), body,
+                target_point.get("latitude"), target_point.get("longitude_east"),
             )
         except (RuntimeError, ValueError, OSError) as error:
             lunar_roughness = {"status": "unavailable", "reason": str(error)}
@@ -445,7 +495,9 @@ def _merge_site_candidates(site, temperature_features, mineral_features, include
         props["match_metrics_available"] = list(available)
         props["match_metrics_missing"] = [key for key, value in metrics.items() if value is None]
         props["match_status"] = "complete" if len(available) == 3 else "partial"
-        props["lunar_surface_roughness"] = lunar_roughness
+        if body == "Moon":
+            props["lunar_surface_roughness"] = lunar_roughness
+        props["environment_surface_roughness"] = lunar_roughness
 
     values.sort(key=lambda item: (
         -len(item["properties"].get("match_metrics_available", [])),
@@ -481,6 +533,363 @@ def _ranked_feature_copies(features, metric, score_key, top_n, *, combined=False
         copy["properties"].update({"match_rank": rank, "ranking_metric": metric})
         ranked.append(copy)
     return ranked
+
+
+def _dedupe_geo_features(collection, identity_keys):
+    if not collection:
+        return []
+    result = {}
+    for feature in collection.get("features", []):
+        if not isinstance(feature, dict) or not isinstance(feature.get("properties"), dict):
+            continue
+        coordinates = _coordinates(feature)
+        if coordinates is None:
+            continue
+        props = feature["properties"]
+        identity = next(
+            (str(props[key]) for key in identity_keys if key != "earth_mineral_class" and props.get(key)),
+            None,
+        )
+        if identity and props.get("earth_mineral_class"):
+            identity = f"{identity}|{props['earth_mineral_class']}"
+        result.setdefault(str(identity or coordinates).casefold(), feature)
+    return list(result.values())
+
+
+def _all_earth_temperature_features():
+    return _dedupe_geo_features(
+        _earth_temperature_collection(), ("earth_grid_id", "earth_sample_id")
+    )
+
+
+def _all_earth_mineral_features(mineral_class=None):
+    features = _dedupe_geo_features(
+        _earth_mineral_collection(), ("earth_sample_id", "earth_mineral_class", "earth_sample_name")
+    )
+    if mineral_class:
+        features = [
+            feature for feature in features
+            if feature["properties"].get("earth_mineral_class") == mineral_class
+        ]
+    return features
+
+
+def _environment_from_location_payload(body, name, payload):
+    location = payload.get("location") or {}
+    temperature = payload.get("temperature") or {}
+    temperature_kelvin = _environment_temperature_kelvin({"temperature": temperature})
+    mineral_result = payload.get("mineral_composition") or {}
+    mineral_composition = mineral_result.get("mineral_composition")
+    if not isinstance(mineral_composition, dict):
+        mineral_composition = mineral_result
+    reference_point = {
+        "latitude": location.get("latitude"),
+        "longitude_east": location.get("longitude_east"),
+    }
+    abundance_values = mineral_composition.get("abundance_values")
+    normalized_minerals = None
+    if isinstance(abundance_values, dict):
+        normalized_minerals = {
+            "abundance_values": abundance_values,
+            "iron_oxide_hematite": mineral_composition.get("iron_oxide_hematite"),
+            "units": mineral_composition.get("units"),
+        }
+    return {
+        "landing_site_id": f"{body.casefold()}-location-{_normalize_name(name).replace(' ', '-')}",
+        "body": body,
+        "site_name": location.get("name") or name,
+        "mission": None,
+        "status": "resolved-location",
+        "reference_point": reference_point,
+        "temperature": {"annual_average_kelvin": temperature_kelvin} if temperature_kelvin else {},
+        "mineral_composition": normalized_minerals,
+        "source_temperature": temperature,
+        "source_minerals": mineral_result,
+        "location": location,
+    }
+
+
+def _rank_environment(site, body, top_n=DEFAULT_TOP_N, include_roughness=None):
+    roughness_keys = roughness_credentials_available()
+    roughness_requested = roughness_keys if include_roughness is None else bool(include_roughness)
+    roughness_performed = roughness_requested and roughness_keys
+    temperature_features = _all_earth_temperature_features()
+    mineral_features = _all_earth_mineral_features()
+    candidates, environment_roughness = _merge_site_candidates(
+        site,
+        temperature_features,
+        mineral_features,
+        include_roughness=roughness_performed,
+        body=body,
+    )
+    if roughness_requested and not roughness_keys:
+        environment_roughness = {
+            "status": "not-configured",
+            "reason": "Set SERPAPI_API_KEY and GEMINI_API_KEY in .env to request image-based roughness.",
+        }
+        for candidate in candidates:
+            candidate["properties"]["environment_surface_roughness"] = environment_roughness
+            if body == "Moon":
+                candidate["properties"]["lunar_surface_roughness"] = environment_roughness
+    for candidate in candidates:
+        props = candidate["properties"]
+        for stale_key in (
+            "lunar_site_id", "lunar_site_name", "lunar_site_status",
+            "lunar_annual_average_kelvin", "lunar_annual_average_celsius",
+            "lunar_depth_below_surface_m", "lunar_mineral_abundance_value", "mission",
+        ):
+            props.pop(stale_key, None)
+        props.update({
+            "environment_body": body,
+            "environment_location_id": site.get("landing_site_id"),
+            "environment_location_name": site.get("site_name"),
+        })
+
+    minerals = {
+        mineral: _ranked_feature_copies(
+            candidates, f"{mineral}_match_percentage", f"{mineral}_match_percentage", top_n
+        )
+        for mineral in ("olivine", "plagioclase", "low_calcium_pyroxene", "high_calcium_pyroxene", "iron")
+    }
+    temperature = _ranked_feature_copies(
+        candidates, "temperature", "temperature_match_percentage", top_n
+    )
+    roughness = _ranked_feature_copies(
+        candidates, "roughness", "roughness_match_percentage", top_n
+    )
+    combined = _ranked_feature_copies(
+        candidates, "combined", "combined_match_percentage", top_n, combined=True
+    )
+    for feature in combined:
+        feature["properties"].pop("ranking_metric", None)
+    rankings = {
+        "location_id": site.get("landing_site_id"),
+        "location_name": site.get("site_name"),
+        "minerals": minerals,
+        "temperature": temperature,
+        "roughness": roughness,
+        "combined": combined,
+    }
+    summary = {
+        "location_id": site.get("landing_site_id"),
+        "location_name": site.get("site_name"),
+        "body": body,
+        "earth_candidates": len(candidates),
+        "temperature_data_available": _environment_temperature_kelvin(site) is not None and bool(temperature_features),
+        "mineral_data_available": bool(site.get("mineral_composition")) and bool(mineral_features),
+        "roughness_status": environment_roughness.get("status", "not-requested"),
+    }
+    return rankings, summary, candidates, environment_roughness
+
+
+def select_earth_analogs_for_location(body, name, location_payload, top_n=DEFAULT_TOP_N, include_roughness=None):
+    """Return all Earth analog rankings for a resolved Moon or Mars feature."""
+    body = str(body).strip().title()
+    if body not in {"Moon", "Mars"}:
+        raise ValueError("body must be Moon or Mars.")
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or not 1 <= top_n <= MAX_TOP_N:
+        raise ValueError(f"top must be an integer from 1 to {MAX_TOP_N}.")
+    site = _environment_from_location_payload(body, name, location_payload)
+    rankings, summary, _candidates, roughness = _rank_environment(
+        site, body, top_n=top_n, include_roughness=include_roughness
+    )
+    features = []
+    for feature in rankings["combined"]:
+        feature["properties"].pop("ranking_metric", None)
+        features.append(feature)
+    return {
+        "type": "FeatureCollection",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "query": {"body": body, "location_name": name},
+        "features": features,
+        "rankings": {"by_environment": [rankings]},
+        "location": site.get("location"),
+        "source_measurements": {
+            "temperature": site.get("source_temperature"),
+            "mineral_composition": site.get("source_minerals"),
+            "surface_roughness": roughness,
+        },
+        "matching": {
+            "top_n_per_location": top_n,
+            "environment": summary,
+            "temperature_method": "100 × min(target K, Earth MODIS K) / max(target K, Earth MODIS K).",
+            "mineral_method": "EarthChem analyses ranked by the closest fixed formula end-member for each mineral family; lunar/Mars abundance values indicate which families occur and are not oxide chemistry.",
+            "roughness_method": "SerpAPI Google Images selects a location image; Gemini returns a visual micrometer proxy. Earth candidates are queried the same way and scored by the symmetric ratio.",
+            "ranking_note": "Each category has an independent top-ten list. Combined ranks average available temperature, mineral, and roughness scores, with more available dimensions first.",
+            "roughness_requested": bool(include_roughness if include_roughness is not None else roughness_credentials_available()),
+            "roughness_provider_keys_configured": roughness_credentials_available(),
+            "roughness_limitations": list(ROUGHNESS_LIMITATIONS),
+            "data_limitations": [
+                "Earth temperature candidates are the MODIS locations saved in the repository's comparison grid; the supplied grid is one monthly composite and is not a full-year climatology.",
+                "Mars MCD temperature is a modeled point value for the requested season and local time, while the Earth MODIS value is a monthly clear-sky surface-temperature composite.",
+                "EarthChem records are georeferenced samples. Formula-fit scores are not mineral abundance estimates and are not direct comparisons with planetary abundance-map values.",
+                "Roughness is an image-derived visual proxy, not calibrated profilometry.",
+            ],
+        },
+    }
+
+
+def select_earth_analog_attribute(body, attribute, *, value=None, unit="K", mineral=None, top_n=DEFAULT_TOP_N):
+    """Rank only one user-supplied planetary attribute against Earth candidates."""
+    body = str(body).strip().title()
+    if body not in {"Moon", "Mars"}:
+        raise ValueError("body must be Moon or Mars.")
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or not 1 <= top_n <= MAX_TOP_N:
+        raise ValueError(f"top must be an integer from 1 to {MAX_TOP_N}.")
+    attribute = str(attribute or "").strip().casefold()
+    if attribute not in {"temperature", "mineral", "roughness"}:
+        raise ValueError("attribute must be temperature, mineral, or roughness.")
+
+    if attribute == "temperature":
+        try:
+            target = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("temperature value must be numeric.") from error
+        unit = str(unit or "K").strip().upper()
+        if unit in {"C", "°C"}:
+            target += 273.15
+        elif unit not in {"K", "KELVIN"}:
+            raise ValueError("temperature unit must be K or C.")
+        if not math.isfinite(target) or not 0 < target <= 1000:
+            raise ValueError("temperature must convert to a finite value from 0 to 1000 K.")
+        candidates = []
+        for feature in _all_earth_temperature_features():
+            props = feature["properties"]
+            earth_value = props.get("earth_annual_average_kelvin", props.get("earth_temperature_kelvin"))
+            try:
+                earth_value = float(earth_value)
+            except (TypeError, ValueError):
+                continue
+            score = _temperature_score(target, earth_value)
+            candidates.append((feature, score, abs(earth_value - target), earth_value))
+        candidates.sort(key=lambda item: (-item[1], item[2], _candidate_key(item[0])))
+        features = []
+        for rank, (feature, score, difference, earth_value) in enumerate(candidates[:top_n], start=1):
+            source = feature["properties"]
+            features.append({
+                "type": "Feature",
+                "geometry": dict(feature["geometry"]),
+                "properties": {
+                    "earth_grid_id": source.get("earth_grid_id"),
+                    "earth_temperature_kelvin": earth_value,
+                    "earth_temperature_celsius": source.get("earth_temperature_celsius"),
+                    "earth_temperature_period": source.get("earth_temperature_period", source.get("earth_data_period")),
+                    "earth_data_source": source.get("earth_data_source"),
+                    "environment_temperature_kelvin": target,
+                    "temperature_difference_kelvin": round(difference, 3),
+                    "temperature_match_percentage": round(score, 2),
+                    "match_percentage": round(score, 2),
+                    "match_rank": rank,
+                    "ranking_metric": "temperature",
+                },
+            })
+        score_key = "temperature_match_percentage"
+        matching = {"target_temperature_kelvin": round(target, 3), "temperature_unit_entered": unit}
+    elif attribute == "mineral":
+        mineral = str(mineral or "").strip().casefold()
+        classes = {"olivine", "plagioclase", "low_calcium_pyroxene", "high_calcium_pyroxene", "iron"}
+        if mineral not in classes:
+            raise ValueError(f"mineral must be one of: {', '.join(sorted(classes))}.")
+        candidates = []
+        for feature in _all_earth_mineral_features(mineral):
+            score = feature["properties"].get("earth_formula_match_percentage")
+            if score is None:
+                continue
+            candidates.append((feature, float(score)))
+        candidates.sort(key=lambda item: (-item[1], _candidate_key(item[0])))
+        features = []
+        for rank, (feature, score) in enumerate(candidates[:top_n], start=1):
+            source = feature["properties"]
+            features.append({
+                "type": "Feature",
+                "geometry": dict(feature["geometry"]),
+                "properties": {
+                    "earth_sample_id": source.get("earth_sample_id"),
+                    "earth_sample_name": source.get("earth_sample_name"),
+                    "earth_material": source.get("earth_material"),
+                    "earth_mineral_class": mineral,
+                    "earth_best_fit_formula": source.get("earth_best_fit_formula"),
+                    "earth_formula_match_percentage": score,
+                    "earth_formula_match_basis": source.get("earth_formula_match_basis"),
+                    "earth_mineral_chemistry_oxide_wt_percent": source.get("earth_mineral_chemistry_oxide_wt_percent"),
+                    "earth_data_source": source.get("earth_data_source"),
+                    f"{mineral}_match_percentage": score,
+                    "match_percentage": score,
+                    "match_rank": rank,
+                    "ranking_metric": f"mineral:{mineral}",
+                },
+            })
+        score_key = f"{mineral}_match_percentage"
+        matching = {"mineral": mineral, "formula_match_method": "Closest fixed end-member formula fit from reported EarthChem oxide analyses."}
+    else:
+        try:
+            target = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("roughness value must be numeric micrometers.") from error
+        if not math.isfinite(target) or target <= 0 or target > 1_000_000:
+            raise ValueError("roughness must be a finite number greater than 0 and at most 1,000,000 micrometers.")
+        if not roughness_credentials_available():
+            return {
+                "type": "FeatureCollection", "features": [],
+                "query": {"body": body, "attribute": "roughness"},
+                "rankings": {"roughness": []},
+                "matching": {
+                    "status": "not-configured",
+                    "reason": "Set SERPAPI_API_KEY and GEMINI_API_KEY to estimate roughness at Earth candidate sites.",
+                    "target_roughness_um": target,
+                },
+            }
+        pool = _dedupe_geo_features(
+            {"features": _all_earth_temperature_features() + _all_earth_mineral_features()},
+            ("earth_grid_id", "earth_sample_id", "earth_mineral_class", "earth_sample_name"),
+        )
+        candidates = []
+        for feature in pool:
+            longitude, latitude = _coordinates(feature)
+            props = feature["properties"]
+            name = props.get("earth_sample_name") or props.get("earth_sample_id") or props.get("earth_grid_id") or f"Earth location {latitude:.4f}, {longitude:.4f}"
+            try:
+                estimate = estimate_surface_roughness(name, "Earth", latitude, longitude)
+            except (RuntimeError, ValueError, OSError) as error:
+                estimate = {"status": "unavailable", "reason": str(error)}
+            roughness_value = estimate.get("surface_roughness_um")
+            score = _roughness_score(target, roughness_value)
+            if score is not None:
+                candidates.append((feature, score, estimate))
+        candidates.sort(key=lambda item: (-item[1], _candidate_key(item[0])))
+        features = []
+        for rank, (feature, score, estimate) in enumerate(candidates[:top_n], start=1):
+            source = feature["properties"]
+            features.append({
+                "type": "Feature",
+                "geometry": dict(feature["geometry"]),
+                "properties": {
+                    "earth_sample_id": source.get("earth_sample_id"),
+                    "earth_sample_name": source.get("earth_sample_name"),
+                    "earth_grid_id": source.get("earth_grid_id"),
+                    "earth_surface_roughness": estimate,
+                    "roughness_match_percentage": round(score, 2),
+                    "match_percentage": round(score, 2),
+                    "match_rank": rank,
+                    "ranking_metric": "roughness",
+                },
+            })
+        score_key = "roughness_match_percentage"
+        matching = {"target_roughness_um": target, "roughness_method": "SerpAPI Google Images plus Gemini visual micrometer proxy; symmetric ratio score."}
+
+    return {
+        "type": "FeatureCollection",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "query": {"body": body, "attribute": attribute},
+        "features": features,
+        "rankings": {attribute if attribute != "mineral" else f"mineral:{mineral}": features},
+        "matching": {
+            **matching,
+            "top_n": top_n,
+            "score_field": score_key,
+            "ignored_attributes": [key for key in ("temperature", "minerals", "roughness") if key != attribute and not (attribute == "mineral" and key == "minerals")],
+        },
+    }
 
 
 def select_earth_analogs(name=None, top_n=DEFAULT_TOP_N, include_roughness=None):
