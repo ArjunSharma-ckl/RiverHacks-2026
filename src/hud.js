@@ -19,7 +19,7 @@ function toggle(label, checked, onChange, note) {
 }
 
 export function createHud(root, context) {
-  const { viewer, scene, sky, satellites, weather, lensFlare, controls } = context;
+  const { viewer, scene, sky, satellites, weather, lensFlare, controls, spin } = context;
   const sections = element('div', 'hud-body');
 
   function section(heading) {
@@ -181,6 +181,19 @@ export function createHud(root, context) {
     hideButton.setAttribute('aria-expanded', String(!hidden));
     hideButton.textContent = hidden ? 'Show controls' : 'Hide controls';
   };
+
+  const spinButton = document.createElement('button');
+  spinButton.type = 'button';
+  spinButton.id = 'spin-toggle';
+  spinButton.setAttribute('aria-pressed', String(spin.isEnabled));
+  spinButton.textContent = spin.isEnabled ? 'Spin: on' : 'Spin: off';
+  spinButton.onclick = () => {
+    const on = !spin.isEnabled;
+    spin.setEnabled(on);
+    spinButton.setAttribute('aria-pressed', String(on));
+    spinButton.textContent = on ? 'Spin: on' : 'Spin: off';
+  };
+  hideButton.after(spinButton);
 
   window.addEventListener('keydown', (event) => {
     if (event.target instanceof HTMLInputElement) return;

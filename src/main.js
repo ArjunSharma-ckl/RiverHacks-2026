@@ -20,7 +20,7 @@ import { STARS, PLANET_NAMES } from './ephemeris.js';
 import { SUBJECTS, describe } from './catalog.js';
 
 const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
-enableGlobeSpin(viewer);
+const spin = enableGlobeSpin(viewer);
 
 initLayers(viewer, [
   'bluemarble',
@@ -74,6 +74,7 @@ createHud(document.getElementById('hud'), {
   satellites,
   weather,
   lensFlare,
+  spin,
   pointMode,
   chooseContact(contact) { trackContact(contact); pointList.open(contact.norad,'Satellites'); },
   controls,
