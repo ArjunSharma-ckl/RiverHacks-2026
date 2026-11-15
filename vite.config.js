@@ -22,5 +22,19 @@ export default defineConfig({
         rename: { stripBase: 4 },
       })),
     }),
+    {
+      name: 'omit-oversized-unused-launch-webm',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'cinematics/.keep', source: '' });
+      },
+      closeBundle() {
+        // Cloudflare Workers assets must each be below 25 MiB. The app uses
+        // orion-mission-cut.mp4; this legacy WebM is not referenced.
+        const oversized = 'dist/cinematics/mission-launch-1080p.webm';
+        return import('node:fs/promises').then(({ unlink }) => unlink(oversized).catch((error) => {
+          if (error.code !== 'ENOENT') throw error;
+        }));
+      },
+    },
   ],
 });
