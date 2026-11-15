@@ -5,6 +5,7 @@ textures, no sequencer, no stock footage.  NASA source model:
   Space Launch System printable model (outer mold line, with Orion and LAS)
   https://science.nasa.gov/3d-resources/space-launch-system-sls/
 """
+import bmesh
 import bpy
 import json
 import math
@@ -28,7 +29,6 @@ PIV.setdefault('ORION', [0.45, 0.45, 77.5])
 PIV.setdefault('LAS', [0.45, 0.45, 86.5])
 ASSETS = os.path.join(HERE, 'assets')
 SUIT_GLB = os.path.join(ASSETS, 'field-suit.glb')
-INSIGHT_GLB = os.path.join(ASSETS, 'insight_deployed.glb')
 FLAG_TEX = os.path.join(ASSETS, 'usa-flag.png')
 REPO = os.path.join(ROOT, 'RiverHacks-2026')
 if os.path.basename(HERE) == 'cinematic-source':
@@ -65,7 +65,8 @@ for attr, val in (('use_gtao', True), ('use_bloom', True), ('motion_blur_shutter
     except Exception:
         pass
 try:
-    s.render.use_motion_blur = True
+    s.render.use_motion_blur = False   # crisp poles/plumes, no smear
+    s.eevee.motion_blur_shutter = 0.0
 except Exception:
     pass
 s.view_settings.look = 'AgX - Medium High Contrast'
@@ -443,21 +444,109 @@ for z in (22, 38, 54, 68):
     box('Umbilical', ENV, (0.5, 0, z), (0.6, 0.6, 1.2), BLACK, TOWER)
 box('Lightning mast', ENV, (0, 0, 88), (0.5, 0.5, 18), METAL, TOWER)
 
-# Ground, sky and the distant Earth.
-ground = prim('primitive_plane_add', 'Coastal Florida ground', ENV,
-              pr('Scrub ground', (0.055, 0.075, 0.035), 0, 0.95), size=4800, location=(0, 0, -1.11))
-bpy.ops.object.shade_smooth() if False else None
-earth = sphere('Earth from orbit', ENV, (0, 0, -6371002.2), 6371000, pr('Earth oceans', (0.02, 0.09, 0.22), 0.1, 0.45), 192)
-earth.data.materials.clear()
-EM = bpy.data.materials.new('Earth map')
-EM.use_nodes = True
-nt = EM.node_tree
-img = bpy.data.images.load(os.path.join(ROOT, 'repo-src', 'earth.jpg'), check_existing=True)
-tex = nt.nodes.new('ShaderNodeTexImage')
-tex.image = img
-nt.links.new(tex.outputs['Color'], nt.nodes['Principled BSDF'].inputs['Base Color'])
-earth.data.materials.append(EM)
-earth.scale = (0.001, 0.001, 0.001)   # starfield carries the launch/orbit sky
+# Ground: a wide curving coastal plain so the pad sits on an Earth horizon
+# instead of a square plane, with atmospheric haze swallowing the far edge.
+def disk_terrain(name, coll, radius, rings, segs, height, flat_radius=0.0, tint=None):
+    verts = [(0.0, 0.0, height(0.0, 0.0))]
+    for i in range(1, rings + 1):
+        r = radius * i / rings
+        for j in range(segs):
+            a = TAU * j / segs
+            x, y = r * math.cos(a), r * math.sin(a)
+            verts.append((x, y, height(x, y)))
+    faces = []
+    for j in range(segs):
+        faces.append((0, 1 + j, 1 + (j + 1) % segs))
+    for i in range(rings - 1):
+        a0 = 1 + i * segs
+        b0 = a0 + segs
+        for j in range(segs):
+            jn = (j + 1) % segs
+            faces.append((a0 + j, b0 + j, b0 + jn, a0 + jn))
+    me = bpy.data.meshes.new(name + ' mesh')
+    me.from_pydata(verts, [], faces)
+    me.update()
+    ob = bpy.data.objects.new(name, me)
+    coll.objects.link(ob)
+    for p in me.polygons:
+        p.use_smooth = True
+    return ob
+
+
+def hazy_ground_material(name, base_a, base_b, haze, far_start, far_end, tex=None):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    t = m.node_tree
+    b = t.nodes['Principled BSDF']
+    b.inputs['Roughness'].default_value = 0.95
+    coord = t.nodes.new('ShaderNodeTexCoord')
+    noise = t.nodes.new('ShaderNodeTexNoise')
+    noise.inputs['Scale'].default_value = 0.0016
+    noise.inputs['Detail'].default_value = 5.0
+    ramp = t.nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].color = (*base_a, 1)
+    ramp.color_ramp.elements[1].color = (*base_b, 1)
+    t.links.new(coord.outputs['Object'], noise.inputs['Vector'])
+    t.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    if tex:
+        mapping = t.nodes.new('ShaderNodeMapping')
+        mapping.inputs['Scale'].default_value = (0.004, 0.004, 0.004)
+        img = t.nodes.new('ShaderNodeTexImage')
+        img.image = tex
+        mix = t.nodes.new('ShaderNodeMixRGB')
+        mix.blend_type = 'MULTIPLY'
+        mix.inputs['Fac'].default_value = 0.6
+        t.links.new(coord.outputs['Object'], mapping.inputs['Vector'])
+        t.links.new(mapping.outputs['Vector'], img.inputs['Vector'])
+        t.links.new(img.outputs['Color'], mix.inputs['Color1'])
+        t.links.new(ramp.outputs['Color'], mix.inputs['Color2'])
+        t.links.new(mix.outputs['Color'], b.inputs['Base Color'])
+    else:
+        t.links.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    length = t.nodes.new('ShaderNodeVectorMath')
+    length.operation = 'LENGTH'
+    t.links.new(coord.outputs['Object'], length.inputs[0])
+    mr = t.nodes.new('ShaderNodeMapRange')
+    mr.inputs['From Min'].default_value = far_start
+    mr.inputs['From Max'].default_value = far_end
+    mr.inputs['To Min'].default_value = 0.0
+    mr.inputs['To Max'].default_value = 1.0
+    t.links.new(length.outputs['Value'], mr.inputs['Value'])
+    fade = t.nodes.new('ShaderNodeMixRGB')
+    fade.inputs['Color2'].default_value = (*haze, 1)
+    t.links.new(mr.outputs['Result'], fade.inputs['Fac'])
+    if tex:
+        pre_fade = mix.outputs['Color']
+    else:
+        pre_fade = ramp.outputs['Color']
+    t.links.new(pre_fade, fade.inputs['Color1'])
+    t.links.new(fade.outputs['Color'], b.inputs['Base Color'])
+    return m
+
+
+def launch_height(x, y):
+    r = math.hypot(x, y)
+    flat = min(1.0, max(0.0, (r - 120.0) / 900.0))
+    return -1.11 + flat * (1.2 * math.sin(x * 0.0007) * math.cos(y * 0.0009) +
+                           0.5 * math.sin((x + y) * 0.002))
+
+
+ground = disk_terrain('Coastal Florida ground', ENV, 26000, 80, 160, launch_height)
+ground.data.materials.append(hazy_ground_material(
+    'Scrub and coastal plain', (0.018, 0.024, 0.012), (0.05, 0.06, 0.03),
+    (0.015, 0.03, 0.055), 6000, 22000))
+LAUNCH_GROUND = add_empty('LAUNCH_GROUND_ROOT', (0, 0, 0), None, ENV)
+ground.parent = LAUNCH_GROUND
+for i in range(45):
+    a = TAU * random.random()
+    d = random.uniform(7000, 18000)
+    lamp = pr('Distant town light %d' % i, (1.0, 0.72, 0.38), 0, 0.4, (1.0, 0.65, 0.3), 4.0)
+    light = sphere('Distant town light %d' % i, ENV,
+           (d * math.cos(a), d * math.sin(a), -0.6), random.uniform(4, 9), lamp, 6)
+    light.parent = LAUNCH_GROUND
+key_scale(LAUNCH_GROUND, 1, 1)
+key_scale(LAUNCH_GROUND, 280, 1)
+key_scale(LAUNCH_GROUND, 300, 0.001)   # ground falls away once the stack is in space
 
 # ------------------------------------------------------------------- flight
 key_loc(ROOT_EMPTY, 1, (0, 0, -1))
@@ -597,51 +686,32 @@ for f, loc, rot in [
 
 # ------------------------------------------------------------------ Mars set
 SITE = add_empty('MARS_LANDING_SITE', (0, -2600, 0), None, MARS)
-N = 90
-W = 420
-verts, faces = [], []
-for j in range(N):
-    for i in range(N):
-        x = -W / 2 + W * i / (N - 1)
-        y = -W / 2 + W * j / (N - 1)
-        r = math.hypot(x, y)
-        z = 1.4 * math.sin(x * 0.035) * math.cos(y * 0.041) + 0.7 * math.sin((x + y) * 0.09)
-        z *= min(1.0, max(0.0, (r - 8) / 26))     # flat pad for touchdown
-        verts.append((x, y, z))
-for j in range(N - 1):
-    for i in range(N - 1):
-        a = j * N + i
-        faces.append((a, a + 1, a + N + 1, a + N))
-me = bpy.data.meshes.new('Mars terrain mesh')
-me.from_pydata(verts, [], faces)
-me.update()
-terrain = bpy.data.objects.new('Rocky Martian terrain', me)
-MARS.objects.link(terrain)
+
+
+def mars_height(x, y):
+    r = math.hypot(x, y)
+    flat = min(1.0, max(0.0, (r - 26.0) / 90.0))
+    dunes = (1.6 * math.sin(x * 0.030 + y * 0.012) * math.cos(y * 0.026) +
+             0.7 * math.sin(x * 0.085) * math.cos(y * 0.07) +
+             0.25 * math.sin((x + y) * 0.19))
+    return flat * dunes - 0.03
+
+
+terrain = disk_terrain('Rocky Martian terrain', MARS, 1200, 64, 160, mars_height)
 terrain.parent = SITE
-MREG = bpy.data.materials.new('Mars regolith from NASA texture')
-MREG.use_nodes = True
-mt = MREG.node_tree
-mimg = bpy.data.images.load(os.path.join(ROOT, 'repo-src', 'mars.jpg'), check_existing=True)
-mtex = mt.nodes.new('ShaderNodeTexImage')
-mtex.image = mimg
-mmix = mt.nodes.new('ShaderNodeMixRGB')
-mmix.blend_type = 'MULTIPLY'
-mmix.inputs['Fac'].default_value = 0.55
-mmix.inputs['Color2'].default_value = (0.30, 0.13, 0.07, 1)
-mt.links.new(mtex.outputs['Color'], mmix.inputs['Color1'])
-mt.links.new(mmix.outputs['Color'], mt.nodes['Principled BSDF'].inputs['Base Color'])
-mt.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.95
+mimg = bpy.data.images.load(os.path.join(ASSETS, 'mars-ground.png'), check_existing=True)
+MREG = hazy_ground_material('Mars regolith from NASA texture',
+                            (0.24, 0.10, 0.05), (0.42, 0.19, 0.10),
+                            (0.55, 0.29, 0.17), 420, 1050, tex=mimg)
 terrain.data.materials.append(MREG)
-for p in me.polygons:
-    p.use_smooth = True
 
 rng = random.Random(2026)
-for i in range(90):
+for i in range(150):
     q = rng.uniform(0, TAU)
-    d = rng.uniform(24, 190)      # keep the landing / EVA zone clear
+    d = rng.uniform(24, 640)      # keep the landing / EVA zone clear
     sphere('Martian boulder %d' % i, MARS,
-           (d * math.cos(q), d * math.sin(q), rng.uniform(-0.2, 0.6)),
-           rng.uniform(0.25, 1.6), REGOLITH, 12, SITE)
+           (d * math.cos(q), d * math.sin(q), mars_height(d * math.cos(q), d * math.sin(q)) + rng.uniform(-0.1, 0.4)),
+           rng.uniform(0.2, 2.2), REGOLITH, 12, SITE)
 
 mars_planet = sphere('Mars (planet)', MARS, (0, -30000, 1400), 2400, REGOLITH, 96)
 mars_planet.data.materials.clear()
@@ -668,32 +738,71 @@ for f, loc, rot in [
     key_loc(MARS_ORION_E, f, loc)
     key_rot(MARS_ORION_E, f, rot)
 
-# -------------------------------------------------------------------- lander
+# ----------------------------------------------------------- Mars capsule
 LAND = add_empty('MARS_LANDER', (0, 0, 165), SITE, MARS)
-LAND['note'] = 'Dedicated Mars lander; Orion never transforms into it'
-# NASA InSight lander (real NASA model, solar panels deployed)
-_ins_before = set(bpy.data.objects)
-bpy.ops.import_scene.gltf(filepath=INSIGHT_GLB)
-_ins_new = [o for o in bpy.data.objects if o not in _ins_before]
-for o in _ins_new:
-    move(o, MARS)
-_ins_roots = [o for o in _ins_new if o.parent is None]
-INSIGHT = add_empty('INSIGHT_LANDER_BODY', (0, 0, 0.64), LAND, MARS)
-for o in _ins_roots:
-    o.parent = INSIGHT
-    o.matrix_parent_inverse = Matrix.Identity(4)
-box('Lander airlock', MARS, (0, -1.45, 1.62), (1.5, 1.0, 1.5), WHITE, LAND)
-box('Lander airlock frame', MARS, (0, -1.97, 1.62), (1.62, 0.08, 1.62), METAL, LAND)
-HATCH = add_empty('LANDER_HATCH_HINGE', (0, -1.98, 1.55), LAND, MARS)
-box('Lander hatch', MARS, (0, -0.03, -0.62), (1.2, 0.14, 1.24), GOLD, HATCH)
+LAND['note'] = 'Mars crew capsule; Orion never transforms into it'
+CAPSULE = add_empty('MARS_CAPSULE', (0, 0, 0), LAND, MARS)
+# Build the capsule from the top cone of NASA's Orion mesh: a real capsule
+# silhouette with the heat shield down and the crew hatch facing the camera.
+_src = bpy.data.objects['ORION_MESH']
+_cme = _src.data.copy()
+_bm = bmesh.new()
+_bm.from_mesh(_cme)
+bmesh.ops.delete(_bm, geom=[v for v in _bm.verts if v.co.z < 4.5], context='VERTS')
+_z0 = min(v.co.z for v in _bm.verts)
+_z1 = max(v.co.z for v in _bm.verts)
+_sf = 3.4 / (_z1 - _z0)
+for v in _bm.verts:
+    v.co.x *= _sf
+    v.co.y *= _sf
+    v.co.z = (v.co.z - _z0) * _sf
+_bm.to_mesh(_cme)
+_bm.free()
+_cme.materials.clear()
+_cme.materials.append(WHITE)
+_cme.materials.append(pr('Capsule ablative shield', (0.10, 0.08, 0.06), 0, 0.7))
+for p in _cme.polygons:
+    p.use_smooth = True
+    p.material_index = 1 if p.center.z < 0.5 else 0
+CAP_BODY = bpy.data.objects.new('MARS_CAPSULE_BODY', _cme)
+MARS.objects.link(CAP_BODY)
+CAP_BODY.parent = CAPSULE
+CAP_BODY['source'] = 'NASA Orion crew module (SLS printable model), sliced and rescaled'
+# Heat shield, windows, hatch frame, RCS clusters.
+sph = sphere('Capsule heat shield', MARS, (0, 0, 0.34), 1.0, pr('Ablative heat shield', (0.09, 0.07, 0.05), 0, 0.8), 48, CAPSULE)
+sph.scale = (2.02, 2.02, 0.42)
+GLASS = pr('Capsule window glass', (0.02, 0.03, 0.045), 0.6, 0.15)
+for i, ang in enumerate((D(50), D(130), D(230), D(310))):
+    radial = Vector((math.cos(ang), math.sin(ang), 0))
+    w = cyl('Capsule window %d' % i, MARS, radial * 1.46 + Vector((0, 0, 2.0)),
+            0.29, 0.16, GLASS, 20, CAPSULE)
+    w.rotation_euler = radial.to_track_quat('Z', 'Y').to_euler()
+cyl('Capsule base trim', MARS, (0, 0, 0.52), 2.08, 0.16, pr('Capsule trim metal', (0.22, 0.21, 0.20), 0.85, 0.4), 64, CAPSULE)
+box('Capsule hatch frame', MARS, (0, -2.02, 1.28), (1.18, 0.10, 1.42), METAL, CAPSULE)
+box('Capsule hatch', MARS, (0, -2.10, 1.28), (0.92, 0.10, 1.16), pr('Capsule hatch metal', (0.55, 0.42, 0.2), 0.8, 0.35), CAPSULE)
+for i, ang in enumerate((D(45), D(135), D(225), D(315))):
+    box('Capsule RCS %d' % i, MARS, (1.12 * math.cos(ang), 1.12 * math.sin(ang), 3.02),
+        (0.3, 0.22, 0.26), METAL, CAPSULE)
+for i, ang in enumerate((D(45), D(135), D(225), D(315))):
+    top = Vector((1.45 * math.cos(ang), 1.45 * math.sin(ang), 0.55))
+    foot = Vector((2.25 * math.cos(ang), 2.25 * math.sin(ang), 0.05))
+    vec = foot - top
+    leg = cyl('Capsule landing leg %d' % i, MARS, (top + foot) / 2, 0.09, vec.length, METAL, 8, CAPSULE)
+    leg.rotation_euler = vec.to_track_quat('Z', 'Y').to_euler()
+    cyl('Capsule foot pad %d' % i, MARS, foot, 0.24, 0.08, METAL, 12, CAPSULE)
+for i, (x, y) in enumerate(((-1.1, -1.1), (-1.1, 1.1), (1.1, -1.1), (1.1, 1.1)), 1):
+    cyl('Capsule retro nozzle %d' % i, MARS, (x, y, 0.30), 0.2, 0.34,
+        pr('Nozzle metal', (0.18, 0.17, 0.16), 0.9, 0.35), 12, CAPSULE)
+HATCH = add_empty('LANDER_HATCH_HINGE', (0, -2.12, 1.92), LAND, MARS)
+box('Capsule hatch door', MARS, (0, 0, -0.6), (0.94, 0.10, 1.2), pr('Capsule hatch metal', (0.55, 0.42, 0.2), 0.8, 0.35), HATCH)
 key_rot(HATCH, 1, (0, 0, 0))
 key_rot(HATCH, 724, (0, 0, 0))
-key_rot(HATCH, 748, (D(-78), 0, 0))
-RAMP = add_empty('LANDER_RAMP_HINGE', (0, -2.0, 0.7), LAND, MARS)
-box('Landing ramp', MARS, (0, -1.5, 0), (1.3, 3.0, 0.12), METAL, RAMP)
-key_rot(RAMP, 1, (D(70), 0, 0))
-key_rot(RAMP, 746, (D(70), 0, 0))
-key_rot(RAMP, 770, (D(13), 0, 0))   # tip rests on the surface
+key_rot(HATCH, 748, (D(-82), 0, 0))
+RAMP = add_empty('LANDER_RAMP_HINGE', (0, -2.12, 1.12), LAND, MARS)
+box('Landing ramp', MARS, (0, -1.8, 0), (1.1, 3.6, 0.1), METAL, RAMP)
+key_rot(RAMP, 1, (D(72), 0, 0))
+key_rot(RAMP, 746, (D(72), 0, 0))
+key_rot(RAMP, 770, (D(19), 0, 0))   # tip rests on the surface
 
 for i, (x, y) in enumerate(((-1.2, -1.2), (-1.2, 1.2), (1.2, -1.2), (1.2, 1.2)), 1):
     exhaust('LANDER_THRUSTER_%d' % i, LAND, (x, y, 0.15), 0.22, 2.4, LANDER_PLUME,
@@ -777,7 +886,8 @@ A2, J2 = sim_astronaut('ASTRONAUT_2', (0.95, -2.7, 0.05), 770,
                         (1.6, -4.9, 0.05), (5.4, -8.4, 0.05), 806, 868)
 
 FLAG = add_empty('SPACE_INVADERS_FLAG', (10.4, -12.0, 0), SITE, EVA)
-cyl('Flag support pole', EVA, (0, 0, 1.55), 0.05, 3.1, METAL, 12, FLAG)
+flag_pole = cyl('Flag support pole', EVA, (0, 0, 1.55), 0.05, 3.1, METAL, 12, FLAG)
+flag_pole.visible_shadow = False   # keeps its shadow off the thin dust haze
 box('Flag cross rod', EVA, (1.3, 0, 2.45), (2.6, 0.05, 0.05), METAL, FLAG)
 fabric = prim('primitive_plane_add', 'Flag fabric', EVA, None, size=1, location=(1.3, 0, 1.85))
 fabric.scale = (2.6, 1.3, 1.0)
@@ -793,12 +903,15 @@ ut.links.new(utex.outputs['Color'], ut.nodes['Principled BSDF'].inputs['Base Col
 ut.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.8
 fabric.data.materials.clear()
 fabric.data.materials.append(USAM)
-key_scale(fabric, 1, (0.06, 1, 1))
-key_scale(fabric, 852, (0.06, 1, 1))
-key_scale(fabric, 868, (1, 1, 1))    # unfurls as the pole goes up
-key_rot(FLAG, 1, (D(72), 0, D(-25)))
-key_rot(FLAG, 852, (D(72), 0, D(-25)))
-key_rot(FLAG, 868, (D(-6), 0, D(3)))
+key_scale(fabric, 1, (0.156, 1.3, 1))
+key_scale(fabric, 852, (0.156, 1.3, 1))
+key_scale(fabric, 868, (2.6, 1.3, 1))    # unfurls to full size
+key_scale(FLAG, 1, 0.001)
+key_scale(FLAG, 840, 0.001)
+key_scale(FLAG, 842, 1)          # planted upright, then unfurled
+key_rot(FLAG, 842, (0, 0, 0))
+key_rot(FLAG, 852, (0, 0, 0))
+key_rot(FLAG, 868, (0, 0, 0))
 key_rot(FLAG, 880, (0, 0, 0))
 # Astronaut 1 steadies the pole as it is raised.
 for f, rot in ((846, (0, 0, 0)), (856, (D(20), 0, 0)), (868, (D(4), 0, 0)), (880, (0, 0, 0))):
@@ -827,7 +940,7 @@ ORION_TARGET = follow_target('TARGET_ORION', ORION_E, (0, 0, 4))
 UPPER_TARGET = follow_target('TARGET_UPPER_STAGE', UPPER_E, (0, 0, 10))
 MARS_ORION_TARGET = follow_target('TARGET_MARS_ORION', MARS_ORION_E, (0, 0, 3))
 LAND_TARGET = follow_target('TARGET_LANDER', LAND, (0, 0, 1.0))
-EVA_TARGET = add_empty('TARGET_EVA', (5.5, -11.0, 1.2), SITE, CAMS)
+EVA_TARGET = add_empty('TARGET_EVA', (5.6, -12.0, 1.1), SITE, CAMS)
 MARS_TARGET = follow_target('TARGET_MARS_APPROACH', MARS_ORION_E, (0, 0, 1))
 
 
@@ -871,29 +984,29 @@ P246 = at_frame(LEFT_E, 246)
 P276 = at_frame(LEFT_E, 276)
 P305 = at_frame(LEFT_E, 305)
 CAM_SEP = camera('CAM_BOOSTER_SEPARATION', 35, LEFT_E,
-                 [(246, P246 + Vector((52, -96, 24))),
-                  (276, P276 + Vector((62, -112, 30))),
-                  (305, P305 + Vector((74, -132, 36)))])
-CAM_ORBIT = camera('CAM_ORBIT', 50, UPPER_TARGET,
-                   [(398, rocket_at(398) + Vector((85, -150, 45))),
-                    (440, rocket_at(440) + Vector((105, -185, 55))),
-                    (500, rocket_at(500) + Vector((130, -230, 70)))])
+                 [(246, P246 + Vector((52, -96, 32))),
+                  (276, P276 + Vector((62, -112, 62))),
+                  (305, P305 + Vector((74, -132, 96)))])
+CAM_ORBIT = camera('CAM_ORBIT', 75, UPPER_TARGET,
+                   [(398, rocket_at(398) + Vector((60, -100, 52))),
+                    (440, rocket_at(440) + Vector((72, -120, 105))),
+                    (500, rocket_at(500) + Vector((88, -146, 168)))])
 O516 = at_frame(ORION_E, 516)
 O560 = at_frame(ORION_E, 560)
 O610 = at_frame(ORION_E, 610)
-CAM_ORION = camera('CAM_ORION', 65, ORION_TARGET,
-                   [(516, O516 + Vector((26, -42, 14))),
-                    (560, O560 + Vector((32, -52, 18))),
-                    (610, O610 + Vector((40, -66, 22)))])
+CAM_ORION = camera('CAM_ORION', 55, ORION_TARGET,
+                   [(516, O516 + Vector((52, -86, 24))),
+                    (560, O560 + Vector((62, -104, 56))),
+                    (610, O610 + Vector((76, -126, 104)))])
 CAM_MARS = camera('CAM_MARS_APPROACH', 60, MARS_TARGET,
                   [(614, (-360, -5650, 240)), (660, (-260, -5250, 190)), (706, (-170, -4980, 140))])
 CAM_LAND = camera('CAM_LANDING', 50, LAND_TARGET,
                   [(612, (34, -2660, 96)), (660, (26, -2640, 40)), (700, (16, -2624, 12)),
                    (726, (10.0, -2614, 3.4)), (760, (9.0, -2613, 3.0))])
-CAM_EVA = camera('CAM_ASTRONAUTS', 42, EVA_TARGET,
-                 [(700, (0.5, -2588, 3.4)), (760, (1.5, -2589, 3.2)),
-                  (800, (2.5, -2590, 3.0)), (852, (2.5, -2590, 3.0)),
-                  (900, (3.0, -2590, 2.9))])
+CAM_EVA = camera('CAM_ASTRONAUTS', 35, EVA_TARGET,
+                 [(700, (0.0, -2626, 3.5)), (760, (1.0, -2625, 3.2)),
+                  (800, (2.0, -2624, 3.1)), (852, (2.0, -2624, 3.1)),
+                  (900, (2.6, -2624, 3.0))])
 
 MARKERS = [
     (1, 'COUNTDOWN / PAD', CAM_LAUNCH),
@@ -942,8 +1055,8 @@ mars_fill.size = 26
 mars_fill.color = (1.0, 0.78, 0.6)
 mo = bpy.data.objects.new('Mars bounce', mars_fill)
 CAMS.objects.link(mo)
-mo.location = (4, -2622, 9)
-mo.rotation_euler = (D(90), 0, 0)   # faces the landing site and crew
+mo.location = (3, -2578, 8)
+mo.rotation_euler = (D(-90), 0, 0)   # lights the camera-facing side of the crew
 
 # World: night launch starfield mixed into a Mars sky at the landing scene.
 world = bpy.data.worlds.new('Mission sky')
@@ -956,7 +1069,43 @@ star_bg = wnt.nodes.new('ShaderNodeBackground')
 star_env = wnt.nodes.new('ShaderNodeTexEnvironment')
 star_env.image = bpy.data.images.load(os.path.join(ASSETS, 'starfield.png'), check_existing=True)
 wnt.links.new(star_env.outputs['Color'], star_bg.inputs['Color'])
-star_bg.inputs['Strength'].default_value = 0.55
+star_bg.inputs['Strength'].default_value = 1.1
+# Earth atmosphere: deep blue horizon glow under a black starry zenith.
+earth_bg = wnt.nodes.new('ShaderNodeBackground')
+earth_bg.inputs['Strength'].default_value = 1.0
+tc = wnt.nodes.new('ShaderNodeTexCoord')
+sep = wnt.nodes.new('ShaderNodeSeparateXYZ')
+sky_mr = wnt.nodes.new('ShaderNodeMapRange')
+sky_mr.inputs['From Min'].default_value = -0.05
+sky_mr.inputs['From Max'].default_value = 0.45
+sky_ramp = wnt.nodes.new('ShaderNodeValToRGB')
+sky_ramp.color_ramp.elements[0].color = (0.055, 0.105, 0.20, 1)
+sky_ramp.color_ramp.elements[1].color = (0.003, 0.005, 0.012, 1)
+wnt.links.new(tc.outputs['Generated'], sep.inputs['Vector'])
+wnt.links.new(sep.outputs['Z'], sky_mr.inputs['Value'])
+wnt.links.new(sky_mr.outputs['Result'], sky_ramp.inputs['Fac'])
+wnt.links.new(sky_ramp.outputs['Color'], earth_bg.inputs['Color'])
+sky_fac = wnt.nodes.new('ShaderNodeMapRange')
+sky_fac.inputs['From Min'].default_value = -0.02
+sky_fac.inputs['From Max'].default_value = 0.30
+sky_fac.inputs['To Min'].default_value = 1.0
+sky_fac.inputs['To Max'].default_value = 0.0
+wnt.links.new(sep.outputs['Z'], sky_fac.inputs['Value'])
+atmo = wnt.nodes.new('ShaderNodeValue')
+atmo.outputs[0].default_value = 1.0
+atmo.outputs[0].keyframe_insert('default_value', frame=1)
+atmo.outputs[0].default_value = 1.0
+atmo.outputs[0].keyframe_insert('default_value', frame=240)
+atmo.outputs[0].default_value = 0.0
+atmo.outputs[0].keyframe_insert('default_value', frame=300)   # atmosphere ends at the top of the climb
+atmo_mul = wnt.nodes.new('ShaderNodeMath')
+atmo_mul.operation = 'MULTIPLY'
+wnt.links.new(sky_fac.outputs['Result'], atmo_mul.inputs[0])
+wnt.links.new(atmo.outputs[0], atmo_mul.inputs[1])
+mix_launch = wnt.nodes.new('ShaderNodeMixShader')
+wnt.links.new(star_bg.outputs[0], mix_launch.inputs[1])
+wnt.links.new(earth_bg.outputs[0], mix_launch.inputs[2])
+wnt.links.new(atmo_mul.outputs[0], mix_launch.inputs[0])
 mars_bg = wnt.nodes.new('ShaderNodeBackground')
 mars_env = wnt.nodes.new('ShaderNodeTexEnvironment')
 mars_env.image = bpy.data.images.load(os.path.join(ASSETS, 'mars-sky.png'), check_existing=True)
@@ -964,12 +1113,54 @@ wnt.links.new(mars_env.outputs['Color'], mars_bg.inputs['Color'])
 mars_bg.inputs['Strength'].default_value = 0.85
 mix = wnt.nodes.new('ShaderNodeMixShader')
 mix.inputs[0].default_value = 0.0
-wnt.links.new(star_bg.outputs[0], mix.inputs[1])
+wnt.links.new(mix_launch.outputs[0], mix.inputs[1])
 wnt.links.new(mars_bg.outputs[0], mix.inputs[2])
 wnt.links.new(mix.outputs[0], out.inputs['Surface'])
 for f, v in ((1, 0.0), (600, 0.0), (606, 1.0), (900, 1.0)):
     mix.inputs[0].default_value = v
     mix.inputs[0].keyframe_insert('default_value', frame=f)
+
+# Visible sun and planets in the space shots: real emissive spheres at a safe
+# distance inside the camera clip range, hidden once the film cuts to Mars.
+SKY_ROOT = add_empty('SPACE_BACKDROP', (0, 0, 0), None, CAMS)
+
+
+def sky_material(name, color=(1, 1, 1), tex=None, strength=1.6):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    em = nt.nodes.new('ShaderNodeEmission')
+    em.inputs['Strength'].default_value = strength
+    if tex:
+        img = nt.nodes.new('ShaderNodeTexImage')
+        local = os.path.join(ASSETS, tex)
+        img.image = bpy.data.images.load(local if os.path.isfile(local) else os.path.join(ROOT, 'repo-src', tex), check_existing=True)
+        nt.links.new(img.outputs['Color'], em.inputs['Color'])
+    else:
+        em.inputs['Color'].default_value = (*color, 1)
+    nt.links.new(em.outputs[0], out.inputs['Surface'])
+    return m
+
+
+SKY_BODIES = [
+    ('Sun', 131, 9, 32000, 1200, sky_material('Sky sun', (1.0, 0.93, 0.78), strength=40)),
+    ('Earth', 133, -55, 24000, 6000, sky_material('Sky earth', tex='earth.jpg', strength=7.0)),
+    ('Mars', 127, 10, 27000, 360, sky_material('Sky mars', tex='mars.jpg', strength=1.4)),
+    ('Jupiter', 104, 15, 35000, 700, sky_material('Sky jupiter', (0.60, 0.48, 0.34), strength=1.0)),
+    ('Saturn', 141, 17, 40000, 520, sky_material('Sky saturn', (0.58, 0.53, 0.42), strength=1.0)),
+]
+for name, az, elev, dist, radius, mat in SKY_BODIES:
+    a, e = D(az), D(elev)
+    pos = (dist * math.cos(e) * math.cos(a), dist * math.cos(e) * math.sin(a), dist * math.sin(e))
+    body = sphere(name, CAMS, pos, radius, mat, 64, SKY_ROOT)
+    body.visible_shadow = False
+    body['celestial_body'] = 'background sphere at %d km' % round(dist / 1000)
+
+key_scale(SKY_ROOT, 1, 1)
+key_scale(SKY_ROOT, 600, 1)
+key_scale(SKY_ROOT, 610, 0.001)
 
 # ------------------------------------------------------------------- polish
 for o in bpy.data.objects:
@@ -988,8 +1179,8 @@ notes.write("""MISSIONFORGE - SLS / ORION / MARS  (30 fps, 900 frames, 30 s)
 NASA geometry (real models, imported and split):
   Space Launch System printable model - core, SRBs, upper stage, Orion, LAS
   https://science.nasa.gov/3d-resources/space-launch-system-sls/
-  InSight Cruise Lander (NASA/Brian E. Kumanchik) - Mars lander
-  https://science.nasa.gov/3d-resources/insight-cruise-lander/
+  NASA Orion crew module geometry - reused as the Mars capsule
+  (same NASA SLS printable model, sliced and rescaled)
 Crew: the MissionForge field-suit glTF from the simulation.
 
 Hierarchy: SLS_ROOT > CORE_STAGE > RS25_ENGINES, SRB_LEFT, SRB_RIGHT,
@@ -998,7 +1189,7 @@ UPPER_STAGE > ORION > CREW_MODULE / SERVICE_MODULE / SOLAR_ARRAYS / LAS.
 Every visible action is an object or material keyframe on this timeline.
 No video textures, no sequencer strips, no imported footage.
 """)
-s['source_models'] = 'NASA SLS printable model + InSight Cruise Lander (NASA 3D Resources); MissionForge field-suit crew'
+s['source_models'] = 'NASA SLS printable model (Orion capsule reused for Mars); MissionForge field-suit crew'
 s['native_keyframe_animation'] = True
 
 print('STAGE: saving', flush=True)

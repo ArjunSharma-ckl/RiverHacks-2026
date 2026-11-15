@@ -99,9 +99,11 @@ s.frame_set(800)
 z_hold = w(lander).z
 chk('lander descends', z_high - z_low > 50, '%.1f -> %.1f m' % (z_high, z_low))
 chk('lander stops at surface', abs(z_touch) < 0.15 and abs(z_hold - z_touch) < 0.01, 'z=%.2f' % z_touch)
-ins = bpy.data.objects.get('INSIGHT_LANDER_BODY')
-chk('NASA InSight lander model present', bool(ins and len([c for c in ins.children_recursive if c.type == 'MESH']) > 20),
-    '%d meshes' % len([c for c in ins.children_recursive if c.type == 'MESH']) if ins else 'missing')
+cap = bpy.data.objects.get('MARS_CAPSULE_BODY')
+chk('Mars capsule built from NASA Orion geometry', bool(cap and len(cap.data.polygons) > 500),
+    '%d polys' % len(cap.data.polygons) if cap else 'missing')
+chk('capsule heat shield and legs are present',
+    all(n in bpy.data.objects for n in ('Capsule heat shield', 'Capsule landing leg 0', 'Capsule hatch door')))
 hatch = bpy.data.objects['LANDER_HATCH_HINGE']
 s.frame_set(720)
 h_a = abs(hatch.rotation_euler.x)
@@ -133,12 +135,13 @@ chk('field-suit limbs are keyframed', bool(limb),
     limb.name if limb else 'no animated ArmL')
 
 flag = bpy.data.objects['SPACE_INVADERS_FLAG']
+fabric = bpy.data.objects['Flag fabric']
 s.frame_set(850)
-f_a = flag.rotation_euler.x
+f_a = fabric.scale.x
 s.frame_set(880)
-f_b = flag.rotation_euler.x
-chk('flag is planted upright', abs(f_a) > 0.5 and abs(f_b) < 0.02,
-    '%.0f -> %.0f deg' % (math.degrees(f_a), math.degrees(f_b)))
+f_b = fabric.scale.x
+chk('flag unfurls upright at the pole', f_a < 0.2 and f_b > 0.9,
+    'scale %.2f -> %.2f' % (f_a, f_b))
 chk('flag carries the USA flag texture',
     any(m and m.use_nodes and any(n.type == 'TEX_IMAGE' and n.image and 'usa-flag' in n.image.name
         for n in m.node_tree.nodes) for m in bpy.data.materials))

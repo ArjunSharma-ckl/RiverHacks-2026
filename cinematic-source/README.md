@@ -3,14 +3,14 @@
 `missionforge-launch.blend` is a 30-second, 900-frame, 30 fps scene in which the
 actual 3D objects are animated. There are no video textures, no sequencer strips
 and no stock footage in the project: the rocket, boosters, stages, spacecraft,
-cameras, lander, crew and flag all move through keyframes on the timeline.
+cameras, capsule, crew and flag all move through keyframes on the timeline.
 
 ## Spacecraft geometry
 
 | Component | Source |
 | --- | --- |
 | SLS core stage, solid rocket boosters, upper stage, Orion, launch abort system | [Space Launch System printable model](https://science.nasa.gov/3d-resources/space-launch-system-sls/), NASA 3D Resources |
-| Mars lander | [InSight Cruise Lander](https://science.nasa.gov/3d-resources/insight-cruise-lander/), NASA/Brian E. Kumanchik, NASA 3D Resources |
+| Mars capsule | NASA Orion crew module geometry (same NASA SLS printable model), sliced at the crew module and rescaled |
 | EVA crew | `public/models/mission/field-suit.glb`, the same articulated field suit used by the MissionForge simulation |
 
 The NASA printable model is a 1.55-million-triangle, 54-shell STL of the full
@@ -85,8 +85,8 @@ The scene is generated entirely from scripts; nothing is painted by hand.
 # 1. Download the printable SLS STL into nasa-assets/sls_printable/
 #    https://science.nasa.gov/3d-resources/space-launch-system-sls/
 
-#    Also copy cinematic-source/assets/ (field-suit.glb, insight_deployed.glb,
-#    usa-flag.png, starfield.png, mars-sky.png).
+#    Also copy cinematic-source/assets/ (field-suit.glb, usa-flag.png,
+#    starfield.png, mars-sky.png, mars-ground.png, earth.jpg, mars.jpg).
 
 blender -b --python cinematic-source/extract_stl.py
 blender -b --python cinematic-source/build_scene.py
@@ -110,8 +110,8 @@ frames took about three minutes on the reference machine.
 `verify_blend.py` reopens the saved file and checks, at multiple frames, that the
 stack lifts off, both boosters detach and separate, the core falls behind, the
 upper stage keeps climbing, Orion separates and turns, the arrays unfold, the
-lander descends and stops, the legs, hatch and ramp move, both astronauts walk,
-the flag rises, and the cameras switch on their markers. It also asserts 30 fps,
+capsule descends and stops, the legs, hatch and ramp move, both astronauts walk,
+the flag is planted and unfurls, and the cameras switch on their markers. It also asserts 30 fps,
 900 frames, eight named cameras, 18 markers, the required hierarchy, keyframed
 limbs, and the absence of movie-clip textures or sequencer strips.
 
@@ -120,6 +120,11 @@ limbs, and the absence of movie-clip textures or sequencer strips.
 The 77 MB NASA STL and the extracted `sls_components.blend` are build inputs,
 not committed. The scene keeps the outer mold line at roughly 50 % decimation so
 the viewport stays interactive; raise the ratios in `extract_stl.py` for final
-renders. The Mars terrain, airlock/hatch/ramp, flag pole and launch pad are original
-MissionForge geometry; the lander body and crew suits are the NASA and
-simulation models credited above.
+renders. The launch plain and Mars dunes are original disk terrain with generated
+atmosphere and distance haze; the capsule heat shield, hatch, legs and ramp, the
+flag pole and launch pad are original MissionForge geometry. The visible sun and
+planet spheres in the space shots are original MissionForge geometry using the
+repository's Earth and Mars maps. The capsule shell and crew suits are the NASA
+and simulation models credited above. Space cameras rise through their shots; the
+launch plain and atmosphere are faded out above the climb so orbit frames show
+stars, Earth and the sun instead of a flat floor.
