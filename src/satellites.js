@@ -73,7 +73,7 @@ export function createSatellites(viewer) {
       label: {
         distanceDisplayCondition: new C.DistanceDisplayCondition(0, 2500),
         text: `${config.name}  ${Math.round(config.altitude / 1000)} km`,
-        font: '500 11px ui-monospace, SFMono-Regular, Menlo, monospace',
+        font: '600 13px ui-monospace, SFMono-Regular, Menlo, monospace',
         fillColor: color,
         pixelOffset: new C.Cartesian2(14, 0),
         horizontalOrigin: C.HorizontalOrigin.LEFT,

@@ -61,7 +61,8 @@ export function createScene(onPick) {
       },
       label: {
         text: s.name.toUpperCase(),
-        font: "15px sans-serif",
+        font: "600 15px system-ui, 'Segoe UI', Roboto, sans-serif",
+        scale: 1,
         horizontalOrigin: C.HorizontalOrigin.CENTER,
         verticalOrigin: C.VerticalOrigin.BOTTOM,
         pixelOffset: new C.Cartesian2(0, -14),
@@ -102,7 +103,7 @@ export function createScene(onPick) {
     site,
     placed = false;
   const layout = { east: 0, north: 0, scale: 1.9 };
-  let renderQuality = "Performance";
+  let renderQuality = "Balanced";
   const surface = new C.CustomDataSource("Settlement photo");
   viewer.dataSources.add(surface);
   function showGlobe() {
@@ -420,6 +421,8 @@ export function createScene(onPick) {
   let roverDriving = false;
   let roverMission = null;
   let roverLastFrame = performance.now();
+  let roverPose = { x: 85, y: 0, heading: 0 };
+  let roverSite = "";
   function showGroundTile(s,opacity=0.55){
     if(groundSite===s.id&&groundLayer){groundLayer.alpha=opacity;return;}
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
@@ -452,7 +455,13 @@ export function createScene(onPick) {
     camera.cancelFlight();
     if (groundLayer) groundLayer.show = false;
     startClock(s);
-    roverDistance = 0;
+    // Adding a facility rebuilds the settlement. Keep the rover where it is
+    // instead of snapping it back to the start of the survey loop.
+    if (roverSite !== s.id) {
+      roverDistance = 0;
+      roverPose = { x: 85, y: 0, heading: 0 };
+      roverSite = s.id;
+    }
     roverFollow = false;
     roverDriving = false;
     roverLastFrame = performance.now();
@@ -543,7 +552,7 @@ export function createScene(onPick) {
     if(points.length<2)return;
     for(let i=0;i<points.length;i++){
       const p=points[i];
-      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:'15px sans-serif',pixelOffset:new C.Cartesian2(12,-15),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
+      itinerary.entities.add({id:`Stop ${i+1}`,position:pos(p.lon,p.lat,10000),point:{pixelSize:10,color:C.Color.fromCssColorString('#a1efcf'),outlineColor:C.Color.BLACK,outlineWidth:2},label:{text:p.name,font:"600 16px system-ui, 'Segoe UI', Roboto, sans-serif",scale:1,pixelOffset:new C.Cartesian2(13,-16),horizontalOrigin:C.HorizontalOrigin.LEFT,style:C.LabelStyle.FILL_AND_OUTLINE,outlineWidth:3}});
       if(i){const a=points[i-1],g=new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a.lon,a.lat),C.Cartographic.fromDegrees(p.lon,p.lat));const positions=[];for(let j=0;j<=48;j++){const f=j/48,q=g.interpolateUsingFraction(f);positions.push(pos(C.Math.toDegrees(q.longitude),C.Math.toDegrees(q.latitude),10000+Math.sin(Math.PI*f)*Math.min(500000,g.surfaceDistance*.12)));}itinerary.entities.add({polyline:{positions,width:3,material:C.Color.fromCssColorString('#9de9c9')}});}
     }
     const sphere=C.BoundingSphere.fromPoints(points.map(p=>pos(p.lon,p.lat)));
@@ -645,11 +654,12 @@ export function createScene(onPick) {
       scene.msaaSamples = mode === "High" ? 2 : 1;
       viewer.resolutionScale =
         mode === "High"
-          ? Math.min(devicePixelRatio, 1.5, Math.sqrt(3600000 / (innerWidth * innerHeight)))
+          ? Math.min(devicePixelRatio || 1, 2)
           : mode === "Performance"
-            ? 0.7
-            : Math.min(devicePixelRatio||1,1.15,Math.sqrt(3000000/Math.max(1,innerWidth*innerHeight)));
-      viewer.targetFrameRate = 30;
+            ? 1
+            : Math.min(devicePixelRatio || 1, 1.5);
+      // Only the lowest preset needs the flat cap; the globe should feel smooth.
+      viewer.targetFrameRate = mode === "Performance" ? 30 : 60;
       viewer.shadows = !placed && mode !== "Performance";
       scene.postProcessStages.fxaa.enabled = mode === "High";
       scene.globe.maximumScreenSpaceError =

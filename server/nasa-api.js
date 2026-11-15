@@ -3,6 +3,7 @@ import { sourceLink } from './serp-links.js';
 import { thermalPoints } from './thermal.js';
 import { weatherMap } from './weather-map.js';
 import { report } from './reports.js';
+import { siteRankings } from './site-rankings.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
 // talks to /api/*.
@@ -263,6 +264,14 @@ export function createApi(env = {}, extras = {}) {
     '/earth-analogs': p => proxyMissionBackend('/earth-analogs', p),
     '/mars-analogs': p => proxyMissionBackend('/mars-analogs', p),
     '/earth-analog-attribute': p => proxyMissionBackend('/earth-analog-attribute', p),
+    '/analog/site-rankings': p => {
+      let target = {};
+      try {
+        const parsed = JSON.parse(p.get('target') || '{}');
+        target = parsed?.target && typeof parsed.target === 'object' ? parsed.target : parsed;
+      } catch {}
+      return siteRankings(target);
+    },
     '/cities': async p => {
       const input=(p.get('q')||'').trim().slice(0,80);
       if(!/^[\p{L}\p{M} .,'-]{2,80}$/u.test(input)) throw Error('bad city');

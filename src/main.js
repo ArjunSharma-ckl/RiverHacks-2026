@@ -146,3 +146,29 @@ scene.canvas.addEventListener('wheel', event => {
     location.height + Math.max(160, C.Cartesian3.distance(camera.positionWC,ground)*0.72)), duration:0.65});
 }, {capture:true,passive:false});
 
+
+// Points on the far side of the Earth should disappear instead of showing
+// through the globe. Cesium's occcluder answers that per point each frame.
+const hiddenBehindGlobe = new Set();
+const horizonTest = new C.EllipsoidalOccluder(scene.globe.ellipsoid, camera.positionWC);
+scene.preRender.addEventListener(() => {
+  horizonTest.cameraPosition = camera.positionWC;
+  const time = viewer.clock.currentTime;
+  const collections = [viewer.entities];
+  for (const source of viewer.dataSources) collections.push(source.entities);
+  for (const collection of collections) {
+    for (const entity of collection.values) {
+      const position = entity.position?.getValue(time);
+      if (!position) continue;
+      if (!horizonTest.isPointVisible(position)) {
+        if (entity.show) {
+          entity.show = false;
+          hiddenBehindGlobe.add(entity);
+        }
+      } else if (hiddenBehindGlobe.has(entity)) {
+        entity.show = true;
+        hiddenBehindGlobe.delete(entity);
+      }
+    }
+  }
+});

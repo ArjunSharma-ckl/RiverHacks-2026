@@ -73,6 +73,13 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 @container (max-width:340px){.panel .fields,.panel .explorer-grid{grid-template-columns:1fr}.travel-stats{grid-template-columns:1fr 1fr}.panel h1{font-size:27px}}
 @media(max-width:700px){.workspace{--rail-width:76px}.tab-rail button{font-size:10px;padding:7px}.panel-drawer .panel{padding:18px}.facility-list{grid-template-columns:1fr}}
 @media print{html:has(.workspace),body:has(.workspace){height:auto;overflow:visible;background:white}.mast,.tab-rail,.drawer-head,.drawer-reopen,.workspace>.viewport,.panel-drawer button{display:none!important}.workspace{height:auto;min-height:0;background:white}.panel-drawer{position:static;width:100%;background:white;color:black;border:0;box-shadow:none}.panel-drawer .panel,.panel-drawer .panel p,.panel-drawer .panel small,.panel-drawer .panel h1,.panel-drawer .panel h2{color:black;overflow:visible}.panel-drawer .panel .trip-stop,.panel-drawer .panel .trip-leg{background:white;color:black;border-color:#888;break-inside:avoid}.panel-drawer .panel input,.panel-drawer .panel select{background:white;color:black;border-color:#999}}
+.ai-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 6px;padding:8px 11px;border:1px solid #355447;border-radius:10px;background:#10201c}
+.ai-bar small{font-size:10px;line-height:1.3}
+.panel-drawer .panel .ai-refresh,.ai-refresh{flex:0 0 auto;display:inline-block;width:auto;min-width:0;min-height:0;padding:5px 12px;font-size:10px;line-height:1.2;border-radius:99px;background:#1d3a2d;border:1px solid #59816b;color:#c8f2da;cursor:pointer;white-space:nowrap}
+.ai-refresh:hover{border-color:#a7ecd0;background:#244a38}
+.hud-timer{display:flex;justify-content:space-between;gap:8px;padding:8px 0 6px;border-top:1px solid #29483c;color:#b5cbbf}
+.hud-timer b{color:#7fa996;font-weight:500}
+.hud-timer span{color:#d8f6e7;font-variant-numeric:tabular-nums}
 .site-catalog [data-act="refresh-ai"]{padding:6px 12px;font-size:12px;line-height:1.2;width:auto;align-self:flex-start}
 
 /* Asset readout on hover. A status colour runs down the edge of the card and
@@ -156,3 +163,35 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 .hud-bar i { display: block; height: 100%; border-radius: 2px; background: #6ee7a8; }
 .hud-bar[data-state="warn"] i { background: #ffc163; }
 .hud-bar[data-state="bad"] i { background: #ff7b6b; }
+
+/* Render quality, on the globe itself so it is reachable from the first
+   screen rather than only from inside the simulation panel. */
+.atlas-quality {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 5px 4px 10px;
+  border: 1px solid #ffffff1f;
+  border-radius: 999px;
+  background: #060d12e8;
+  backdrop-filter: blur(10px);
+  font: 11px/1 system-ui, sans-serif;
+}
+.atlas-quality span { margin-right: 4px; color: #93a9b6; font-size: 10px; }
+.atlas-quality button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #cfe0ea;
+  font: inherit;
+  cursor: pointer;
+}
+.atlas-quality button:hover { background: #ffffff14; }
+.atlas-quality button[aria-pressed="true"] { background: #7ef0ff; color: #04121a; font-weight: 600; }
+.atlas-quality button:focus-visible { outline: 2px solid #7ef0ff; outline-offset: 1px; }
+@media (max-width: 760px) { .atlas-quality span { display: none; } }
