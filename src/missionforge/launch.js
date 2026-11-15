@@ -1,4 +1,4 @@
-const film = "/cinematics/mission-launch-1080p.mp4";
+const film = "/cinematics/mission-launch-720p.mp4";
 const CACHE = "missionforge-cinematics-v1";
 
 // The launch film is the heaviest single asset on the site. Put it in the Cache
