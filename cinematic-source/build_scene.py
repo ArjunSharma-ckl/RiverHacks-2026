@@ -517,6 +517,41 @@ def hazy_ground_material(name, base_a, base_b, haze, far_start, far_end, tex=Non
     t.links.new(mr.outputs['Result'], fade.inputs['Fac'])
     if tex:
         pre_fade = mix.outputs['Color']
+        # A second, rotated copy at a different scale breaks the tile grid.
+        map2 = t.nodes.new('ShaderNodeMapping')
+        map2.inputs['Scale'].default_value = (0.00021, 0.00021, 0.00021)
+        map2.inputs['Rotation'].default_value = (0.0, 0.0, 0.7)
+        img2 = t.nodes.new('ShaderNodeTexImage')
+        img2.image = tex
+        t.links.new(coord.outputs['Object'], map2.inputs['Vector'])
+        t.links.new(map2.outputs['Vector'], img2.inputs['Vector'])
+        layer2 = t.nodes.new('ShaderNodeMixRGB')
+        layer2.inputs['Fac'].default_value = 0.42
+        t.links.new(pre_fade, layer2.inputs['Color1'])
+        t.links.new(img2.outputs['Color'], layer2.inputs['Color2'])
+        pre_fade = layer2.outputs['Color']
+        # Fine regolith detail breaks up the repeating map tiles.
+        detail = t.nodes.new('ShaderNodeTexNoise')
+        detail.inputs['Scale'].default_value = 0.03
+        detail.inputs['Detail'].default_value = 8.0
+        detail.inputs['Roughness'].default_value = 0.62
+        t.links.new(coord.outputs['Object'], detail.inputs['Vector'])
+        dr = t.nodes.new('ShaderNodeValToRGB')
+        dr.color_ramp.elements[0].position = 0.3
+        dr.color_ramp.elements[0].color = (0.55, 0.5, 0.46, 1)
+        dr.color_ramp.elements[1].position = 0.72
+        dr.color_ramp.elements[1].color = (1.18, 1.08, 1.0, 1)
+        t.links.new(detail.outputs['Fac'], dr.inputs['Fac'])
+        dm = t.nodes.new('ShaderNodeMixRGB')
+        dm.blend_type = 'MULTIPLY'
+        dm.inputs['Fac'].default_value = 0.55
+        t.links.new(pre_fade, dm.inputs['Color1'])
+        t.links.new(dr.outputs['Color'], dm.inputs['Color2'])
+        pre_fade = dm.outputs['Color']
+        bump = t.nodes.new('ShaderNodeBump')
+        bump.inputs['Strength'].default_value = 0.28
+        t.links.new(detail.outputs['Fac'], bump.inputs['Height'])
+        t.links.new(bump.outputs['Normal'], b.inputs['Normal'])
     else:
         pre_fade = ramp.outputs['Color']
     t.links.new(pre_fade, fade.inputs['Color1'])
@@ -908,10 +943,17 @@ key_rot(FLAG, 842, (0, 0, 0))
 key_rot(FLAG, 852, (0, 0, 0))
 key_rot(FLAG, 868, (0, 0, 0))
 key_rot(FLAG, 880, (0, 0, 0))
-# Astronaut 1 steadies the pole as it is raised.
-for f, rot in ((846, (0, 0, 0)), (856, (D(20), 0, 0)), (868, (D(4), 0, 0)), (880, (0, 0, 0))):
-    if J1.get('r_arm'):
-        key_rot(J1['r_arm'], f, rot)
+# Crew reach toward the pole while it is planted.
+for J, left, right, zl, zr in ((J1, D(-38), D(-72), D(10), D(-16)),
+                                (J2, D(-70), D(-70), D(18), D(-18))):
+    for name, ang, zz in (('ArmL', left, zl), ('ArmR', right, zr)):
+        arm = J['legs'].get(name)
+        if not arm:
+            continue
+        key_rot(arm, 846, (0, 0, 0))
+        key_rot(arm, 856, (ang, 0, zz))
+        key_rot(arm, 868, (ang, 0, zz))
+        key_rot(arm, 880, (ang, 0, zz))
 # Both astronauts turn to face the flag while it is planted.
 for rig, endf, pos in ((A1, 854, (8.4, -10.8)), (A2, 868, (5.4, -8.4))):
     fx, fy = 10.4, -12.0

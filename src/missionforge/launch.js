@@ -1,9 +1,10 @@
 const film = "/cinematics/mission-launch";
 const phases = [
-  [0, "T−3"], [.74, "T−2"], [1.47, "T−1"], [2.2, "Ignition"],
-  [3.4, "Tower clear"], [4.5, "Stage separation"], [6.5, "Orbital transfer"],
-  [8.7, "Powered descent"], [11.3, "Landing burn"], [12.6, "Contact"],
-  [13.2, "Crew deployment"],
+  [0, "T−3"], [2.2, "Ignition"], [3.0, "Tower clear"],
+  [8.2, "Booster separation"], [14.0, "Core separation"],
+  [16.7, "Orion separation"], [20.4, "Mars approach"],
+  [23.3, "Powered descent"], [24.1, "Touchdown"],
+  [26.0, "Crew egress"], [28.9, "Flag raised"],
 ];
 
 export function launchSequence(site) {
