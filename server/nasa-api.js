@@ -207,14 +207,44 @@ export function createApi(env = {}, extras = {}) {
 
   // Planetary analog endpoints are served by the local Python API in backend/.
   const missionBackend = String(env.MISSION_BACKEND_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+  // WebSocketPair exists only on Workers; Node has no such global.
+  const onWorkers = typeof WebSocketPair !== 'undefined';
+  const LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0)(:|\/|$)/i;
+
   const proxyMissionBackend = async (path, params) => {
+    // A Worker cannot open a connection to a loopback address. With
+    // MISSION_BACKEND_URL unset the request still leaves for 127.0.0.1:8000 and
+    // comes back as an opaque 403 from the edge, which reads in the UI as
+    // "Backend request failed (403)" - a broken API rather than a backend that
+    // was never pointed anywhere. Say which it is.
+    if (onWorkers && LOOPBACK.test(missionBackend)) {
+      return {
+        features: [],
+        error: 'The analog backend is not reachable from this deployment. Set MISSION_BACKEND_URL to a public instance of backend/server.py.',
+        __proxyStatus: 503
+      };
+    }
     const query = params.toString();
-    const response = await fetch(`${missionBackend}/api${path}${query ? `?${query}` : ''}`, {
-      signal: AbortSignal.timeout(300000),
-      headers: { accept: 'application/json' }
-    });
-    const result = await response.json().catch(() => ({}));
-    return response.ok ? result : { ...result, __proxyStatus: response.status };
+    try {
+      const response = await fetch(`${missionBackend}/api${path}${query ? `?${query}` : ''}`, {
+        signal: AbortSignal.timeout(300000),
+        headers: { accept: 'application/json' }
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) return result;
+      return {
+        features: [],
+        ...result,
+        error: result.error || `The analog backend returned ${response.status}.`,
+        __proxyStatus: response.status
+      };
+    } catch {
+      return {
+        features: [],
+        error: 'The analog backend did not respond.',
+        __proxyStatus: 503
+      };
+    }
   };
 
   async function pointResearch(q, subject) {
