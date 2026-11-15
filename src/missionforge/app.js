@@ -1,6 +1,6 @@
 import { cue, toggleSound } from "./audio.js";
 import { launchSequence } from "./launch.js";
-import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates } from './travel.js';
+import { trip, travelHtml, changeTrip, travelAction, routePoints, loadRates, loadSeason, ensureScoutedSite } from './travel.js';
 
 import { stations, prepareDuties, assignDuty, dutyPose } from "./duties.js";
 import morphdom from "morphdom";
@@ -14,6 +14,8 @@ import {
   start,
   advance,
   generation,
+  thermalDemand,
+  surfaceGravity,
   failures,
   medicalCases,
   inject,
@@ -61,7 +63,14 @@ let sortBy = "Suitability",
   researchType = "Studies",
   searchTimer,
   groundQuestion = "";
-let drawerOpen = true, drawerShift = 0, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
+let drawerOpen = true, drawerWidth = Number(localStorage.getItem('mf-drawer-width')) || 390, filterTemp = 'Any', filterMineral = 'Any', researchQuestion = '', researchAnswer = '';
+const explorerFields=[['olivine','Olivine'],['plagioclase','Plagioclase'],['lowCalciumPyroxene','Low calcium pyroxene'],['highCalciumPyroxene','High calcium pyroxene'],['smfe','SMFe'],['roughness','Terrain roughness'],['surfaceTemperature','Average surface temperature (°C)']];
+let explorerValues={};
+try{explorerValues=JSON.parse(localStorage.getItem('mf-explorer-inputs')||'{}')}catch{}
+let missionHistory=[];
+try{missionHistory=JSON.parse(localStorage.getItem('mf-mission-history')||'[]')}catch{}
+let facilitySearch='';
+const extraFacilities={greenhouse:'Food greenhouse',observatory:'Geology observatory',power:'Auxiliary power module',storage:'Cold storage depot',comms:'Communications relay',airlock:'Secondary airlock',drilling:'Subsurface drilling bay',landing:'Landing support pad'};
 let gtAnswer = "",
   quality = "Balanced";
 let crewIndex = 0;
@@ -95,7 +104,11 @@ let cfg = {
   load: 1.8,
   water: 64,
   oxygen: 36,
+  food: 27,
   parts: 3,
+  medkits: 2,
+  regolith: 0,
+  components: 0,
   rover: true,
   backup: true,
   roles: [...roles, "Systems engineer", "Geologist"],
@@ -105,14 +118,17 @@ let cfg = {
 try {
   const saved = JSON.parse(localStorage.getItem("missionforge-v1"));
   if (saved?.cfg) {
-    cfg = saved.cfg;
+    cfg = { ...cfg, ...saved.cfg, food: saved.cfg.food ?? cfg.food, medkits: saved.cfg.medkits ?? cfg.medkits, regolith:saved.cfg.regolith??cfg.regolith, components:saved.cfg.components??cfg.components };
     site = saved.site;
     profile = saved.profile ?? 0;
     mission = saved.mission;
   }
 } catch {}
+try{const session=JSON.parse(localStorage.getItem('mf-sim-session')||'{}');playing=Boolean(mission&&mission.outcome==='In progress'&&session.playing);speed=[1,2,3,4,10,50].includes(session.speed)?session.speed:1;const elapsed=Math.max(0,Date.now()-(session.savedAt||Date.now()))/3000*.1;if(playing&&elapsed)advance(mission,Math.min(elapsed*speed,mission.cfg.days*SOL-mission.h));for(const entry of missionHistory){if(entry.id===mission?.id||!entry.playing||entry.snapshot?.outcome!=='In progress')continue;advance(entry.snapshot,Math.min(elapsed*(entry.speed||1),entry.snapshot.cfg.days*SOL-entry.snapshot.h));entry.h=entry.snapshot.h;entry.outcome=entry.snapshot.outcome;entry.resources=entry.snapshot.resources;entry.logs=entry.snapshot.logs;entry.parts=entry.snapshot.parts;entry.medkits=entry.snapshot.medkits;entry.playing=entry.outcome==='In progress'} }catch{}
 function save() {
   try {
+    if(mission?.cfg?.site){mission.id??=String(Date.now());const entry={id:mission.id,site:mission.cfg.site,mode:mission.cfg.mode,crew:mission.cfg.crew,h:mission.h,outcome:mission.outcome,playing,speed,logs:mission.logs.slice(-80),parts:mission.parts,medkits:mission.medkits,resources:mission.resources,snapshot:mission};missionHistory=[entry,...missionHistory.filter(x=>x.id!==entry.id)].slice(0,30);localStorage.setItem('mf-mission-history',JSON.stringify(missionHistory));}
+    localStorage.setItem('mf-sim-session',JSON.stringify({playing,speed,savedAt:Date.now()}));
     localStorage.setItem(
       "missionforge-v1",
       JSON.stringify({ cfg, site, mission, profile }),
@@ -164,10 +180,7 @@ function lensContent() {
     : "";
 }
 const viewport = () =>
-  `<div class="viewport"><div class="crew-lens">${lensContent()}</div>${page === "home" || page === "discover" ? "" : btn("skip", "Skip camera flight", "skip")}<div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
-function home() {
-  return `<section class="hero">${viewport()}<div class="heroText">${label("Earth-to-Mars mission preparation")}<h1>Find Earth.<br><em>Prepare for Mars.</em></h1><p>Discover Mars analog sites on Earth, establish a research habitat, and put your crew to the test.</p><div class="actions"><a class="primary" href="#discover">Find a Mars analog site　→</a><a class="quiet" href="#mission">Explore simulation ↗</a></div></div></section><section class="catalog"><div class="sectionhead"><div>${label("Terrestrial analogs")}<h2>Field site atlas</h2></div>${btn("discover", "Explore all 6 sites　→")}</div><div class="cardgrid">${[sites[0], sites[1], sites[2]].map((s) => `<button class="card" data-act="site:${s.id}"><div class="imageband">${photo(s)}<span class="tag">${s.type.toUpperCase()}</span></div><div class="cardfoot"><div><small>${s.country.toUpperCase()}</small><h3>${s.name}</h3></div><b>↗</b></div></button>`).join("")}</div><div class="foot"><small>Earth is our proving ground.</small><small>Imagery © Esri and contributors</small></div></section>`;
-}
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
 function reasoning(s) {
   const r = ranking(s),
     total = r.w.reduce((sum, w, i) => sum + (r.scores[i] === null ? 0 : w), 0);
@@ -216,17 +229,18 @@ function rows() {
   return ranked().filter(s => (filterTemp==='Any' || (filterTemp==='Below 0°C' ? (annual(s,'T2M')??100)<0 : filterTemp==='0–15°C' ? (annual(s,'T2M')??100)>=0 && (annual(s,'T2M')??100)<=15 : (annual(s,'T2M')??-100)>15)) && (filterMineral==='Any' || minerals[s.id]===filterMineral))
     .map(
       (s) =>
-        `<button class="row" data-act="site:${s.id}">${photo(s)}<span><strong>${s.name}</strong><small>${s.country} · ${s.type}</small><span class="score-reason">${esc(reasoning(s))}</span></span><b>${ranking(s).score ?? "—"}</b></button>`,
+        `<button class="site-card" data-act="site:${s.id}"><span class="site-card-image">${photo(s)}</span><span class="site-card-content"><small>${esc(s.country)} · ${esc(s.type)}</small><strong>${esc(s.name)}</strong><span class="score-reason">${esc(reasoning(s))}</span></span><b class="site-card-score">${ranking(s).score ?? "—"}<small>/100</small></b></button>`,
     )
     .join("");
 }
 function discover() {
   return `${label("Site atlas / Discovery")}<h1>Find a field site</h1><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Surface material is a broad site classification, not a verified mineral assay.</p>${select("sort", "Sort candidates", ["Suitability", "Solar resource", "Site name"], sortBy)}<div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
-function mapHome(){return `${label('Home map / Conditions')}<h1>Explore Earth</h1><p>Rotate and zoom the globe. Filter candidate analogs by climate and surface material.</p>${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}<div id="rankings">${rows()}</div>${btn('manual','Evaluate a point on the globe')}`;}
-function researchPanel(){return `${label('GroundTruth / Research')}<h1>Ask about a site</h1><p>Search cited web evidence about ${esc(site.name)}. Results require a configured SERPAPI_KEY.</p><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What equipment risks matter here?"></label>${btn('ask-research','Search evidence')}<div id="research-answer" role="status">${researchAnswer}</div>`;}
+function pastMissions(){const entries=missionHistory;const card=x=>`<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${x.snapshot?btn('resume-mission:'+esc(x.id),'Open mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Mission log and supplies</summary><p>Repair spares: ${esc(x.parts??'—')} · Medical kits: ${esc(x.medkits??'—')}</p>${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value))).join('')}${Object.entries(x.snapshot?.inventory||{}).map(([key,value])=>line(esc(key),fmt(value,0))).join('')}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')||'<p>No detailed log was saved for this older mission.</p>'}</details></div></article>`;const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card to inspect logs and remaining supplies.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;}
+function siteExplorer(){return `${label('Site explorer / Input staging')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements. This form saves a structured input record for the matching AI planned next.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(explorerValues,null,2))}</pre></details><p class="note">No matching score is calculated yet. Mineral values and roughness retain the units of your source data.</p>`;}
+function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div><details><summary>SerpAPI connection</summary><p>Add <code>SERPAPI_KEY=your_key</code> to <code>.env.local</code> in the repository root, then restart the server. Set the same variable in your Render environment for deployment. Keep the key out of browser code.</p></details>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
-function facilityControls(){return `<details open><summary>Planned settlement facilities</summary><p class="note">Pressurized modules share enclosed corridors. Surface work still requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div></details>`;}
+function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Eight core facilities. Search to add optional modules before launch. Pressurized modules share enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. greenhouse, airlock"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
 function breakdown(s) {
   const r = ranking(s);
   return factors
@@ -277,7 +291,11 @@ function design() {
     ["load", "Habitat load (kW)", 0.1, 10],
     ["water", "Water (L)", 1, 700],
     ["oxygen", "Oxygen (kg)", 1, 300],
+    ["food", "Food (kg)", 0, 1000],
     ["parts", "Repair spares", 0, 20],
+    ["medkits", "Medical kits", 0, 30],
+    ["regolith", "Packed regolith (kg)", 0, 200],
+    ["components", "Fabrication components", 0, 100],
   ]
     .map(([id, l, min, max]) =>
       num(id, l, cfg[id], min, max, id === "load" ? 0.1 : 1),
@@ -358,7 +376,7 @@ function astra(m) {
 }
 function groundTruth() {
   return (
-    '<details><summary>GroundTruth AI · Mission evidence</summary><p class="note">Search context includes the site, active incidents and selected crew telemetry. Evidence supports training decisions.</p><label class="field">Question<input id="gt-question" value="' +
+    '<details class="mission-groundtruth"><summary>GroundTruth AI · Mission evidence</summary><p class="note">Search context includes the site, active incidents and selected crew telemetry. Evidence supports training decisions.</p><label class="field">Question<input id="gt-question" value="' +
     esc(groundQuestion) +
     '" maxlength="180" placeholder="How does dust affect solar output?"></label>' +
     btn("groundtruth", "Investigate with GroundTruth AI") +
@@ -371,7 +389,7 @@ function environmentControls(){const env=mission?.environment||{temperature:-35,
 function control() {
   const m = mission;
   prepareDuties(m);
-  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${btn("speed", speed + "× speed")}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("retry", "Restart expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
+  return `${label("MF-001 / Mission control")}<h1>${site.id === "atacama" ? "Atacama Habitat Expedition" : site.name + " Expedition"}</h1><p>${m.cfg.mode} · ${m.cfg.crew} crew · ${m.cfg.days} sols</p>${line("Mission clock", `SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h, 1)} h elapsed`)}<div class="actions pills">${btn("play", playing ? "Pause" : "Resume")}${btn("hour", "+1 hour")}${btn("sol", "+1 sol")}${select('sim-speed','Clock rate',[1,2,3,4,10,50].map(x=>x+'×'),speed+'×')}${btn("report", "View report ↗")}${btn("inspect", "Site data")}${btn("design", "Plan another mission")}${btn("retry", "Relaunch expedition")}${btn("sound", localStorage.getItem("mf-sound") === "on" ? "Sound on" : "Sound off")}</div><small>1× = 0.1 simulated hour per 3 seconds; rates are relative training speeds.</small>${environmentControls()}${facilityControls()}${crewControls(m)}<div class="metrics">${metrics(m)}</div><div class="pills">${["Systems", "ASTRA", "Log"].map((t) => btn("tab:" + t, (t === tab ? "● " : "") + t)).join("")}</div>${Object.keys(
     m.active,
   )
     .map(
@@ -385,7 +403,7 @@ function control() {
     )
     .join(
       "",
-    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(m.cfg.load * m.load * (1+Math.max(0,Math.abs(m.environment?.temperature??-35)-35)*0.003), 2) + " kW")}${line('Crew radiation dose',fmt(m.crewDose??0,3)+' mSv simulated')}${line('Surface travel',(m.environment?.wind??0)>=25?'Paused by wind':'Available')}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Habitat integrity", fmt(m.integrity ?? 100, 1) + "%")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
+    )}${tab === "ASTRA" ? astra(m) : tab === "Log" ? timeline(m) : `${workTotals(m)}<h2>Surface systems</h2>${line("Solar generation", fmt(generation(m), 2) + " kW mean")}${line("Habitat demand", fmt(thermalDemand(m), 2) + " kW")}${line('Scenario gravity',fmt(surfaceGravity(m.cfg.mode),2)+' m/s² · projected on Earth terrain')}${line('Crew radiation dose',fmt(m.crewDose??0,3)+' mSv simulated')}${line('Surface travel',m.active.storm?'Paused by dust':(m.environment?.wind??0)>=25?'Paused by wind':'Available')}${line("Rover", m.cfg.rover ? (m.active.rover ? "Disabled" : m.traverse ? "Traversing" : "Parked") + " · " + fmt(m.km) + " km" : "Not deployed")}${line("Rover battery", m.cfg.rover ? fmt(((m.roverEnergy ?? 2.4) / 2.4) * 100, 0) + "%" : "Not deployed")}${line("Habitat integrity", fmt(m.integrity ?? 100, 1) + "%")}${line("Communications", m.active.comms ? "Interrupted" : "Online")}${line("Repair inventory", m.parts + " spares")}${m.cfg.rover ? btn("traverse", m.traverse ? "Park rover" : "Begin rover traverse") : ""}`}${groundTruth()}<h2>Scenario controls</h2><div class="fields">${select(
     "incident",
     "Inject failure",
     Object.entries(failures)
@@ -415,25 +433,24 @@ function report() {
     )}</tbody></table>${line("Battery trend", spark(m.history.map((v) => v.battery)))}${timeline(m)}${astra(m)}<p>Deterministic training model. Mean daily irradiance, constant crew demand and simplified health relationships. Mars gravity, radiation and atmospheric exposure are outside this model.</p><div class="actions">${btn("export", "Export report", "primary")}${btn("control", "Return to mission")}${btn("retry", "Retry mission")}${btn("design", "Revise configuration")}${btn("discover", "Compare another site")}</div></article>`;
 }
 function render() {
-  const holder = document.createDocumentFragment();
-  holder.append(atlas);
   const mode = page === "control";
   document.body.classList.toggle("dark", mode);
-  document.title = "MissionForge | " + ({map:'Earth map',discover:'Site discovery',travel:'Travel planning',inspect:site.name,design:'Mission planning',control:'Mission simulation',report:'After-action report',research:'GroundTruth research'}[page]||'Explorer');
-  document
-    .querySelectorAll(".mast nav a")
-    .forEach((a) =>
-      a.classList.toggle(
-        "active",
-        a.hash === "#" + (["inspect","discover"].includes(page) ? "discover" : page),
-      ),
-    );
-  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
-  const tabs = [['map','Home map'],['travel','Travel'],['design','Mission planning'],['control','Mission sim'],['discover','Site atlas'],['research','Ask GroundTruth']];
-  app.innerHTML = `<section class="workspace ${drawerOpen?'':'drawer-closed'}" style="--drawer-shift:${drawerShift}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" class="${(page==='inspect'&&id==='discover')||page===id?'selected':''}" title="${name}" aria-label="${name}">${name}</button>`).join('')}</nav><div class="panel-drawer"><div class="drawer-head" id="drawer-handle"><span>MISSIONFORGE / ${esc(page.toUpperCase())}</span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel">${content()}</div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
-  const dest = app.querySelector(".viewport");
-  dest.prepend(atlas);
-  atlas.hidden = false;
+  document.title = "MissionForge | " + ({past:'Past missions',explorer:'Site explorer',discover:'Site atlas',travel:'Travel planning',inspect:site.name,design:'Mission planning',control:'Mission simulation',report:'After-action report',research:'GroundTruth research'}[page]||'Explorer');
+  const activeTab=page==='inspect'?'discover':['design','control','report'].includes(page)?'mission':page;
+  const content = { past:pastMissions, explorer:siteExplorer, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
+  if(!app.querySelector('.workspace')){
+    const tabs=[['past','Past missions'],['discover','Site atlas'],['explorer','Site explorer'],['travel','Travel'],['mission','Mission'],['research','GroundTruth']];
+    app.innerHTML=`<section class="workspace" style="--drawer-width:${drawerWidth}px"><nav class="tab-rail" aria-label="Workspace tabs">${tabs.map(([id,name])=>`<button type="button" data-workspace="${id}" title="${name}" aria-label="${name}">${name}</button>`).join('')}<a class="earth-viewer-link" href="/orbit.html">Earth Viewer ↗</a></nav><div class="panel-drawer"><div class="drawer-head"><span id="drawer-title"></span><button type="button" data-drawer="toggle" aria-label="Minimize panel">−</button></div><div class="panel"></div><div class="drawer-resize" role="separator" aria-label="Resize side panel" aria-orientation="vertical" tabindex="0"></div></div><button class="drawer-reopen" type="button" data-drawer="toggle" aria-label="Open panel">☰</button>${viewport()}</section>`;
+    app.querySelector('.viewport').prepend(atlas);
+    app.querySelector('.viewport').insertAdjacentHTML('beforeend','<div class="weather-layer" aria-hidden="true"></div>');
+    atlas.hidden=false;
+  }
+  const workspace=app.querySelector('.workspace');
+  workspace.classList.toggle('drawer-closed',!drawerOpen);
+  workspace.style.setProperty('--drawer-width',drawerWidth+'px');
+  app.querySelector('#drawer-title').textContent='MISSIONFORGE / '+page.toUpperCase();
+  app.querySelectorAll('[data-workspace]').forEach(button=>button.classList.toggle('selected',button.dataset.workspace===activeTab));
+  update();
 }
 function update() {
   const panel = app.querySelector(".panel");
@@ -441,7 +458,7 @@ function update() {
     render();
     return;
   }
-  const content = { map:mapHome, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
+  const content = { past:pastMissions, explorer:siteExplorer, discover, inspect, design, control, travel:travelHtml, research:researchPanel, report }[page] || discover;
   morphdom(panel, '<div class="panel">' + content() + "</div>", {
     onBeforeElUpdated(oldEl, newEl) {
       if (oldEl.tagName === "DETAILS") newEl.open = oldEl.open;
@@ -455,6 +472,7 @@ function update() {
   });
   const lens = app.querySelector(".crew-lens");
   if (lens) lens.innerHTML = lensContent();
+  const weather=app.querySelector('.weather-layer');if(weather){const env=mission?.environment;weather.style.opacity=page==='control'&&env?String(Math.min(.8,Math.max(0,(env.dust||0)/160+(env.wind||0)/180))):'0';weather.style.animationDuration=env?Math.max(.4,3-(env.wind||0)/20)+'s':'2s';}
   const sceneNote = app.querySelector(".scene-note");
   if (equip) {
     const el = sceneNote ?? document.createElement("div");
@@ -469,19 +487,24 @@ function go(name) {
 }
 function displayScene() {
   if (!scene) return;
-  if (["map", "discover", "research"].includes(page)) scene.overview();
+  const loading=app.querySelector('.mission-loading');if(loading)loading.remove();
+  if(['design','control'].includes(page)){const overlay=document.createElement('div');overlay.className='mission-loading';overlay.innerHTML='<div class="mission-loading-card"><div class="mission-loading-rocket">🚀</div><div class="mission-loading-spinner"></div><strong>Preparing terrain and habitat</strong><p>Loading Earth imagery and 3D scene…</p></div>';app.querySelector('.workspace').append(overlay);scene.waitForTiles().then(()=>overlay.remove());}
+  if (["past", "discover", "research"].includes(page)) scene.overview();
+  else if(page==='explorer')scene.preview(site);
   else if (page === 'travel') { scene.overview(); if(trip.stops.length)scene.showRoute(routePoints()); }
   else if (page === "inspect") scene.inspect(site);
-  else if (["design", "control"].includes(page)) {
+  else if(page==='design')scene.preview(site);
+  else if(page==='control'){
     scene.place(site, cfg);
     scene.setFacilities(cfg.facilities||{});
-    if (page === "control") scene.sync(mission, playing ? speed : 0);
+    scene.sync(mission, playing ? speed : 0);
   }
 }
 function route() {
   const target = location.hash.slice(1);
   page = [
-    "map",
+    "past",
+    "explorer",
     "travel",
     "research",
     "discover",
@@ -492,22 +515,21 @@ function route() {
   ].includes(target)
     ? target
     : target === "mission"
-      ? mission
-        ? "control"
-        : "design"
+      ? "design"
       : "discover";
   if (!mission && ["control", "report"].includes(page)) page = "design";
   if (page !== "control") {
-    playing = false;
     scene?.detach();
     cameraPreset = "Overview";
   }
   if (mission && ["control", "report"].includes(page)) {
     site = mission.cfg.site;
-    cfg = structuredClone(mission.cfg);
+    cfg = { ...cfg, ...structuredClone(mission.cfg), food: mission.cfg.food ?? cfg.food, medkits: mission.cfg.medkits ?? cfg.medkits, regolith:mission.cfg.regolith??cfg.regolith, components:mission.cfg.components??cfg.components };
   }
+  if(page==='travel'){ensureScoutedSite(site);loadSeason(site,cache[site.id]).then(()=>{if(page==='travel')update()});}
   equip = "";
   render();
+  app.querySelector('.panel').scrollTop=0;
   displayScene();
   if (page === "inspect") loadObs();
   window.scrollTo(0, 0);
@@ -613,11 +635,12 @@ async function launch() {
   go("control");
 }
 function tick(h) {
+  if(!mission)return;
   advance(mission, h);
   if (mission.outcome !== "In progress") playing = false;
-  scene?.sync(mission, playing ? speed : 0);
+  if(page==='control')scene?.sync(mission, playing ? speed : 0);
   save();
-  update();
+  if(['control','past'].includes(page))update();
 }
 app.addEventListener("submit", (e) => {
   if (e.target.id === "config") {
@@ -626,7 +649,9 @@ app.addEventListener("submit", (e) => {
   }
 });
 app.addEventListener("input", (e) => {
-  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(e.target.value);e.target.nextElementSibling.textContent=e.target.value;scene?.sync(mission,playing?speed:0);return;}
+  if(e.target.id==='facility-search'){facilitySearch=e.target.value;const box=e.target.closest('details');const results=box.querySelector('.facility-search-results');if(results)results.remove();const matches=Object.entries(extraFacilities).filter(([key,name])=>!(cfg.addedFacilities||[]).includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));if(matches.length)e.target.closest('label').insertAdjacentHTML('afterend',`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`);return;}
+  if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query')){changeTrip(e.target);return;}
+  if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(e.target.value);e.target.nextElementSibling.textContent=e.target.value;scene?.sync(mission,playing?speed:0);const weather=app.querySelector('.weather-layer');if(weather){weather.style.opacity=String(Math.min(.8,(mission.environment.dust||0)/160+(mission.environment.wind||0)/180));weather.style.animationDuration=Math.max(.4,3-(mission.environment.wind||0)/20)+'s'}return;}
   if (e.target.id === "gt-question") groundQuestion = e.target.value;
   if (e.target.id === "query") {
     query = e.target.value;
@@ -650,7 +675,9 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
-  if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined){changeTrip(e.target);update();if(page==='travel')scene?.showRoute(routePoints());return;}
+  if(id==='sim-speed'){speed=Number(value.replace('×',''));save();update();return;}
+  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));update();return;}
+  if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
   if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
   if(e.target.dataset.environment && mission){mission.environment??={};mission.environment[e.target.dataset.environment]=Number(value);scene?.sync(mission,playing?speed:0);save();update();return;}
   if(id==='temperature-filter'){filterTemp=value;update();return;}
@@ -729,16 +756,23 @@ app.addEventListener("change", (e) => {
 app.addEventListener("click", async (e) => {
   const workspace=e.target.closest('[data-workspace]');if(workspace){go(workspace.dataset.workspace);return;}
   const drawer=e.target.closest('[data-drawer]');if(drawer){drawerOpen=!drawerOpen;document.querySelector('.workspace')?.classList.toggle('drawer-closed',!drawerOpen);return;}
-  const travel=e.target.closest('[data-travel]');if(travel){travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();return;}
+  const prompt=e.target.closest('[data-research-prompt]');if(prompt){researchQuestion=prompt.dataset.researchPrompt+' at '+site.name;update();app.querySelector('#research-question')?.focus();return;}
+  const travel=e.target.closest('[data-travel]');if(travel){await travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();if(page==='travel'&&/^(select|remove)/.test(travel.dataset.travel))scene?.showRoute(routePoints());return;}
   const button = e.target.closest("[data-act]");
   if (!button) return;
   e.preventDefault();
   const [act, id, ix] = button.dataset.act.split(":");
+  if(act==='resume-mission'){const entry=missionHistory.find(x=>x.id===id);if(!entry?.snapshot)return;mission=entry.snapshot;playing=entry.playing&&mission.outcome==='In progress';speed=entry.speed||1;site=mission.cfg.site;cfg=structuredClone(mission.cfg);save();go('control');return;}
+  if(act==='add-facility'){cfg.addedFacilities??=[];if(extraFacilities[id]&&!cfg.addedFacilities.includes(id))cfg.addedFacilities.push(id);facilitySearch='';const field=app.querySelector('#facility-search');if(field)field.value='';if(mission&&page==='control')mission.cfg.addedFacilities=[...cfg.addedFacilities];save();update();if(page==='control')displayScene();return;}
+  if(act==='remove-facility'){cfg.addedFacilities=(cfg.addedFacilities||[]).filter(x=>x!==id);if(mission&&page==='control')mission.cfg.addedFacilities=[...cfg.addedFacilities];save();update();if(page==='control')displayScene();return;}
+  if(act==='archive-site'){const archived=missionHistory.find(x=>x.site?.id===id);const selected=sites.find(x=>x.id===id)||archived?.site;if(selected)choose(selected);return;}
+  if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));toast('Site inputs saved locally for AI integration');update();return;}
+  if(act==='clear-explorer'){explorerValues={};localStorage.removeItem('mf-explorer-inputs');update();return;}
   if(act==='ask-research'){
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
     if(!researchQuestion)return toast('Enter a research question');
     researchAnswer='<p>Searching cited sources…</p>';update();
-    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<p><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)}</a><br>${esc(r.snippet)}</p>`).join('')||'<p>No cited results returned.</p>';}catch{researchAnswer='<p>Research unavailable. Configure SERPAPI_KEY on the server.</p>';}update();return;
+    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch{researchAnswer='<p class="empty-card">Research unavailable. Configure SERPAPI_KEY on the server.</p>';}update();return;
   }
   if (["helmet", "follow", "overviewCamera"].includes(act)) {
     cameraPreset = {
@@ -751,7 +785,7 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (
-    ["map", "travel", "research", "discover", "inspect", "design", "control", "report"].includes(act)
+    ["past", "explorer", "mission", "travel", "research", "discover", "inspect", "design", "control", "report"].includes(act)
   )
     return go(act);
   if (act === "skip") {
@@ -938,7 +972,6 @@ app.addEventListener("click", async (e) => {
   if (act === "retry") return launch();
   if (act === "play") playing = !playing && mission.outcome === "In progress";
   if (act === "hour" || act === "sol") return tick(act === "hour" ? 1 : SOL);
-  if (act === "speed") speed = speed === 1 ? 4 : speed === 4 ? 12 : 1;
   if (act === "tab") tab = id;
   if (act === "traverse") {
     if (
@@ -997,9 +1030,10 @@ app.addEventListener("click", async (e) => {
   update();
 });
 let dragStart=null;
-app.addEventListener('pointerdown',e=>{const handle=e.target.closest('#drawer-handle');if(!handle||e.target.closest('button'))return;const workspace=app.querySelector('.workspace');dragStart={x:e.clientX,shift:drawerShift,workspace};handle.setPointerCapture(e.pointerId);});
-app.addEventListener('pointermove',e=>{if(!dragStart)return;drawerShift=Math.max(0,Math.min(innerWidth*.32,dragStart.shift+e.clientX-dragStart.x));dragStart.workspace.style.setProperty('--drawer-shift',drawerShift+'px');});
-app.addEventListener('pointerup',()=>{dragStart=null});
+app.addEventListener('pointerdown',e=>{const handle=e.target.closest('.drawer-resize');if(!handle)return;dragStart={x:e.clientX,width:drawerWidth,workspace:app.querySelector('.workspace')};handle.setPointerCapture(e.pointerId);e.preventDefault();});
+app.addEventListener('pointermove',e=>{if(!dragStart)return;const next=dragStart.width+e.clientX-dragStart.x;drawerWidth=next<190?0:Math.max(210,Math.min(innerWidth-130,next));dragStart.workspace.style.setProperty('--drawer-width',drawerWidth+'px');if(drawerWidth===0){drawerOpen=false;dragStart.workspace.classList.add('drawer-closed')}});
+app.addEventListener('pointerup',()=>{if(dragStart){if(!drawerOpen)drawerWidth=390;localStorage.setItem('mf-drawer-width',String(drawerWidth))}dragStart=null});
+app.addEventListener('keydown',e=>{if(!e.target.matches('.drawer-resize'))return;if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const next=drawerWidth+(e.key==='ArrowRight'?24:-24);if(next<190){drawerOpen=false;app.querySelector('.workspace')?.classList.add('drawer-closed');drawerWidth=390}else drawerWidth=Math.max(210,Math.min(innerWidth-130,next));app.querySelector('.workspace')?.style.setProperty('--drawer-width',drawerWidth+'px');localStorage.setItem('mf-drawer-width',String(drawerWidth));}});
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ["Helmet", "Follow crew"].includes(cameraPreset)) {
     cameraPreset = "Overview";
@@ -1037,6 +1071,12 @@ try {
   document.querySelector("#map-status").textContent =
     "3D Earth unavailable · WebGL 2 required";
 }
+let previousFrame=Date.now();
 setInterval(() => {
-  if (playing && page === "control" && !document.hidden) tick(0.1 * speed);
+  const now=Date.now(),hours=Math.max(0,now-previousFrame)/3000*.1;previousFrame=now;
+  if(playing&&mission?.outcome==='In progress')tick(hours*speed);
+  let changed=false;
+  for(const entry of missionHistory){if(entry.id===mission?.id||!entry.playing||entry.snapshot?.outcome!=='In progress')continue;advance(entry.snapshot,hours*(entry.speed||1));entry.h=entry.snapshot.h;entry.outcome=entry.snapshot.outcome;entry.resources=entry.snapshot.resources;entry.logs=entry.snapshot.logs.slice(-80);entry.parts=entry.snapshot.parts;entry.medkits=entry.snapshot.medkits;entry.playing=entry.outcome==='In progress';changed=true}
+  if(changed)try{localStorage.setItem('mf-mission-history',JSON.stringify(missionHistory));localStorage.setItem('mf-sim-session',JSON.stringify({playing,speed,savedAt:now}))}catch{}
+  if(page==='past')update();
 }, 3000);

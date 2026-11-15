@@ -64,7 +64,7 @@ export function start(cfg) {
     battery: cfg.battery,
     oxygen: cfg.oxygen,
     water: cfg.water,
-    food: cfg.crew * cfg.days * 0.8 + 3,
+    food: cfg.food ?? cfg.crew * cfg.days * 0.8 + 3,
   };
   return {
     cfg: structuredClone(cfg),
@@ -80,7 +80,8 @@ export function start(cfg) {
     traverse: false,
     parts: cfg.parts,
     backup: cfg.backup ? 20 : 0,
-    medkits: 2,
+    medkits: cfg.medkits ?? 2,
+    inventory: { regolith: cfg.regolith ?? 0, components: cfg.components ?? 0 },
     active: {},
     mitigated: {},
     health: null,
@@ -92,6 +93,8 @@ export function start(cfg) {
   };
 }
 export const log = (s, msg) => s.logs.push({ h: s.h, msg });
+export const surfaceGravity = mode => mode==='Moon projection'?1.62:mode==='Mars projection'?3.71:9.81;
+export function thermalDemand(s){const target=s.cfg.mode==='Moon projection'?-20:s.cfg.mode==='Mars projection'?-15:15;return s.cfg.load*s.load*(1+Math.max(0,Math.abs((s.environment?.temperature??target)-target)-15)*0.012)}
 export function generation(s) {
   return (
     ((s.cfg.array * s.cfg.sun) / 24) *
@@ -137,6 +140,12 @@ export function advance(s, hours) {
     const dt = Math.min(1, left),
       n = s.cfg.crew,
       r = s.resources;
+    const moon=s.cfg.mode==='Moon projection';
+    if(moon)s.environment.wind=0;
+    const wind=s.environment?.wind??0,dust=s.environment?.dust??0;
+    const weatherStorm=!moon&&wind>=25&&dust>=45;
+    if(weatherStorm&&!s.active.storm){s.active.storm=true;log(s,'High wind and dust · surface operations suspended')}
+    if(!weatherStorm&&s.active.storm&&!s.manualStorm){delete s.active.storm;log(s,'Wind and dust dropped · surface operations may resume')}
     const moving =
       s.traverse &&
       !s.active.rover &&
@@ -155,7 +164,7 @@ export function advance(s, hours) {
       log(s, "Rover battery depleted · traverse paused");
     }
     const supply = generation(s) * dt,
-      demand = s.cfg.load * s.load * dt * (1+Math.max(0,Math.abs(s.environment?.temperature??-35)-35)*0.003) + charge;
+      demand = thermalDemand(s) * dt + charge;
     const backup = s.mitigated.solar
       ? Math.min(s.backup, Math.max(0, demand - supply))
       : 0;
@@ -181,9 +190,11 @@ export function advance(s, hours) {
     s.integrity = Math.max(
       0,
       (s.integrity ?? 100) -
-        dt * ((s.active.oxygen ? 0.35 : 0) + (s.active.storm ? 0.18 : 0)),
+        dt * ((s.active.oxygen ? 0.35 : 0) + (s.active.storm ? 0.18 : 0) + (dust>65 ? (dust-65)*0.002 : 0)),
     );
     s.h += dt;
+    if(s.integrity<75&&!s.integrityWarning){s.integrityWarning=true;log(s,'Habitat integrity below 75% · inspect seals and external surfaces')}
+    if(s.crewDose>=20&&!s.doseWarning){s.doseWarning=true;log(s,'Cumulative dose passed 20 mSv · review shielding and EVA plan')}
     left -= dt;
     if (Object.values(r).some((v) => v <= 0)) {
       s.outcome = "Aborted · reserve depleted";
@@ -197,6 +208,7 @@ export function advance(s, hours) {
     battery: s.resources.battery,
     hr: vitals(s, 0).pulse,
   });
+  if(s.history.length>360)s.history.splice(0,s.history.length-360);
   if (s.outcome !== "In progress") log(s, s.outcome);
 }
 export function inject(s, id, medical = "Dehydration") {
@@ -208,6 +220,7 @@ export function inject(s, id, medical = "Dehydration") {
   )
     return false;
   s.active[id] = true;
+  if(id==='storm')s.manualStorm=true;
   if (id === "medical") s.health = medical;
   log(s, failures[id][0] + (id === "medical" ? " · " + medical : ""));
   return true;
@@ -221,7 +234,7 @@ export function respond(s, id, index) {
     return;
   let consequence = "System restored";
   if (index === 1 && ["solar", "oxygen", "rover", "comms"].includes(id)) {
-    if (s.parts <= 0) return "No spare parts remaining";
+    if (s.parts <= 0) {log(s,failures[id][0]+' repair blocked · no spare parts remaining');return "No spare parts remaining";}
     s.parts--;
     consequence = "One spare part consumed";
   } else if (id === "solar") {
@@ -240,7 +253,7 @@ export function respond(s, id, index) {
     consequence =
       index === 2 ? "Leak rate reduced" : "3 kg reserve transferred";
   } else if (id === "medical") {
-    if (index === 2 && s.medkits <= 0) return "Training medical kits exhausted";
+    if (index === 2 && s.medkits <= 0) {log(s,'Medical response blocked · no kits remaining');return "Training medical kits exhausted";}
     if (index === 2) s.medkits--;
     s.health = null;
     s.recoverAt = s.h + (index === 2 ? 2 : 6);
@@ -262,6 +275,7 @@ export function respond(s, id, index) {
     (["rover", "comms"].includes(id) && index === 3);
   if (!persists) {
     delete s.active[id];
+    if(id==='storm')s.manualStorm=false;
     delete s.mitigated[id];
     if (id === "comms") delete s.mitigated.autonomy;
   }
