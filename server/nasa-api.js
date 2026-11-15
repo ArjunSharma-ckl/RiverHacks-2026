@@ -219,7 +219,7 @@ export function createApi(env = {}, extras = {}) {
   async function pointResearch(q, subject) {
     async function search(engine) {
       if (!serpKey) throw new Error('Search unavailable');
-      const params = new URLSearchParams({engine, q, api_key: serpKey, num: '8'});
+      const params = new URLSearchParams({engine, q, api_key: serpKey, num: '8', hl: 'en', gl: 'us'});
       const data = await getJson('https://serpapi.com/search.json?' + params);
       if (data.error) throw new Error('Search unavailable');
       if (engine === 'google') {
