@@ -155,7 +155,12 @@ scene.preRender.addEventListener(() => {
   horizonTest.cameraPosition = camera.positionWC;
   const time = viewer.clock.currentTime;
   const collections = [viewer.entities];
-  for (const source of viewer.dataSources) collections.push(source.entities);
+  // DataSourceCollection exposes length and get(i); it has no Symbol.iterator,
+  // so for..of over it throws on every frame and Cesium stops rendering.
+  for (let i = 0; i < viewer.dataSources.length; i++) {
+    const source = viewer.dataSources.get(i);
+    if (source?.entities) collections.push(source.entities);
+  }
   for (const collection of collections) {
     for (const entity of collection.values) {
       const position = entity.position?.getValue(time);
