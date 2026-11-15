@@ -2,7 +2,7 @@ import { mission, MISSION_COLORS } from './catalog-search.js';
 import * as C from 'cesium';
 import { propagate, gstime, eciToEcf, twoline2satrec } from 'satellite.js';
 
-export function addCatalog(viewer, fleet) {
+export function addCatalog(viewer, fleet, onCatalog) {
   const featuredIds = ['27424','25994','37849','39574','49260','20580','25544'];
   const cloud = viewer.scene.primitives.add(new C.PointPrimitiveCollection());
   const worker = new Worker(new URL('./orbits.worker.js', import.meta.url), {type:'module'});
@@ -29,6 +29,7 @@ export function addCatalog(viewer, fleet) {
   worker.onmessage = async ({data}) => {
     if (data.names) {
       fleet.contacts = data.names.map(([name,norad],catalogIndex) => ({name,norad,catalogIndex,job:mission(name)}));
+      onCatalog?.();
       points = data.names.map(([name,id],index) => {
         const featured = featuredIds.indexOf(id);
         if (featured >= 0) {

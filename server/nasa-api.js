@@ -1,5 +1,7 @@
 import { answerQuestion, research } from './analog-api.js';
 import { sourceLink } from './serp-links.js';
+import { thermalPoints } from './thermal.js';
+import { weatherMap } from './weather-map.js';
 import { report } from './reports.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
@@ -191,6 +193,23 @@ export function createApi(env = {}, extras = {}) {
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
 
+  async function pointResearch(q, subject) {
+        async function search(engine) {
+          if (!serpKey) throw new Error('Search unavailable');
+          const params = new URLSearchParams({engine, q, api_key: serpKey});
+          const data = await getJson('https://serpapi.com/search.json?' + params);
+          if (data.error) throw new Error('Search unavailable');
+          return engine === 'google' ? (data.organic_results || []).slice(0, 5)
+            .map(({title,link}) => ({title,link})) : (data.images_results || []).slice(0, 4)
+            .map(({title,link,thumbnail}) => ({title,link,thumbnail}));
+        }
+        const nasaQuery = subject.replace(/[^\w .-]/g, ' ').slice(0,60).trim();
+        const [web, images, nasa] = await Promise.allSettled([
+          search('google'), search('google_images'), routes['/nasa/images'](new URLSearchParams({name:nasaQuery}))
+        ]);
+        return { links: web.value || [], images: images.value || [], nasa: nasa.value?.photos || [],
+          searchUnavailable: web.status === 'rejected' || images.status === 'rejected' };
+  }
   const routes = {
     '/cities': async p => {
       const input=(p.get('q')||'').trim().slice(0,80);
@@ -235,7 +254,7 @@ export function createApi(env = {}, extras = {}) {
       return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
     },
     '/analog/research': p => cached('research:v2:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
-    '/analog/ask': p => cached('ask:v1:' + (p.get('q') ?? '').slice(0,200).toLowerCase(), 60 * MINUTE, () => answerQuestion(p, serpKey)),
+    '/analog/ask': p => cached('ask:v2:' + (p.get('q') ?? '').slice(0,200).toLowerCase(), 60 * MINUTE, () => answerQuestion(p, serpKey)),
     '/place': p => {
       const latitude = number(p, 'lat', -90, 90), longitude = number(p, 'lon', -180, 180);
       const key = `place:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
@@ -251,7 +270,7 @@ export function createApi(env = {}, extras = {}) {
     },
     // Open natural events: storms, wildfires, floods, volcanoes, ice.
     '/nasa/events': () => cached('events', 5 * MINUTE, async () => {
-      const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=200&days=45');
+      const data = await getJson('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
       const events = [];
       for (const event of data.events ?? []) {
         const last = event.geometry?.[event.geometry.length - 1];
@@ -269,6 +288,36 @@ export function createApi(env = {}, extras = {}) {
       }
       return { events };
     }),
+
+    '/nasa/thermal-points': params => {
+      const date = params.get('date');
+      return cached('thermal:'+date, 30*MINUTE, () => thermalPoints(date));
+    },
+    '/nasa/point-detail': params => {
+      const kind = params.get('kind');
+      let subject, query;
+      if (kind === 'fires') {
+        const lat = number(params,'lat',-90,90), lon = number(params,'lon',-180,180);
+        const date = params.get('date');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date');
+        subject = 'VIIRS thermal anomalies';
+        query = 'satellite thermal hotspot near '+lat.toFixed(2)+', '+lon.toFixed(2)+' '+date;
+      } else {
+        subject = (params.get('name') || '').slice(0,80);
+        if (!subject || !['Stars','Planets','Satellites'].includes(kind)) throw new Error('Invalid point');
+        query = subject+' '+kind+' NASA';
+      }
+      return cached('point:'+query, 6*60*MINUTE, () => pointResearch(query,subject));
+    },
+    '/nasa/event-detail': async params => {
+      const { events } = await routes['/nasa/events']();
+      const event = events.find(item => item.id === params.get('id'));
+      if (!event) throw new Error('Unknown event');
+      return cached('event-detail:' + event.id, 6 * 60 * MINUTE, async () => {
+        const q = event.title + ' ' + event.date.slice(0, 4);
+        return pointResearch(q, event.title);
+      });
+    },
 
     // Point meteorology and solar resource from NASA POWER.
     '/nasa/power': (params) => {
@@ -397,6 +446,9 @@ export function createApi(env = {}, extras = {}) {
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname === '/weather/map' && req.method === 'GET') {
+      return weatherMap(url.searchParams, res);
+    }
     if (url.pathname.startsWith('/arcgis/imagery/')) {
       if (!extras.imageryTile) {
         res.statusCode = 404;

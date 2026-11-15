@@ -26,7 +26,7 @@ export function createViewer(container) {
   // Globe: true solar lighting, a scattering-based atmosphere and a black base
   // so nothing blue bleeds through gaps in the imagery.
   scene.globe.showWaterEffect = false;
-  scene.globe.enableLighting = true;
+  scene.globe.enableLighting = container !== 'cesiumContainer';
   scene.globe.dynamicAtmosphereLighting = true;
   scene.globe.dynamicAtmosphereLightingFromSun = false;
   scene.globe.showGroundAtmosphere = true;

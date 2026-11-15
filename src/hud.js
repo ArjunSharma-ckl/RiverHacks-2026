@@ -140,10 +140,10 @@ export function createHud(root, context) {
   // Scene
   const sceneSection = section('Scene');
   const sceneToggles = [
-    ['Planets', true, (on) => sky.setPlanets(on)],
-    ['Stars', true, (on) => sky.setStars(on)],
+    ['Planets', true, (on) => { sky.setPlanets(on); context.pointMode('Planets',on); }],
+    ['Stars', true, (on) => { sky.setStars(on); context.pointMode('Stars',on); }],
     ['Star names', true, (on) => sky.setStarLabels(on)],
-    ['Satellites', true, (on) => satellites.setFleet(on)],
+    ['Satellites', true, (on) => { satellites.setFleet(on); context.pointMode('Satellites',on); }],
     ['Satellite labels', true, (on) => satellites.setLabels(on)],
     ['Atmosphere', true, (on) => {
       scene.skyAtmosphere.show = on;

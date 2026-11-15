@@ -708,8 +708,10 @@ async function launch() {
   playing = true;
   tab = "Systems";
   save();
+  scene?.setRendering(false);
+  try { await playback; }
+  finally { scene?.setRendering(true); }
   scene?.place(site, cfg);
-  await playback;
   go("control");
 }
 function tick(h) {

@@ -1,31 +1,20 @@
+import { trueColour } from './true-colour.js';
+import { thermalLayer, THERMAL } from './thermal-layer.js';
 import * as C from 'cesium';
+import { createCloudLoop } from './cloud-loop.js';
 import { gibsWms } from './gibs.js';
 import { setLayer, dropLayer, getLayer } from './layers.js';
 
-// Every layer here is a NASA GIBS product. stepMinutes is the product's native
-// cadence and latencyMinutes is how far behind real time it is published, so
-// the requested timestamp always lands on an image that actually exists.
+// GFS fields share a three-hour valid time and a pole-to-pole geographic grid.
+function forecast(id, label, note, on = false) {
+  return { id, label, note, forecast: true, stepMinutes: 180, latencyMinutes: 0, alpha: 0.62, on };
+}
 export const WEATHER_LAYERS = [
-  {
-    id: 'clouds', label: 'Cloud fraction — MODIS Terra', layer: 'MODIS_Terra_Cloud_Fraction_Day',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.68, maxLevel: 5, on: true,
-    note: 'Daily global daytime observations. Clear gaps can indicate missing measurements.'
-  },
-  {
-    id: 'precip', label: 'Precipitation rate — GPM IMERG', layer: 'IMERG_Precipitation_Rate_30min',
-    stepMinutes: 30, latencyMinutes: 360, alpha: 0.8, maxLevel: 6, on: true,
-    note: 'Global half-hour precipitation estimate.'
-  },
-  {
-    id: 'cloudtop', label: 'Cloud-top temperature — MODIS Terra', layer: 'MODIS_Terra_Cloud_Top_Temp_Night',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
-    note: 'Global nighttime cloud-top observations.'
-  },
-  {
-    id: 'vapor', label: 'Atmospheric water vapor — MODIS Aqua', layer: 'MODIS_Aqua_Water_Vapor_5km_Day',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
-    note: 'Daily global daytime water vapor observations.'
-  },
+  forecast('clouds', 'Cloud cover — 6-hour NOAA GFS loop', 'Six hours of cloud forecasts ending at the displayed UTC time. Denser blue-violet shading means more cloud.', true),
+  forecast('precip', 'Precipitation — NOAA GFS', 'Forecast rain and snow rate. Dry areas show the surface.'),
+  forecast('cloudtop', 'High cloud-top temperature — NOAA GFS', 'Temperature where the model predicts high clouds.'),
+  forecast('vapor', 'Atmospheric water vapor — NOAA GFS', 'Total water vapor in the atmospheric column.'),
+  forecast('temperature', 'Surface temperature — NOAA GFS', 'Model surface temperature over land, ice and ocean.'),
   {
     id: 'sst', label: 'Sea-surface temperature — MUR L4', layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature',
     stepMinutes: 1440, latencyMinutes: 2880, alpha: 0.75, maxLevel: 6,
@@ -50,7 +39,7 @@ export const WEATHER_LAYERS = [
     id: 'truecolor', label: 'Daily true colour — VIIRS', layer: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor',
     stepMinutes: 1440, latencyMinutes: 1440, alpha: 1, maxLevel: 8,
 
-    note: 'Global daytime mosaic. Areas without observations show the basemap.'
+    note: 'Daily observations blend into summer polar imagery (Arctic June 2026, Antarctic December 2025) and the Earth basemap where coverage ends.'
   }
 ];
 
@@ -99,13 +88,17 @@ function timestampFor(spec, date) {
     : `${snapped.toISOString().slice(0, 19)}Z`;
 }
 
-export function createWeather(viewer, { onStatus } = {}) {
+export function createWeather(viewer, { onStatus, eventList } = {}) {
   const state = new Map(WEATHER_LAYERS.map((spec) => [spec.id, {
     spec, enabled: false, alpha: spec.alpha, stamp: undefined, failures: 0
   }]));
   const events = new C.CustomDataSource('eonet');
   events.show = false;
   viewer.dataSources.add(events);
+  const clouds = createCloudLoop(viewer);
+  let colourRequest;
+  const thermal = thermalLayer(viewer,eventList);
+  let eventItems = [];
   let eventsLoaded = false;
   let live = true;
 
@@ -113,7 +106,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     if (!onStatus) return;
     onStatus([...state.values()]
       .filter((entry) => entry.enabled)
-      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: live && (entry.spec.stepMinutes < 1440 || entry.spec.id === 'sst') ? 'Latest available' : entry.stamp, failing: entry.failures > 6 })));
+      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: !entry.spec.forecast && live && (entry.spec.stepMinutes < 1440 || entry.spec.id === 'sst') ? 'Latest available' : entry.stamp, failing: entry.failures > 6 })));
   }
 
   function build(entry) {
@@ -121,6 +114,33 @@ export function createWeather(viewer, { onStatus } = {}) {
     const stamp = timestampFor(spec, C.JulianDate.toDate(viewer.clock.currentTime));
     entry.stamp = stamp;
     entry.failures = 0;
+    if (spec.id === 'fires') {
+      thermal.load(stamp).catch(() => { entry.failures = 7; report(); });
+      return;
+    }
+    if (spec.id === 'truecolor') {
+      colourRequest?.abort();
+      const request = colourRequest = new AbortController();
+      trueColour(stamp, request.signal).then(provider => {
+        if (!request.signal.aborted) setLayer('w:truecolor', new C.ImageryLayer(provider, { alpha: entry.alpha }));
+      }).catch(() => { if (!request.signal.aborted) { entry.failures = 7; report(); } });
+      return;
+    }
+    if (spec.id === 'clouds') {
+      clouds.setOpacity(entry.alpha);
+      clouds.load(stamp).catch(() => { entry.failures = 7; report(); });
+      return;
+    }
+    if (spec.forecast) {
+      const provider = new C.SingleTileImageryProvider({
+        url: '/api/weather/map?field=' + spec.id + '&time=' + encodeURIComponent(stamp),
+        tileWidth: 720, tileHeight: 360,
+        credit: new C.Credit('NOAA GFS · ' + spec.label.split(' — ')[0], true)
+      });
+      provider.errorEvent.addEventListener(() => { entry.failures = 7; report(); });
+      setLayer('w:' + spec.id, new C.ImageryLayer(provider, { alpha: entry.alpha }));
+      return;
+    }
     const provider = gibsWms({
       layer: spec.layer,
       time: live && (spec.stepMinutes < 1440 || spec.id === 'sst') ? undefined : stamp,
@@ -133,7 +153,7 @@ export function createWeather(viewer, { onStatus } = {}) {
       entry.failures += 1;
       if (entry.failures === 7) report();
     });
-    setLayer(`w:${spec.id}`, new C.ImageryLayer(provider, { alpha: entry.alpha }));
+    setLayer(`w:${spec.id}`, new C.ImageryLayer(provider, { alpha: entry.alpha, colorToAlpha: C.Color.BLACK, colorToAlphaThreshold: 0.008 }));
   }
 
   function setEnabled(id, enabled) {
@@ -142,6 +162,9 @@ export function createWeather(viewer, { onStatus } = {}) {
     entry.enabled = enabled;
     if (enabled) build(entry);
     else {
+      if (id === 'fires') { thermal.clear(); eventList.visible(false,THERMAL); }
+      if (id === 'truecolor') colourRequest?.abort();
+      if (id === 'clouds') clouds.clear();
       dropLayer(`w:${id}`);
       entry.stamp = undefined;
     }
@@ -152,6 +175,8 @@ export function createWeather(viewer, { onStatus } = {}) {
     const entry = state.get(id);
     if (!entry) return;
     entry.alpha = alpha;
+    if (id === 'fires') thermal.opacity(alpha);
+    if (id === 'clouds') clouds.setOpacity(alpha);
     const layer = getLayer(`w:${id}`);
     if (layer) layer.alpha = alpha;
   }
@@ -182,13 +207,18 @@ export function createWeather(viewer, { onStatus } = {}) {
       const response = await fetch('/api/nasa/events');
       if (!response.ok) throw new Error('unavailable');
       const payload = await response.json();
+      const icons = new Map();
+      eventItems = payload.events.sort((a,b)=>b.date.localeCompare(a.date));
+      eventList.populate(eventItems);
+      events.clustering.enabled = true;
       for (const event of payload.events ?? []) {
         const color = EVENT_COLORS[event.category] ?? '#9aa7b8';
+        if (!icons.has(color)) icons.set(color, pin(color, event.category));
         events.entities.add({
           name: event.title,
           position: C.Cartesian3.fromDegrees(event.longitude, event.latitude, 18000),
           billboard: {
-            image: pin(color,event.category),
+            image: icons.get(color),
             width: 26,
             height: 26,
             scaleByDistance: new C.NearFarScalar(2.0e6, 1.1, 4.0e7, 0.55)
@@ -197,6 +227,7 @@ export function createWeather(viewer, { onStatus } = {}) {
         });
       }
     } catch {
+      eventList.message('Events could not be loaded. Toggle Natural events to retry.');
       eventsLoaded = false;
     }
   }
@@ -217,10 +248,12 @@ export function createWeather(viewer, { onStatus } = {}) {
       }
     },
     async setEvents(show) {
+      eventList.visible(show);
       events.show = show;
-      if (show) await loadEvents();
+      if (show) { await loadEvents(); if (eventItems.length) eventList.populate(eventItems); }
       document.getElementById('event-credit').textContent = events.show && events.entities.values.length ? 'NASA EONET' : '';
     },
+    openEvent: eventList.open,
     eventsSource: events
   };
 }
