@@ -63,7 +63,7 @@ export function crewScene(viewer, base, local) {
         walk = pose.walking ? Math.sin(phase) : 0;
       const point = local(pose.x, pose.y);
       const cart = C.Cartographic.fromCartesian(point),
-        terrain = scene.globe.getHeight(cart) ?? 0;
+        terrain = 0;
       const job = mission.duties[i].key;
       const heavy = job === "mine" || job === "build";
       const stroke = Math.sin(phase * (heavy ? 0.33 : 0.51));
