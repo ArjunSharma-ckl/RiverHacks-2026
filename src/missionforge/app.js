@@ -142,7 +142,7 @@ function toast(s) {
 }
 async function json(url) {
   const r = await fetch(url, { signal: AbortSignal.timeout(28000) });
-  if (!r.ok) throw Error();
+  if (!r.ok) throw Error((await r.json().catch(()=>({}))).error || 'upstream_unavailable');
   return r.json();
 }
 await Promise.all(
@@ -271,7 +271,7 @@ function discover() {
 }
 function pastMissions(){const entries=missionHistory;const card=x=>`<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${x.snapshot?btn('resume-mission:'+esc(x.id),'Open mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Mission log and supplies</summary><p>Repair spares: ${esc(x.parts??'—')} · Medical kits: ${esc(x.medkits??'—')}</p>${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value))).join('')}${Object.entries(x.snapshot?.inventory||{}).map(([key,value])=>line(esc(key),fmt(value,0))).join('')}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')||'<p>No detailed log was saved for this older mission.</p>'}</details></div></article>`;const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card to inspect logs and remaining supplies.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;}
 function siteExplorer(){return `${label('Site explorer / Input staging')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements. This form saves a structured input record for the matching AI planned next.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(explorerValues,null,2))}</pre></details><p class="note">No matching score is calculated yet. Mineral values and roughness retain the units of your source data.</p>`;}
-function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div><details><summary>SerpAPI connection</summary><p>Add <code>SERPAPI_KEY=your_key</code> to <code>.env.local</code> in the repository root, then restart the server. Set the same variable as a Cloudflare Worker secret for deployment. Keep the key out of browser code.</p></details>`;}
+function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
 function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Core facilities. Search to add optional modules before launch. Pressurized modules share enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. greenhouse, airlock"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
 function breakdown(s) {
@@ -793,7 +793,7 @@ app.addEventListener("change", (e) => {
 });
 app.addEventListener("click", async (e) => {
   const workspace=e.target.closest('[data-workspace]');if(workspace){go(workspace.dataset.workspace);return;}
-  const drawer=e.target.closest('[data-drawer]');if(drawer){drawerOpen=!drawerOpen;document.querySelector('.workspace')?.classList.toggle('drawer-closed',!drawerOpen);return;}
+  const drawer=e.target.closest('[data-drawer]');if(drawer){setDrawerOpen(!drawerOpen);return;}
   const prompt=e.target.closest('[data-research-prompt]');if(prompt){researchQuestion=prompt.dataset.researchPrompt+' at '+site.name;update();app.querySelector('#research-question')?.focus();return;}
   const travel=e.target.closest('[data-travel]');if(travel){await travelAction(travel.dataset.travel,site,points=>scene?.showRoute(points));update();if(page==='travel'&&/^(select|remove)/.test(travel.dataset.travel))scene?.showRoute(routePoints());return;}
   const button = e.target.closest("[data-act]");
@@ -810,7 +810,7 @@ app.addEventListener("click", async (e) => {
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
     if(!researchQuestion)return toast('Enter a research question');
     researchAnswer='<p>Searching cited sources…</p>';update();
-    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch{researchAnswer='<p class="empty-card">Research unavailable. Configure SERPAPI_KEY locally or as a Cloudflare Worker secret.</p>';}update();return;
+    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));const brief=(result.summary||[]).map(r=>`<li>${esc(r.text)} <a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.source)} ↗</a></li>`).join('');researchAnswer=(brief?`<section class="research-brief"><h3>Evidence summary</h3><p>Key points from the linked research snippets:</p><ul>${brief}</ul></section>`:'')+(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch(error){researchAnswer=`<p class="empty-card">${error.message==='missing_key'?'Add SERPAPI_KEY to .env.local and restart the server.':'Source search is temporarily unavailable. Please retry.'}</p>`;}update();return;
   }
   if (act === "followRover") {
     if (!cfg.rover) return toast("No rover is deployed");
@@ -1074,11 +1074,23 @@ app.addEventListener("click", async (e) => {
   save();
   update();
 });
+const BASE_DRAWER_WIDTH=390;
+function setDrawerOpen(open){
+  drawerOpen=open;
+  if(open)drawerWidth=BASE_DRAWER_WIDTH;
+  const workspace=app.querySelector('.workspace');
+  workspace?.classList.toggle('drawer-closed',!open);
+  workspace?.style.setProperty('--drawer-width',drawerWidth+'px');
+  localStorage.setItem('mf-drawer-width',String(drawerWidth));
+  requestAnimationFrame(()=>{scene?.resize();if(page==='control'&&cameraPreset==='Overview')scene.view('Overview');});
+}
 let dragStart=null;
-app.addEventListener('pointerdown',e=>{const handle=e.target.closest('.drawer-resize');if(!handle)return;dragStart={x:e.clientX,width:drawerWidth,workspace:app.querySelector('.workspace')};handle.setPointerCapture(e.pointerId);e.preventDefault();});
-app.addEventListener('pointermove',e=>{if(!dragStart)return;const next=dragStart.width+e.clientX-dragStart.x;drawerWidth=next<190?0:Math.max(210,Math.min(innerWidth-130,next));dragStart.workspace.style.setProperty('--drawer-width',drawerWidth+'px');if(drawerWidth===0){drawerOpen=false;dragStart.workspace.classList.add('drawer-closed')}});
-app.addEventListener('pointerup',()=>{if(dragStart){if(!drawerOpen)drawerWidth=390;localStorage.setItem('mf-drawer-width',String(drawerWidth))}dragStart=null});
-app.addEventListener('keydown',e=>{if(!e.target.matches('.drawer-resize'))return;if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const next=drawerWidth+(e.key==='ArrowRight'?24:-24);if(next<190){drawerOpen=false;app.querySelector('.workspace')?.classList.add('drawer-closed');drawerWidth=390}else drawerWidth=Math.max(210,Math.min(innerWidth-130,next));app.querySelector('.workspace')?.style.setProperty('--drawer-width',drawerWidth+'px');localStorage.setItem('mf-drawer-width',String(drawerWidth));}});
+app.addEventListener('pointerdown',e=>{if(!e.target.closest('.drawer-resize'))return;dragStart={pointerId:e.pointerId,x:e.clientX,width:drawerWidth,workspace:app.querySelector('.workspace'),close:false};app.setPointerCapture(e.pointerId);e.preventDefault();});
+app.addEventListener('pointermove',e=>{if(!dragStart||e.pointerId!==dragStart.pointerId)return;const next=dragStart.width+e.clientX-dragStart.x;dragStart.close=next<190;drawerWidth=Math.max(210,Math.min(innerWidth-130,next));dragStart.workspace.style.setProperty('--drawer-width',drawerWidth+'px');scene?.resize();});
+function finishDrawerDrag(e){if(!dragStart||e.pointerId!==dragStart.pointerId)return;if(dragStart.close)setDrawerOpen(false);else{localStorage.setItem('mf-drawer-width',String(drawerWidth));if(page==='control'&&cameraPreset==='Overview')scene?.view('Overview');}dragStart=null;}
+app.addEventListener('pointerup',finishDrawerDrag);
+app.addEventListener('pointercancel',finishDrawerDrag);
+app.addEventListener('keydown',e=>{if(!e.target.matches('.drawer-resize'))return;if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const next=drawerWidth+(e.key==='ArrowRight'?24:-24);if(next<190)setDrawerOpen(false);else{drawerWidth=Math.max(210,Math.min(innerWidth-130,next));app.querySelector('.workspace')?.style.setProperty('--drawer-width',drawerWidth+'px');localStorage.setItem('mf-drawer-width',String(drawerWidth));}}});
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ["Helmet", "Follow crew"].includes(cameraPreset)) {
     cameraPreset = "Overview";

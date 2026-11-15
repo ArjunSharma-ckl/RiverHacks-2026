@@ -1,4 +1,5 @@
 import { research } from './analog-api.js';
+import { sourceLink } from './serp-links.js';
 import { report } from './reports.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
@@ -119,12 +120,13 @@ async function placeCard(latitude, longitude, key) {
     engine: 'google_maps', q: coordinateText, ll: `@${latitude},${longitude},14z`, type: 'search', hl: 'en', api_key: key
   });
   const [search, maps] = await Promise.all([
-    getJson('https://serpapi.com/search.json?' + query).catch(() => ({})),
+    getJson('https://serpapi.com/search.json?' + query),
     getJson('https://serpapi.com/search.json?' + mapParams).catch(() => ({}))
   ]);
+  if(search.error)throw Error('Place search unavailable');
   const graph = search.knowledge_graph || {};
   const local = maps.local_results?.[0] || maps.place_results || {};
-  const organic = search.organic_results?.[0] || {};
+  const organic = search.organic_results?.find(r=>/https:\/\/[^\s]*(?:nasa\.gov|usgs\.gov|gov\.is|wikipedia\.org)/i.test(r.displayed_link||r.link||'')) || {};
   const localTitle = local.title || '';
   const coordinateTitle = !localTitle || /^[\s\d°'".,+\-NSEW]+$/i.test(localTitle) || /^(gps|coordinates?|latitude)/i.test(localTitle);
   const name = (!coordinateTitle ? localTitle : '') || location.locality || graph.title || `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
@@ -133,11 +135,7 @@ async function placeCard(latitude, longitude, key) {
     const result = await getJson('https://serpapi.com/search.json?' + imageParams).catch(() => ({}));
     return result.images_results || [];
   };
-  let imageResultsRaw = await imageResults(`${name} landmark`);
-  if (!imageResultsRaw.length && location.region)
-    imageResultsRaw = await imageResults(`${name} ${location.region}`);
-  if (!imageResultsRaw.length)
-    imageResultsRaw = await imageResults(`${name} skyline`);
+  const imageResultsRaw = await imageResults(`${name} ${location.region} landscape`);
   const imageSearch = { images_results: imageResultsRaw };
   const useful = (text) =>
     typeof text === 'string' && text.trim().length > 24 && !/^no information|not available|cookie|consent/i.test(text.trim());
@@ -146,17 +144,20 @@ async function placeCard(latitude, longitude, key) {
     (useful(graph.description) && graph.description) ||
     (useful(organic.snippet) && organic.snippet) ||
     `An Earth observation point ${location.region ? 'near ' + location.region : 'at the selected coordinates'}${local.type ? ' · ' + local.type : ''}.`;
-  const images = (imageSearch.images_results || [])
+  const images = await Promise.all((imageSearch.images_results || [])
     .filter((image) => /^https:\/\//.test(image.thumbnail || image.original || ''))
     .slice(0, 6)
-    .map((image) => ({
+    .map(async (image) => ({
       src: image.thumbnail || image.original,
       title: image.title || name,
-      link: image.link || image.original
-    }));
+      link: await sourceLink({link:image.link || image.original || image.thumbnail}) || image.original || image.thumbnail
+    })));
   if (local.thumbnail && /^https:\/\//.test(local.thumbnail) && !images.some((image) => image.src === local.thumbnail)) {
     images.unshift({ src: local.thumbnail, title: local.title || name, link: mapsUrl });
   }
+  const sourceLinkResolved=await sourceLink({link:local.website || graph.source?.link || organic.link || mapsUrl});
+  const source=sourceLinkResolved && !/(?:facebook|instagram|tiktok|pinterest)\.com$/i.test(new URL(sourceLinkResolved).hostname)
+    ? sourceLinkResolved : mapsUrl;
   return {
     name,
     subtitle: [local.type || graph.type, location.region].filter(Boolean).join(' · ') || 'Earth observation point',
@@ -166,7 +167,7 @@ async function placeCard(latitude, longitude, key) {
     reviews: local.reviews || null,
     coordinates: { latitude, longitude },
     images: images.slice(0, 6),
-    source: local.website || graph.source?.link || organic.link || mapsUrl,
+    source,
     mapsUrl,
     provider: 'SerpApi',
     configured: true
@@ -207,7 +208,7 @@ export function createApi(env = {}, extras = {}) {
       const matching=region?candidates.filter(x=>[x.admin1,x.country,x.country_code].some(v=>v?.toLowerCase().includes(region))):candidates;
       const sorted=matching.sort((a,b)=>(b.population||0)-(a.population||0));
       let serpMatch=false;
-      if(serpKey&&sorted.length)try{
+      if(serpKey&&sorted.length>1&&sorted[0].name.toLowerCase()===sorted[1].name.toLowerCase())try{
         const q=new URLSearchParams({engine:'google',q:`${city} ${region} city municipality`,num:'3',api_key:serpKey});
         const evidence=await cached('city-serp:'+input.toLowerCase(),60*MINUTE,()=>getJson('https://serpapi.com/search.json?'+q));
         serpMatch=[evidence.knowledge_graph?.title,...(evidence.organic_results||[]).slice(0,3).map(x=>x.title)].some(title=>title?.toLowerCase().includes(city.toLowerCase()));
@@ -224,7 +225,8 @@ export function createApi(env = {}, extras = {}) {
         const params=new URLSearchParams({engine:'google',q,num:'8',api_key:serpKey});
         const data=await getJson('https://serpapi.com/search.json?'+params);
         if(data.error)throw Error('Vendor search unavailable');
-        return {results:(data.organic_results||[]).filter(r=>/^https:\/\//.test(r.link||'')).slice(0,8).map(({title,link,snippet})=>({title,link,snippet})),source:'SerpAPI Google search',category};
+        const links=await Promise.all((data.organic_results||[]).slice(0,12).map(async r=>({r,link:await sourceLink(r)})));
+        return {results:links.filter(({r,link})=>r.title&&link).slice(0,8).map(({r,link})=>({title:r.title,link,snippet:r.snippet||''})),source:'SerpAPI Google search',category};
       });
     },
     '/analog/climate': p => {
@@ -232,7 +234,7 @@ export function createApi(env = {}, extras = {}) {
       const q = new URLSearchParams({latitude:lat.toFixed(4), longitude:lon.toFixed(4), community:'RE', format:'JSON', parameters:'T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS'});
       return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
     },
-    '/analog/research': p => cached('research:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/analog/research': p => cached('research:v2:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
     '/place': p => {
       const latitude = number(p, 'lat', -90, 90), longitude = number(p, 'lon', -180, 180);
       const key = `place:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
@@ -389,7 +391,7 @@ export function createApi(env = {}, extras = {}) {
     '/nasa/apod': () => cached('apod', 60 * MINUTE, () =>
       getJson(`https://api.nasa.gov/planetary/apod?api_key=${nasaKey}`)),
 
-    '/object': params => report(params.get('name'), serpKey)
+    '/object': params => {if(!serpKey)throw Error('SerpAPI key required');return report(params.get('name'), serpKey)}
   };
 
   return async function handle(req, res) {
@@ -403,7 +405,7 @@ export function createApi(env = {}, extras = {}) {
     }
     const category=url.pathname.match(/^\/research\/(site|incident|logistics|news|medical-support)$/)?.[1];
     if(category)url.searchParams.set("category",category);
-    const route = category ? p=>cached("gt:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
+    const route = category ? p=>cached("gt:v2:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' || !route) {
@@ -414,7 +416,8 @@ export function createApi(env = {}, extras = {}) {
       res.end(JSON.stringify(await route(url.searchParams)));
     } catch {
       res.statusCode = 503;
-      res.end('{}');
+      const serpRoute=Boolean(category)||['/vendors','/analog/research','/object'].includes(url.pathname);
+      res.end(JSON.stringify({error:!serpKey&&serpRoute?'missing_key':'upstream_unavailable'}));
     }
   };
 }

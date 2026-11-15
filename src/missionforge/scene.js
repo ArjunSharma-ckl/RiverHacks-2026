@@ -67,6 +67,38 @@ export function createScene(onPick) {
   let groundClick = null,
     site,
     placed = false;
+  const layoutCache = new Map(), layoutPending = new Map();
+  const defaultLayout = { east:0, north:0, scale:1.6, slope:null };
+  let layout = defaultLayout, placedLayout = null, lastRate = 0;
+  const within = (promise, ms) => Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(Error('Terrain sample timed out')),ms))]);
+  async function prepareLayout(s) {
+    if (layoutCache.has(s.id)) return layoutCache.get(s.id);
+    if (layoutPending.has(s.id)) return layoutPending.get(s.id);
+    const task = (async () => {
+      await within(terrainReady,4000).catch(()=>{});
+      const candidates = [-100,0,100].flatMap(east=>[-100,0,100].map(north=>({east,north})));
+      const offsets = [[0,0],[25,0],[-25,0],[0,25],[0,-25]];
+      const points = candidates.flatMap(({east,north})=>offsets.map(([dx,dy])=>
+        C.Cartographic.fromDegrees(s.lon+(east+dx)/(111320*Math.max(.01,Math.cos(C.Math.toRadians(s.lat)))),s.lat+(north+dy)/111320)));
+      let sampled;
+      try { sampled=await within(viewer.terrainProvider.availability
+        ? C.sampleTerrainMostDetailed(viewer.terrainProvider,points)
+        : C.sampleTerrain(viewer.terrainProvider,13,points),5500); }
+      catch { sampled=points.map(p=>({height:scene.globe.getHeight(p)})); }
+      const scored=candidates.map((candidate,i)=>{
+        const heights=sampled.slice(i*5,i*5+5).map(p=>p.height);
+        if(heights.some(h=>!Number.isFinite(h)))return {...candidate,score:Infinity,slope:Infinity};
+        const slope=Math.max(...heights.slice(1).map(h=>Math.abs(h-heights[0])/25));
+        const roughness=Math.max(...heights)-Math.min(...heights);
+        return {...candidate,slope,score:slope*100+roughness*.3+Math.hypot(candidate.east,candidate.north)*.012};
+      });
+      const best=scored.sort((a,b)=>a.score-b.score)[0];
+      if(!Number.isFinite(best.score))return defaultLayout;
+      return {east:best.east,north:best.north,scale:best.slope<.08?1.9:best.slope<.22?1.65:1.4,slope:best.slope};
+    })().then(value=>{layoutCache.set(s.id,value);layoutPending.delete(s.id);return value;},()=>{layoutPending.delete(s.id);return defaultLayout;});
+    layoutPending.set(s.id,task);
+    return task;
+  }
   viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
     const ray = camera.getPickRay(position),
       ground = ray && scene.globe.pick(ray, scene);
@@ -99,6 +131,8 @@ export function createScene(onPick) {
     actors.reset();
     itinerary.entities.removeAll();
     site = s;
+    layout = layoutCache.get(s.id)||defaultLayout;
+    prepareLayout(s);
     groundClick = null;
     placed = false;
     base.entities.removeAll();
@@ -116,8 +150,8 @@ export function createScene(onPick) {
   const local = (east, north, z = 0) =>
     pos(
       site.lon +
-        east / (111320 * Math.max(0.01, Math.cos((site.lat * Math.PI) / 180))),
-      site.lat + north / 111320,
+        (layout.east+east*layout.scale) / (111320 * Math.max(0.01, Math.cos((site.lat * Math.PI) / 180))),
+      site.lat + (layout.north+north*layout.scale) / 111320,
       z,
     );
   const actors = crewScene(viewer, base, local);
@@ -127,7 +161,9 @@ export function createScene(onPick) {
       position: local(e, n, height),
       model: {
         uri: "/models/mission/" + file + ".glb",
-        ...(scale ? { scale } : {}),
+        scale: file === 'crew' || file === 'field-suit' ? (scale||1)
+          : (scale||1)*layout.scale*(file.startsWith('passage-') || file === 'rover' || file === 'kestrel' ? 1 : 1.28),
+        minimumPixelSize: file.startsWith('passage-') ? 0 : file === 'crew' ? 3 : file === 'solar' ? 5 : 14,
         ...(file === "field-suit"
           ? {
               nodeTransformations: Object.fromEntries(
@@ -141,7 +177,7 @@ export function createScene(onPick) {
         heightReference: height
           ? C.HeightReference.RELATIVE_TO_GROUND
           : C.HeightReference.CLAMP_TO_GROUND,
-        imageBasedLightingFactor: new C.Cartesian2(0.72, 0.82),
+        imageBasedLightingFactor: new C.Cartesian2(0.95, 1),
       },
     });
   }
@@ -162,11 +198,15 @@ export function createScene(onPick) {
     }
   }
   async function terrainHeight(point) {
-    await terrainReady;
+    const loaded=scene.globe.getHeight(point);
+    if(Number.isFinite(loaded))return loaded;
+    await within(terrainReady,3500).catch(()=>{});
     if (!viewer.terrainProvider) return scene.globe.getHeight(point) ?? 0;
     try {
-      const [sampled] = await C.sampleTerrainMostDetailed(viewer.terrainProvider, [point]);
-      return sampled.height;
+      const [sampled] = await within(viewer.terrainProvider.availability
+        ? C.sampleTerrainMostDetailed(viewer.terrainProvider, [point])
+        : C.sampleTerrain(viewer.terrainProvider,13,[point]),3500);
+      return Number.isFinite(sampled.height)?sampled.height:0;
     } catch {
       return scene.globe.getHeight(point) ?? 0;
     }
@@ -182,12 +222,12 @@ export function createScene(onPick) {
     scene.screenSpaceCameraController.enableInputs = !roverFollow;
     if (roverFollow) camera.cancelFlight();
     if(preset==='Overview'){
-      const point=C.Cartographic.fromDegrees(site.lon,site.lat);
+      const point=C.Cartographic.fromCartesian(local(0,0));
       const ground=await terrainHeight(point);
-      const target=C.Cartesian3.fromDegrees(site.lon,site.lat,ground+2);
+      const target=local(0,0,ground+2);
       camera.flyToBoundingSphere(new C.BoundingSphere(target,30),{
         duration:duration(),
-        offset:new C.HeadingPitchRange(Math.PI,-0.68,280),
+        offset:new C.HeadingPitchRange(Math.PI,-1.22,310*layout.scale/1.6),
       });
       return;
     }
@@ -256,6 +296,7 @@ export function createScene(onPick) {
   let placedSignature='';
   function place(s, c) {
     const signature=JSON.stringify(c.addedFacilities||[]);
+    const nextLayout=layoutCache.get(s.id)||defaultLayout;
     if (
       placed &&
       site.id === s.id &&
@@ -263,7 +304,7 @@ export function createScene(onPick) {
       site.lon === s.lon &&
       base.entities.getById("crew" + (c.crew - 1)) &&
       !base.entities.getById("crew" + c.crew) &&
-      Boolean(base.entities.getById("Rover")) === c.rover && placedSignature===signature
+      Boolean(base.entities.getById("Rover")) === c.rover && placedSignature===signature && placedLayout===nextLayout
     )
       return;
     camera.cancelFlight();
@@ -274,6 +315,8 @@ export function createScene(onPick) {
     roverDriving = false;
     roverLastFrame = performance.now();
     site = s;
+    layout = nextLayout;
+    placedLayout = nextLayout;
     placedSignature=signature;
     placed = true;
     pins.show = false;
@@ -320,7 +363,7 @@ export function createScene(onPick) {
     passage("Research north ring", 40, -1, 40, 26);
     passage("Bio spur", 40, 14, 44.1, 14);
     passage("Chem spur", 40, 26, 44.1, 26);
-    const extraModels={greenhouse:['laboratory',-46,25],observatory:['laboratory',-38,8],power:['habitat2',42,26],storage:['logistics',-32,-18],comms:['habitat2',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
+    const extraModels={greenhouse:['laboratory',-46,25],observatory:['comms',-38,8],power:['habitat2',42,26],storage:['logistics',-32,-18],comms:['comms',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
     for(const key of c.addedFacilities||[]){const item=extraModels[key];if(item)model('Extra '+key,...item)}
     if (c.rover) model("Rover", "rover", 38, 0, undefined, 1.05);
     for (let i = 0; i < c.crew; i++)
@@ -330,6 +373,13 @@ export function createScene(onPick) {
     model("Communications", "comms", -5, 13);
     view();
     setFacilities(c.facilities || {});
+    if(!layoutCache.has(s.id))prepareLayout(s).then(prepared=>{
+      if(placed&&site.id===s.id&&placedLayout!==prepared){
+        const previous=roverMission, rate=lastRate;
+        place(s,c);
+        if(previous)sync(previous,rate);
+      }
+    });
   }
   function setFacilities(facilities) {
     const names={ science:["Science module","Geology laboratory","Biology lab","Chemistry lab"], medical:["Emergency shelter","Medical bay"], quarters:["Crew quarters"], water:["Water reclamation"], logistics:["Logistics depot"], fabrication:["Fabrication workshop"], construction:["Construction yard","Constructed greenhouse"], rover:["Rover"] };
@@ -348,6 +398,7 @@ export function createScene(onPick) {
   }
   function sync(m, rate = 0) {
     if (!placed) return;
+    lastRate = rate;
     actors.sync(m, rate);
     roverMission = m;
     roverDriving = Boolean(
@@ -432,6 +483,7 @@ export function createScene(onPick) {
     preview,
     place,
     view,
+    resize(){viewer.resize();scene.requestRender();},
     sync,
     waitForTiles(){return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;remove();clearTimeout(timer);resolve()};const remove=scene.globe.tileLoadProgressEvent.addEventListener(count=>{if(count===0)finish()});const timer=setTimeout(finish,12000);if(scene.globe.tilesLoaded)setTimeout(finish,300)})},
     setFacilities,
@@ -445,17 +497,15 @@ export function createScene(onPick) {
       return l.show;
     },
     async terrain(s) {
-      if (!viewer.terrainProvider.availability) return null;
       const ds = 30 / 111320,
         points = [
           [s.lon, s.lat],
           [s.lon + ds / Math.cos((s.lat * Math.PI) / 180), s.lat],
           [s.lon, s.lat + ds],
         ].map(([x, y]) => C.Cartographic.fromDegrees(x, y));
-      const [a, b, c] = await C.sampleTerrainMostDetailed(
-        viewer.terrainProvider,
-        points,
-      );
+      const [a, b, c] = viewer.terrainProvider.availability
+        ? await C.sampleTerrainMostDetailed(viewer.terrainProvider,points)
+        : await C.sampleTerrain(viewer.terrainProvider,13,points);
       return {
         height: a.height,
         slope:

@@ -33,3 +33,18 @@ test("GroundTruth selects engines, filters sources and keeps citations attached"
   }
   await assert.rejects(research(new URLSearchParams({ q: "field" }), ""));
 });
+
+test('GroundTruth resolves Google redirect citations and accepts journal papers for Studies', async t=>{
+  t.mock.method(globalThis,'fetch',async url=>{
+    if(String(url).startsWith('https://serpapi.com/'))return Response.json({organic_results:[
+      {title:'NASA analog report',snippet:'Icelandic terrain helps study Martian landforms.',link:'https://www.google.com/goto?url=opaque',displayed_link:'https://ntrs.nasa.gov › citations'},
+      {title:'Peer-reviewed rover field test',snippet:'Researchers tested a rover in Iceland.',link:'https://iopscience.iop.org/article/example'}
+    ]});
+    return {url:'https://ntrs.nasa.gov/citations/123',body:null};
+  });
+  const result=await research(new URLSearchParams({q:'Iceland rover',category:'site'}),'test-key');
+  assert.equal(result.results.length,2);
+  assert.equal(result.results[0].link,'https://ntrs.nasa.gov/citations/123');
+  assert.equal(result.summary.length,2);
+  assert.equal(result.results[1].source,'iopscience.iop.org');
+});
