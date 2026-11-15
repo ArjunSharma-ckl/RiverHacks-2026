@@ -410,6 +410,7 @@ export function createScene(onPick) {
   });
   overview();
   return {
+    setRendering(enabled) { viewer.useDefaultRenderLoop = enabled; },
     quality(mode) {
       scene.msaaSamples = mode === "High" ? 2 : 1;
       viewer.resolutionScale =

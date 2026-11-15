@@ -2,30 +2,16 @@ import * as C from 'cesium';
 import { gibsWms } from './gibs.js';
 import { setLayer, dropLayer, getLayer } from './layers.js';
 
-// Every layer here is a NASA GIBS product. stepMinutes is the product's native
-// cadence and latencyMinutes is how far behind real time it is published, so
-// the requested timestamp always lands on an image that actually exists.
+// GFS fields share a three-hour valid time and a pole-to-pole geographic grid.
+function forecast(id, label, note, on = false) {
+  return { id, label, note, forecast: true, stepMinutes: 180, latencyMinutes: 0, alpha: 0.62, on };
+}
 export const WEATHER_LAYERS = [
-  {
-    id: 'clouds', label: 'Cloud fraction — MODIS Terra', layer: 'MODIS_Terra_Cloud_Fraction_Day',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.68, maxLevel: 5, on: true,
-    note: 'Daily global daytime observations. Clear gaps can indicate missing measurements.'
-  },
-  {
-    id: 'precip', label: 'Precipitation rate — GPM IMERG', layer: 'IMERG_Precipitation_Rate_30min',
-    stepMinutes: 30, latencyMinutes: 360, alpha: 0.8, maxLevel: 6, on: true,
-    note: 'Global half-hour precipitation estimate.'
-  },
-  {
-    id: 'cloudtop', label: 'Cloud-top temperature — MODIS Terra', layer: 'MODIS_Terra_Cloud_Top_Temp_Night',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
-    note: 'Global nighttime cloud-top observations.'
-  },
-  {
-    id: 'vapor', label: 'Atmospheric water vapor — MODIS Aqua', layer: 'MODIS_Aqua_Water_Vapor_5km_Day',
-    stepMinutes: 1440, latencyMinutes: 1440, alpha: 0.72, maxLevel: 5,
-    note: 'Daily global daytime water vapor observations.'
-  },
+  forecast('clouds', 'Cloud cover — NOAA GFS', 'Blue to violet shows increasing cloud cover, from clear to overcast.', true),
+  forecast('precip', 'Precipitation — NOAA GFS', 'Forecast rain and snow rate. Dry areas show the surface.'),
+  forecast('cloudtop', 'High cloud-top temperature — NOAA GFS', 'Temperature where the model predicts high clouds.'),
+  forecast('vapor', 'Atmospheric water vapor — NOAA GFS', 'Total water vapor in the atmospheric column.'),
+  forecast('temperature', 'Surface temperature — NOAA GFS', 'Model surface temperature over land, ice and ocean.'),
   {
     id: 'sst', label: 'Sea-surface temperature — MUR L4', layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature',
     stepMinutes: 1440, latencyMinutes: 2880, alpha: 0.75, maxLevel: 6,
@@ -113,7 +99,7 @@ export function createWeather(viewer, { onStatus } = {}) {
     if (!onStatus) return;
     onStatus([...state.values()]
       .filter((entry) => entry.enabled)
-      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: live && (entry.spec.stepMinutes < 1440 || entry.spec.id === 'sst') ? 'Latest available' : entry.stamp, failing: entry.failures > 6 })));
+      .map((entry) => ({ id: entry.spec.id, label: entry.spec.label, stamp: !entry.spec.forecast && live && (entry.spec.stepMinutes < 1440 || entry.spec.id === 'sst') ? 'Latest available' : entry.stamp, failing: entry.failures > 6 })));
   }
 
   function build(entry) {
@@ -121,6 +107,16 @@ export function createWeather(viewer, { onStatus } = {}) {
     const stamp = timestampFor(spec, C.JulianDate.toDate(viewer.clock.currentTime));
     entry.stamp = stamp;
     entry.failures = 0;
+    if (spec.forecast) {
+      const provider = new C.SingleTileImageryProvider({
+        url: '/api/weather/map?field=' + spec.id + '&time=' + encodeURIComponent(stamp),
+        tileWidth: 720, tileHeight: 360,
+        credit: new C.Credit('NOAA GFS · ' + spec.label.split(' — ')[0], true)
+      });
+      provider.errorEvent.addEventListener(() => { entry.failures = 7; report(); });
+      setLayer('w:' + spec.id, new C.ImageryLayer(provider, { alpha: entry.alpha }));
+      return;
+    }
     const provider = gibsWms({
       layer: spec.layer,
       time: live && (spec.stepMinutes < 1440 || spec.id === 'sst') ? undefined : stamp,
@@ -133,7 +129,7 @@ export function createWeather(viewer, { onStatus } = {}) {
       entry.failures += 1;
       if (entry.failures === 7) report();
     });
-    setLayer(`w:${spec.id}`, new C.ImageryLayer(provider, { alpha: entry.alpha }));
+    setLayer(`w:${spec.id}`, new C.ImageryLayer(provider, { alpha: entry.alpha, colorToAlpha: C.Color.BLACK, colorToAlphaThreshold: 0.008 }));
   }
 
   function setEnabled(id, enabled) {

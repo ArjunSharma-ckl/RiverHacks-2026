@@ -664,8 +664,13 @@ async function launch() {
     sun: annual(site, "ALLSKY_SFC_SW_DWN") ?? 5,
   };
   const expedition = start(cfg);
+  scene?.setRendering(false);
+  try {
+    await playback;
+  } finally {
+    scene?.setRendering(true);
+  }
   scene?.place(site, cfg);
-  await playback;
   mission = expedition;
   playing = true;
   tab = "Systems";

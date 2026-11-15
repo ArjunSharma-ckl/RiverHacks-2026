@@ -66,11 +66,11 @@ the real one for the clock time, with a scattering atmosphere, HDR tone mapping,
 bloom and a lens-flare stage on the Sun. Cesium world terrain loads if a
 `VITE_CESIUM_ION_ACCESS_TOKEN` is present.
 
-**Weather (the toggle, or press `W`).** Ten NASA GIBS layers with per-layer
-opacity. The default stack is GOES-East and GOES-West GeoColor cloud cover plus
-GPM IMERG precipitation rate. Each layer declares its native cadence and
-publication latency, so the timestamp requested always lands on an image that
-exists, and layers re-request themselves as new imagery appears.
+**Weather.** The main toggle displays NOAA GFS cloud cover. Cloud cover,
+precipitation, high cloud-top temperature, water vapor and surface temperature
+use a global one-degree forecast grid at three-hour intervals. The clock selects
+the forecast valid time. NASA satellite overlays show observations where
+available, with the Earth basemap visible through missing imagery.
 
 **Active events.** Open storms, wildfires, floods, volcanoes and ice events from
 NASA EONET, as clickable markers.

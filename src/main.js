@@ -20,7 +20,8 @@ const { viewer, scene, camera, lensFlare } = createViewer('cesiumContainer');
 initLayers(viewer, [
   'bluemarble',
   'esri',
-  ...WEATHER_LAYERS.map((spec) => `w:${spec.id}`)
+  'w:truecolor',
+  ...WEATHER_LAYERS.filter(spec => spec.id !== 'truecolor').map((spec) => `w:${spec.id}`)
 ]);
 addBaseImagery({ blueMarble: false });
 

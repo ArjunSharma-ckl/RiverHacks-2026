@@ -40,11 +40,13 @@ export function launchSequence() {
     panel.querySelector("#launch-skip").onclick = finish;
     const speed = panel.querySelector("#launch-speed");
     speed.onclick = () => {
-      video.playbackRate = video.playbackRate === 1 ? 2 : 1;
+      video.playbackRate = video.playbackRate === 2 ? 1 : 2;
       speed.textContent = video.playbackRate === 1 ? "2× speed" : "1× speed";
       speed.setAttribute("aria-pressed", String(video.playbackRate === 2));
     };
+    video.defaultPlaybackRate = 1.5;
     video.src = film;
+    video.playbackRate = 1.5;
     watch();
     video.play().catch(async () => {
       if (done) return;

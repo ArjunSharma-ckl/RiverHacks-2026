@@ -1,3 +1,4 @@
+import { weatherMap } from './weather-map.js';
 import { research } from './analog-api.js';
 import { report } from './reports.js';
 // One API surface, used by the Vite dev/preview middleware and by the
@@ -394,6 +395,9 @@ export function createApi(env = {}, extras = {}) {
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname === '/weather/map' && req.method === 'GET') {
+      return weatherMap(url.searchParams, res);
+    }
     if (url.pathname.startsWith('/arcgis/imagery/')) {
       if (!extras.imageryTile) {
         res.statusCode = 404;
