@@ -348,7 +348,7 @@ function rows() {
     .join("");
 }
 function discover() {
-  return `${siteExplorer()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<div class="ai-bar"><small>${esc(aiRankingStatus)}</small><button type="button" class="ai-refresh" data-act="refresh-ai">Refresh</button></div><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
+  return `${siteExplorer()}${backendAnalogPanel()}<div class="site-catalog">${label("Site atlas / Discovery")}<h2>Find a field site</h2><p>Rank terrestrial environments against your mission requirements.</p><label class="field">Mission description<input id="query" value="${esc(query)}" placeholder="e.g. A cold volcanic site for rover testing"></label><div class="fields">${select("profile", "Mission profile", profiles, profiles[profile])}${select("priority", "Climate weight", ["Standard", "Double", "Triple"], ["Standard", "Double", "Triple"][priority - 1])}${select('temperature-filter','Mean temperature',['Any','Below 0°C','0–15°C','Above 15°C'],filterTemp)}${select('mineral-filter','Surface material',['Any','Basalt','Salt','Silica','Impact breccia'],filterMineral)}</div><div class="headrow"><h2>Candidate sites</h2><small>Suitability / 100</small></div><p class="note">Temperature uses NASA POWER normals. Mineral measurements are shown only when a matching AI provides them.</p>${select("sort", "Sort candidates", ["Suitability",...SITE_FEATURES.map(([,name])=>name),"Solar resource", "Site name"], sortBy)}<div class="ai-bar"><small>${esc(aiRankingStatus)}</small><button type="button" class="ai-refresh" data-act="refresh-ai">Refresh</button></div><div id="rankings">${rows()}</div><p class="note">Derived estimates · NASA POWER climate normals and editorial field criteria. AI results replace these scores when available.</p>${btn("manual", "Evaluate a point on the globe")}</div>`;
 }
 function pastMissions(){
   const entries=missionHistory;
@@ -358,6 +358,85 @@ function pastMissions(){
   };
   const active=entries.filter(x=>x.outcome==='In progress');
   return `${label('Mission archive')}<h1>Missions</h1><p>Every mission you start is stored here and keeps running while you use other tabs. Each one carries a settlement uptime clock.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${entries.length?entries.map(card).join(''):'<p class="empty-card">Start a mission and it is saved here immediately.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;
+}
+let analogBody='Moon',analogGroups=[],analogLoading=false,analogTimer=null,analogRequest=0;
+const ANALOG_MINERALS={olivine:'olivine',plagioclase:'plagioclase',lowCalciumPyroxene:'low_calcium_pyroxene',highCalciumPyroxene:'high_calcium_pyroxene',smfe:'iron'};
+// The same inputs that feed the site model also drive the planetary backend.
+function analogQueries(){
+  const queries=[];
+  const temperature=Number(explorerValues.surfaceTemperature);
+  if(Number.isFinite(temperature))
+    queries.push({key:'temperature',label:'Surface temperature',params:{attribute:'temperature',value:String(temperature),unit:'C'}});
+  const mineral=Object.entries(ANALOG_MINERALS)
+    .map(([field,family])=>[family,Number(explorerValues[field])])
+    .filter(([,value])=>Number.isFinite(value))
+    .sort((a,b)=>b[1]-a[1])[0];
+  if(mineral)
+    queries.push({key:'mineral',label:'Mineral family · '+mineral[0].replace(/_/g,' '),params:{attribute:'mineral',mineral:mineral[0]}});
+  const roughness=Number(explorerValues.roughness);
+  if(Number.isFinite(roughness))
+    queries.push({key:'roughness',label:'Surface roughness',params:{attribute:'roughness',value:String(roughness)}});
+  return queries;
+}
+async function runBackendAnalogs(){
+  const queries=analogQueries();
+  const request=++analogRequest;
+  if(!queries.length){analogGroups=[];analogLoading=false;if(page==='discover')update();return;}
+  analogLoading=true;
+  if(page==='discover')update();
+  const groups=[];
+  for(const query of queries){
+    const params=new URLSearchParams({top:'10',body:analogBody,...query.params});
+    try{
+      const response=await fetch('/api/earth-analog-attribute?'+params,{signal:AbortSignal.timeout(120000)});
+      const data=await response.json().catch(()=>({}));
+      if(request!==analogRequest)return;
+      if(!response.ok){groups.push({...query,error:data.error||('Backend request failed ('+response.status+')'),items:[]});continue;}
+      const items=(data.features||[]).map(feature=>{
+        const properties=feature.properties||{},coordinates=feature.geometry?.coordinates||[];
+        return {
+          name:properties.earth_sample_name||properties.earth_sample_id||properties.earth_grid_id||'Earth location',
+          score:properties[query.key+'_match_percentage']??properties.earth_formula_match_percentage??properties.match_percentage,
+          lat:Number(coordinates[1]),lon:Number(coordinates[0]),
+          formula:properties.earth_best_fit_formula,
+          kelvin:properties.earth_temperature_kelvin,
+          roughness:properties.earth_surface_roughness?.surface_roughness_um,
+        };
+      });
+      groups.push({...query,items,note:data.matching?.formula_match_method||data.matching?.reason||''});
+    }catch{
+      if(request!==analogRequest)return;
+      groups.push({...query,error:'The planetary backend is not reachable. Start it with python -m backend.server.',items:[]});
+    }
+  }
+  analogLoading=false;
+  analogGroups=groups;
+  if(page==='discover')update();
+}
+function scheduleAnalogRun(){clearTimeout(analogTimer);analogTimer=setTimeout(runBackendAnalogs,700);}
+function analogItems(group){
+  if(group.error)return `<p class="analog-error">${esc(group.error)}</p>`;
+  if(!group.items?.length)return '<p class="analog-error">No Earth matches returned.</p>';
+  return `<ol class="analog-list">${group.items.map(item=>{
+    const where=Number.isFinite(item.lat)?item.lat.toFixed(2)+'°, '+item.lon.toFixed(2)+'°':'coordinates unavailable';
+    const score=Number.isFinite(item.score)?' · '+Math.round(item.score)+'% match':'';
+    const formula=item.formula?' · '+esc(item.formula):'';
+    const kelvin=Number.isFinite(item.kelvin)?' · '+fmt(item.kelvin,1)+' K':'';
+    const roughness=Number.isFinite(item.roughness)?' · '+fmt(item.roughness,2)+' µm':'';
+    return `<li><b>${esc(item.name)}</b><small>${where}${score}${formula}${kelvin}${roughness}</small></li>`;
+  }).join('')}</ol>`;
+}
+function backendAnalogPanel(){
+  const queries=analogQueries();
+  const controls=queries.length
+    ? `<div class="analog-controls">${select('analog-body','Target body',['Moon','Mars'],analogBody)}<button type="button" class="ai-refresh" data-act="refresh-analogs">${analogLoading?'Querying…':'Re-query'}</button></div>`
+    : '';
+  const results=queries.length
+    ? (analogGroups.length
+      ? analogGroups.map(group=>`<details class="analog-group" open><summary>${esc(group.label)}${group.items?.length?' · top '+group.items.length:''}</summary>${analogItems(group)}${group.note?`<p class="note">${esc(group.note)}</p>`:''}</details>`).join('')
+      : `<p class="note">${analogLoading?'Querying the mission backend…':'No results yet.'}</p>`)
+    : '<p class="note">Enter a surface temperature, mineral value or terrain roughness above and the backend ranks real Earth locations against it.</p>';
+  return `<section class="analog-panel">${label('Planetary backend / Earth analogs')}<h2>Earth analog matches</h2><p class="note">These inputs go to the mission backend, which scores Earth mineralogy, MODIS temperature and visual roughness against the target.</p>${controls}${results}</section>`;
 }
 function siteExplorer(){return `${label('Site explorer / AI input')}<h1>Describe a target site</h1><p>These seven measurements are the model's entire input. Fill any of them and every candidate site is re-scored against your target.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="${esc({olivine:'modal %',plagioclase:'modal %',lowCalciumPyroxene:'modal %',highCalciumPyroxene:'modal %',smfe:'band depth',roughness:'µm',surfaceTemperature:'°C mean'}[key]||'Number')}"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(siteAiRequest(explorerValues),null,2))}</pre></details><p class="note">Mineral values and roughness retain the units of your source data. Missing values remain null.</p>`;}
 function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Ask GroundTruth</h1><p>Ask about this site, mission operations or any research topic. Answers include the search sources used.</p></div><div class="research-search"><label class="field">Question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Get answer →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see an answer with source links.</p>'}</div>`;}
@@ -901,8 +980,9 @@ app.addEventListener("input", (e) => {
 app.addEventListener("change", (e) => {
   const { id, value, checked } = e.target;
   if(e.target.dataset.crew){const [index,key]=e.target.dataset.crew.split(':');const person=cfg.crewMembers[Number(index)];if(!person)return;if(e.target.type==='number'&&value!==''&&!e.target.checkValidity())return;person[key]=e.target.type==='number'?(value===''?'':Number(value)):value.trim();save();update();return;}
+  if(id==='analog-body'){analogBody=value;runBackendAnalogs();update();return;}
   if(id==='sim-speed'){speed=Number(value.replace('×',''));save();update();return;}
-  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));scheduleAiRefresh();update();return;}
+  if(e.target.dataset.explorer){explorerValues[e.target.dataset.explorer]=value===''?'':Number(value);localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));scheduleAiRefresh();scheduleAnalogRun();update();return;}
   if(e.target.dataset.trip || e.target.dataset.stop || e.target.dataset.leg!==undefined || e.target.dataset.waypointQuery!==undefined){changeTrip(e.target);if(e.target.dataset.trip==='originQuery'||e.target.dataset.waypointQuery!==undefined||e.target.dataset.stop?.endsWith(':query'))return;update();return;}
   if(e.target.dataset.facility){cfg.facilities??={};cfg.facilities[e.target.dataset.facility]=checked;if(e.target.dataset.facility==='rover'){cfg.rover=checked;if(mission)mission.cfg.rover=checked;}if(mission)mission.cfg.facilities=structuredClone(cfg.facilities);scene?.setFacilities(cfg.facilities);save();update();return;}
   if (e.target.id === 'engineering-replay' && mission) {
@@ -1049,6 +1129,7 @@ app.addEventListener("click", async (e) => {
   if(act==='archive-site'){const archived=missionHistory.find(x=>x.site?.id===id);const selected=sites.find(x=>x.id===id)||archived?.site;if(selected)choose(selected);return;}
   if(act==='save-explorer'){localStorage.setItem('mf-explorer-inputs',JSON.stringify(explorerValues));refreshAiRankings();toast('Site inputs saved for AI integration');update();return;}
   if(act==='refresh-ai'){refreshAiRankings();return;}
+  if(act==='refresh-analogs'){runBackendAnalogs();return;}
   if(act==='clear-explorer'){explorerValues={};localStorage.removeItem('mf-explorer-inputs');update();return;}
   if(act==='ask-research'){
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
@@ -1293,6 +1374,7 @@ route();
 // Cache the launch film and habitat models on first load.
 cacheFilm();
 refreshAiRankings();
+runBackendAnalogs();
 loadRates().then(()=>{if(page==='travel')update();});
 try {
   const { createScene } = await import("./scene.js");

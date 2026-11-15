@@ -195,3 +195,14 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 .atlas-quality button[aria-pressed="true"] { background: #7ef0ff; color: #04121a; font-weight: 600; }
 .atlas-quality button:focus-visible { outline: 2px solid #7ef0ff; outline-offset: 1px; }
 @media (max-width: 760px) { .atlas-quality span { display: none; } }
+.analog-panel{margin:22px 0;padding:16px;border:1px solid #426958;border-radius:16px;background:#10231c}
+.analog-panel h2{margin:6px 0 8px}
+.analog-controls{display:flex;align-items:flex-end;gap:10px;margin:12px 0}
+.analog-controls .field{flex:1;margin:0}
+.analog-group{margin:10px 0;padding:11px;border:1px solid #375647;border-radius:10px;background:#132a21}
+.analog-group summary{cursor:pointer;font-weight:700;font-size:12px}
+.analog-list{margin:10px 0 0;padding-left:20px;display:grid;gap:7px}
+.analog-list li{font-size:12px;line-height:1.35}
+.analog-list li b{display:block;font-size:12.5px}
+.analog-list li small{display:block;color:#a9c6b8;font-size:10.5px}
+.analog-error{margin:9px 0 0;color:#ffb3a3;font-size:11px}

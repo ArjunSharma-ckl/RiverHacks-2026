@@ -42,8 +42,10 @@ Nothing needs an API key to work. Keys only add extras — copy `.env.example` t
 
 ## Planetary analog backend (Python)
 
-The text analog search page opens at `/analog-search.html` and is backed by the
-small standard-library Python API in `backend/`. Start it beside the web app:
+The Sites tab carries the analog search. The mineral, surface temperature and
+terrain roughness inputs in *Describe a target site* are sent to the small
+standard-library Python API in `backend/`, which returns ranked Earth matches
+inline under *Earth analog matches*. Start it beside the web app:
 
 ```bash
 pip install -r requirements.txt
