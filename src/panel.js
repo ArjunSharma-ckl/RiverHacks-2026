@@ -31,6 +31,7 @@ export function createPanel(root) {
   function reset(name, sub) {
     const current = ++token;
     root.hidden = false;
+    root.classList.remove('place-mode');
     root.scrollTop = 0;
     title.textContent = name;
     subtitle.textContent = sub ?? '';
@@ -141,6 +142,83 @@ export function createPanel(root) {
     }
   }
 
+  function brand() {
+    const credit = element('div', 'serpapi-credit');
+    const mark = new Image();
+    mark.src = '/serpapi-logo.svg';
+    mark.alt = 'SerpApi';
+    const copy = element('span', undefined, 'Powered by SerpApi');
+    const link = externalLink('https://serpapi.com/', 'Real-time place intelligence');
+    link.className = 'serpapi-link';
+    credit.append(mark, copy, link);
+    return credit;
+  }
+
+  async function showPlace(location) {
+    const current = reset('Identifying this point…', 'SerpApi · Earth observation');
+    root.classList.add('place-mode');
+    body.textContent = 'Finding the nearest mapped place, description and imagery…';
+    extra.append(brand());
+    const status = element('p', 'muted', 'Querying point intelligence…');
+    extra.append(status);
+    try {
+      const query = new URLSearchParams({
+        lat: location.latitude.toFixed(5),
+        lon: location.longitude.toFixed(5)
+      });
+      const response = await fetch('/api/place?' + query, { signal: AbortSignal.timeout(30000) });
+      if (!response.ok) throw new Error('place unavailable');
+      const place = await response.json();
+      if (current !== token) return;
+      title.textContent = place.name || 'Selected Earth point';
+      subtitle.textContent = [place.subtitle, place.provider].filter(Boolean).join(' · ');
+      body.textContent = place.description || 'No description returned for this point.';
+      status.remove();
+      if (!place.configured) {
+        extra.append(element('p', 'place-setup', 'Set SERPAPI_KEY as a Cloudflare secret to enable place descriptions and images.'));
+      }
+      if (place.address || place.rating) {
+        extra.append(definitionList([
+          ...(place.address ? [['Location', place.address]] : []),
+          ...(place.rating ? [['Rating', `${place.rating} / 5${place.reviews ? ' · ' + place.reviews + ' reviews' : ''}`]] : [])
+        ]));
+      }
+      extra.append(definitionList([
+        ['Coordinates', `${place.coordinates.latitude.toFixed(3)}°, ${place.coordinates.longitude.toFixed(3)}°`],
+        ['Source', place.provider === 'SerpApi' ? 'SerpApi Google Search + Maps' : place.provider || 'Earth observation']
+      ]));
+      const links = element('p', 'place-links');
+      if (place.source) links.append(externalLink(place.source, 'Open source ↗'), document.createTextNode('  '));
+      if (place.mapsUrl) links.append(externalLink(place.mapsUrl, 'View on Google Maps ↗'));
+      extra.append(links);
+      if (place.images?.length) {
+        gallery.append(element('p', 'caption', 'Place imagery · SerpApi'));
+        const grid = element('div', 'grid place-grid');
+        for (const image of place.images) {
+          const link = externalLink(image.link || place.source || place.mapsUrl, '',);
+          const img = new Image();
+          img.loading = 'lazy';
+          img.alt = image.title || place.name;
+          img.src = image.src;
+          img.onerror = () => link.remove();
+          link.append(img);
+          grid.append(link);
+        }
+        gallery.append(grid);
+      }
+    } catch {
+      if (current !== token) return;
+      title.textContent = 'Point details unavailable';
+      subtitle.textContent = 'SerpApi · Earth observation';
+      body.textContent = 'The place-intelligence request did not complete. Coordinates remain available and the globe is still interactive.';
+      status.remove();
+      extra.append(element('p', 'place-setup', 'Check SERPAPI_KEY in the Cloudflare Worker secrets or the local .env.local file.'));
+      extra.append(definitionList([
+        ['Coordinates', `${location.latitude.toFixed(3)}°, ${location.longitude.toFixed(3)}°`]
+      ]));
+    }
+  }
+
   function show(name, options = {}) {
     const current = reset(name, options.subtitle);
 
@@ -167,7 +245,7 @@ export function createPanel(root) {
     loadImagery(event.category, current);
   }
 
-  return { show, showEvent, hide, showContact(contact) {
+  return { show, showPlace, showEvent, hide, showContact(contact) {
     const current = reset(contact.name, 'Satellite tracking');
     loadArticle(contact.name,current);
     if (contact.speed) extra.append(definitionList([

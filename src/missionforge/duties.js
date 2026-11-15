@@ -1,4 +1,6 @@
 // Coordinates are metres east/north of the habitat. Work happens in simulated hours.
+import { pointOnRoute, walkRoute } from "./navigation.js";
+
 export const stations = {
   water: {
     name: "Water reclamation",
@@ -39,6 +41,46 @@ export const stations = {
     at: [14, -8],
     door: [8.4, -8],
     model: "logistics",
+  },
+  bio: {
+    name: "Biology lab",
+    task: "Culture samples",
+    output: "Bio samples",
+    unit: "samples",
+    yield: 1,
+    at: [48, 14],
+    door: [44.1, 14],
+    model: "laboratory",
+  },
+  chem: {
+    name: "Chemistry lab",
+    task: "Run chemistry assay",
+    output: "Assays completed",
+    unit: "assays",
+    yield: 1,
+    at: [48, 26],
+    door: [44.1, 26],
+    model: "laboratory",
+  },
+  transport1: {
+    name: "Crew transport 1",
+    task: "Preflight crew transport",
+    output: "Transport checks",
+    unit: "checks",
+    yield: 1,
+    at: [12, -20],
+    door: [12, -21.4],
+    model: "space-car",
+  },
+  transport2: {
+    name: "Crew transport 2",
+    task: "Preflight crew transport",
+    output: "Transport checks",
+    unit: "checks",
+    yield: 1,
+    at: [-10, 22],
+    door: [-10, 20.6],
+    model: "space-car",
   },
 };
 Object.assign(stations, {
@@ -106,7 +148,7 @@ export function prepareDuties(m) {
   m.production ??= { water: 0, lab: 0, med: 0, stores: 0 };
 }
 export const offDuty = (m, i) =>
-  m.active.storm || m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction'}[m.duties?.[i]?.key]]===false || (i === 0 && (m.health || m.recoverAt > m.h));
+  m.active.storm || m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction',bio:'science',chem:'science'}[m.duties?.[i]?.key]]===false || (i === 0 && (m.health || m.recoverAt > m.h));
 const travel = 0.2,
   work = 0.55,
   cycle = travel * 2 + work;
@@ -125,17 +167,20 @@ export function dutyPose(m, i, ahead = 0) {
       : phase < travel + work
         ? 1
         : 1 - (phase - travel - work) / travel;
-  const [x, y] = d.origin,
-    dx = dock[0] - x,
-    dy = dock[1] - y;
+  const routeKey = `${d.key}|${i}|${d.origin[0].toFixed(2)}|${d.origin[1].toFixed(2)}`;
+  if (d.routeKey !== routeKey) {
+    d.route = walkRoute(d.origin, dock);
+    d.routeKey = routeKey;
+  }
   const returning = phase >= travel + work,
     busy = phase >= travel && !returning;
+  const point = pointOnRoute(d.route, returning ? 1 - progress : progress);
   return {
-    x: x + dx * progress,
-    y: y + dy * progress,
+    x: point.x,
+    y: point.y,
     heading: busy
       ? Math.atan2(station.at[0] - dock[0], station.at[1] - dock[1])
-      : Math.atan2(dx, dy) + (returning ? Math.PI : 0),
+      : point.heading + (returning ? Math.PI : 0),
     working: !paused && busy,
     walking: !paused && !busy,
     status: paused
@@ -154,7 +199,7 @@ export function assignDuty(m, i, key) {
   if (
     !m.duties[i] ||
     !stations[key] ||
-    m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction'}[key]]===false ||
+    m.cfg.facilities?.[{water:'water',lab:'science',med:'medical',stores:'logistics',forge:'fabrication',build:'construction',bio:'science',chem:'science'}[key]]===false ||
     key === m.duties[i].key ||
     m.outcome !== "In progress"
   )

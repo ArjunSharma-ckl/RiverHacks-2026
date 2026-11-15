@@ -4,6 +4,7 @@ import { createViewer, addBaseImagery } from "../viewer.js";
 import { initLayers, getLayer } from "../layers.js";
 import { crewScene } from "./crew-scene.js";
 import { stations } from "./duties.js";
+import { pointOnRoute } from "./navigation.js";
 import tiles from "./tile-bounds.json";
 import { sites } from "./sites.js";
 export function createScene(onPick) {
@@ -83,6 +84,8 @@ export function createScene(onPick) {
     matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1.05;
   function overview() {
     actors.reset();
+    roverFollow = false;
+    scene.screenSpaceCameraController.enableInputs = true;
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
     itinerary.entities.removeAll();
     groundClick = null;
@@ -118,10 +121,10 @@ export function createScene(onPick) {
       z,
     );
   const actors = crewScene(viewer, base, local);
-  function model(id, file, e, n, scale) {
+  function model(id, file, e, n, scale, height = 0) {
     base.entities.add({
       id,
-      position: local(e, n),
+      position: local(e, n, height),
       model: {
         uri: "/models/mission/" + file + ".glb",
         ...(scale ? { scale } : {}),
@@ -135,7 +138,9 @@ export function createScene(onPick) {
               ),
             }
           : {}),
-        heightReference: C.HeightReference.CLAMP_TO_GROUND,
+        heightReference: height
+          ? C.HeightReference.RELATIVE_TO_GROUND
+          : C.HeightReference.CLAMP_TO_GROUND,
         imageBasedLightingFactor: new C.Cartesian2(0.72, 0.82),
       },
     });
@@ -168,7 +173,14 @@ export function createScene(onPick) {
   }
   async function view(preset = "Overview", astronaut = 0) {
     if (!placed) return;
-    if (actors.cameraMode(preset, astronaut)) return;
+    const attached = actors.cameraMode(preset, astronaut);
+    if (attached) {
+      roverFollow = false;
+      return;
+    }
+    roverFollow = preset === "Rover";
+    scene.screenSpaceCameraController.enableInputs = !roverFollow;
+    if (roverFollow) camera.cancelFlight();
     if(preset==='Overview'){
       const point=C.Cartographic.fromDegrees(site.lon,site.lat);
       const ground=await terrainHeight(point);
@@ -209,6 +221,22 @@ export function createScene(onPick) {
   }
   let groundLayer;
   let groundSite='';
+  // A closed survey loop east of the settlement keeps the rover clear of the
+  // habitat and gives the chase camera a continuous, fluid route.
+  const roverPath = [
+    [38, 0], [44, -18], [58, -24], [70, -12],
+    [72, 8], [58, 24], [44, 20], [38, 0],
+  ];
+  const roverLength = roverPath.slice(1).reduce(
+    (sum, point, index) =>
+      sum + Math.hypot(point[0] - roverPath[index][0], point[1] - roverPath[index][1]),
+    0,
+  );
+  let roverDistance = 0;
+  let roverFollow = false;
+  let roverDriving = false;
+  let roverMission = null;
+  let roverLastFrame = performance.now();
   function showGroundTile(s,opacity=0.55){
     if(groundSite===s.id&&groundLayer){groundLayer.alpha=opacity;return;}
     if(groundLayer){viewer.imageryLayers.remove(groundLayer);groundLayer=null;}
@@ -241,6 +269,10 @@ export function createScene(onPick) {
     camera.cancelFlight();
     if (groundLayer) groundLayer.show = false;
     startClock(s);
+    roverDistance = 0;
+    roverFollow = false;
+    roverDriving = false;
+    roverLastFrame = performance.now();
     site = s;
     placedSignature=signature;
     placed = true;
@@ -249,28 +281,50 @@ export function createScene(onPick) {
     base.entities.removeAll();
     itinerary.entities.removeAll();
     model("Habitat", "habitat", 0, 0);
-    model("Science module", "habitat2", -8, 6);
+    model("Science module", "habitat2", 56, -12);
     model("Kestrel descent vehicle", "kestrel", 60, -65);
     model("Emergency shelter", "medical", 0, 17);
     model("Crew quarters", "habitat", -10, -18);
     for (const station of Object.values(stations))
       model(station.name, station.model, ...station.at);
     // A ribbed pressure loop links the habitat, laboratories, medical bay and depot.
-    passage("North corridor", 0, 0, 0, 15.2);
+    passage("Habitat apron", 0, 2.2, 0, 4);
+    passage("North corridor", 0, 4, 0, 15.2);
     passage("West corridor", 0, -2, -13.5, -2);
-    passage("South corridor", 0, 0, 0, -13);
+    passage("Habitat bypass riser", -6, -2, -6, 4);
+    passage("Habitat bypass north", -6, 4, 0, 4);
+    passage("South corridor", 0, -2, 0, -13);
     passage("East corridor", 0, -8, 8.4, -8);
     passage("Water corridor", 0, -9, -13, -9);
+    passage("Quarters connector", -10, -2, -10, -6);
     passage("Quarters corridor", -10, -6, -10, -15.9);
     passage("Fabrication corridor", 0, 4, 22.4, 4);
     passage("Battery corridor", 19, 4, 19, 13.2);
+    passage("Construction riser", -10.5, -2, -10.5, 2);
+    passage("Construction link", -10.5, 2, -19, 2);
+    passage("Construction return", -19, 2, -19, 0);
     passage("Construction corridor", -19, 0, -19, 14.3);
     passage("Medical connector", 0, -13, 1.3, -13);
+    passage("Transport 1 spur", 0, -13, 0, -16);
+    passage("Transport 1 link", 0, -16, 12, -16);
+    passage("Transport 1 bay", 12, -16, 12, -20);
+    passage("Transport 2 spur", 0, 15.2, -6, 15.2);
+    passage("Transport 2 link", -6, 15.2, -10, 22);
+    passage("Mine link north", 22.4, 4, 22.4, 10);
+    passage("Mine link east", 22.4, 10, 24.5, 10);
+    passage("Mine link south", 24.5, 10, 24.5, 17);
+    passage("Research descent", 19, 4, 19, -1);
+    passage("Research south link", 19, -1, 40, -1);
+    passage("Research south ring", 40, -1, 40, -12);
+    passage("Science spur", 40, -12, 48.2, -12);
+    passage("Research north ring", 40, -1, 40, 26);
+    passage("Bio spur", 40, 14, 44.1, 14);
+    passage("Chem spur", 40, 26, 44.1, 26);
     const extraModels={greenhouse:['laboratory',-46,25],observatory:['laboratory',-38,8],power:['habitat2',42,26],storage:['logistics',-32,-18],comms:['habitat2',34,-12],airlock:['medical',-18,-24],drilling:['recycler',-42,-12],landing:['kestrel',72,-22]};
     for(const key of c.addedFacilities||[]){const item=extraModels[key];if(item)model('Extra '+key,...item)}
-    if (c.rover) model("Rover", "rover", 5.5, -3);
+    if (c.rover) model("Rover", "rover", 38, 0, undefined, 1.05);
     for (let i = 0; i < c.crew; i++)
-      model("crew" + i, "field-suit", -3 + i * 1.6, -5 + (i % 2) * 1.3);
+      model("crew" + i, "crew", -3 + i * 1.6, -5 + (i % 2) * 1.3);
     for (let i = 0; i < 4; i++)
       model("Solar " + i, "solar", 6 + (i % 2) * 4.5, 9 + Math.floor(i / 2) * 4.2);
     model("Communications", "comms", -5, 13);
@@ -278,7 +332,7 @@ export function createScene(onPick) {
     setFacilities(c.facilities || {});
   }
   function setFacilities(facilities) {
-    const names={ science:["Science module","Geology laboratory"], medical:["Emergency shelter","Medical bay"], quarters:["Crew quarters"], water:["Water reclamation"], logistics:["Logistics depot"], fabrication:["Fabrication workshop"], construction:["Construction yard","Constructed greenhouse"], rover:["Rover"] };
+    const names={ science:["Science module","Geology laboratory","Biology lab","Chemistry lab"], medical:["Emergency shelter","Medical bay"], quarters:["Crew quarters"], water:["Water reclamation"], logistics:["Logistics depot"], fabrication:["Fabrication workshop"], construction:["Construction yard","Constructed greenhouse"], rover:["Rover"] };
     for(const [key,ids] of Object.entries(names)) for(const id of ids){const entity=base.entities.getById(id);if(entity)entity.show=facilities[key]!==false;}
   }
   function showRoute(points) {
@@ -295,6 +349,16 @@ export function createScene(onPick) {
   function sync(m, rate = 0) {
     if (!placed) return;
     actors.sync(m, rate);
+    roverMission = m;
+    roverDriving = Boolean(
+      rate > 0 &&
+      m.traverse &&
+      m.outcome === "In progress" &&
+      !m.active.rover &&
+      !m.active.storm &&
+      (m.environment?.wind ?? 0) < 25 &&
+      (!m.active.comms || m.mitigated?.autonomy)
+    );
     let greenhouse = base.entities.getById("Constructed greenhouse");
     if (m.construction >= 4 && !greenhouse)
       model("Constructed greenhouse", "laboratory", -34, 20);
@@ -304,13 +368,7 @@ export function createScene(onPick) {
         ? orange
         : C.Color.WHITE;
     const rover = base.entities.getById("Rover");
-    if (rover) {
-      rover.position = local(
-        5.5 + 2.2 * Math.sin(m.km),
-        -3 - 1.6 * (1 - Math.cos(m.km)),
-      );
-      rover.model.color = m.active.rover ? orange : C.Color.WHITE;
-    }
+    if (rover) rover.model.color = m.active.rover ? orange : C.Color.WHITE;
     base.entities.getById("crew0").model.color = m.health
       ? orange
       : C.Color.WHITE;
@@ -321,19 +379,51 @@ export function createScene(onPick) {
     scene.fog.density = m.active.storm ? 0.004 : 0.0002 + dust*0.000035;
     scene.fog.minimumBrightness = Math.max(0.04,0.25-dust*0.002);
   }
+  scene.preUpdate.addEventListener(() => {
+    if (!placed) return;
+    const now = performance.now();
+    const delta = Math.min((now - roverLastFrame) / 1000, 3);
+    roverLastFrame = now;
+    if (roverDriving) roverDistance = (roverDistance + delta * 8.5) % roverLength;
+    const rover = base.entities.getById("Rover");
+    if (!rover) return;
+    const point = pointOnRoute(roverPath, roverDistance / roverLength);
+    const world = local(point.x, point.y, 1.05);
+    rover.position.setValue(world);
+    rover.orientation ??= new C.ConstantProperty();
+    rover.orientation.setValue(
+      C.Transforms.headingPitchRollQuaternion(
+        world,
+        new C.HeadingPitchRoll(point.heading - Math.PI / 2, 0, 0),
+      ),
+    );
+    if (!roverFollow) return;
+    const ground = scene.globe.getHeight(C.Cartographic.fromCartesian(world)) ?? 0;
+    camera.setView({
+      destination: local(
+        point.x - Math.sin(point.heading) * 10,
+        point.y - Math.cos(point.heading) * 10,
+        ground + 4.2,
+      ),
+      orientation: { heading: point.heading, pitch: -0.26, roll: 0 },
+    });
+  });
   overview();
   return {
     quality(mode) {
-      scene.msaaSamples = mode === "Performance" ? 1 : mode === "High" ? 4 : 2;
+      scene.msaaSamples = mode === "High" ? 2 : 1;
       viewer.resolutionScale =
         mode === "High"
-          ? Math.min(devicePixelRatio, 2, Math.sqrt(4000000 / (innerWidth * innerHeight)))
+          ? Math.min(devicePixelRatio, 1.5, Math.sqrt(3600000 / (innerWidth * innerHeight)))
           : mode === "Performance"
-            ? 0.75
-            : 1;
-      viewer.targetFrameRate = mode === "High" ? 60 : 30;
+            ? 0.7
+            : 0.9;
+      viewer.targetFrameRate = 30;
+      viewer.shadows = mode !== "Performance";
+      scene.postProcessStages.fxaa.enabled = mode === "High";
       scene.globe.maximumScreenSpaceError =
-        mode === "High" ? 1.5 : mode === "Performance" ? 4 : 2;
+        mode === "High" ? 2 : mode === "Performance" ? 5 : 3;
+      scene.globe.tileCacheSize = mode === "Performance" ? 150 : 220;
     },
     skip: () => camera.completeFlight(),
     detach: actors.reset,

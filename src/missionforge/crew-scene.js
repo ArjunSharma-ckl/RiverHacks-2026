@@ -91,9 +91,10 @@ export function crewScene(viewer, base, local) {
           pose.working ? (heavy ? -.89 + .58 * stroke : -.64 - .25 * stroke) : walk * 0.35,
         ],
       ]) {
-        entity.model.nodeTransformations[name].rotation.setValue(
-          C.Quaternion.fromAxisAngle(axis, angle),
-        );
+        const joint = entity.model.nodeTransformations?.[name];
+        if (joint?.rotation) {
+          joint.rotation.setValue(C.Quaternion.fromAxisAngle(axis, angle));
+        }
       }
       entity.show = !(i === selected && preset === "Helmet");
       if (i !== selected || !["Helmet", "Follow crew"].includes(preset))

@@ -175,12 +175,45 @@ const resourceName = {
 };
 const current = () => obs.get(site.id) || {};
 function lensContent() {
-  return ["Helmet", "Follow crew"].includes(cameraPreset) && page === "control"
+  if (page !== "control") return "";
+  if (cameraPreset === "Rover")
+    return `<div><b>ROVER CHASE CAM　/　MF-001</b><span>${mission?.traverse ? "Survey traverse active" : "Parked at the survey loop"} · ${fmt(mission?.km ?? 0, 1)} km</span></div>${btn("overviewCamera", "Exit camera")}`;
+  return ["Helmet", "Follow crew"].includes(cameraPreset)
     ? `<div><b>${cameraPreset === "Helmet" ? "HELMET CAM" : "CHASE CAM"}　/　${roster[crewIndex]}</b><span>${dutyPose(mission, crewIndex).status} · ${vitals(mission, crewIndex).pulse} BPM</span></div>${btn("overviewCamera", "Exit camera")}`
     : "";
 }
 const viewport = () =>
-  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
+  `<div class="viewport"><div class="crew-lens">${lensContent()}</div><div class="zoom">${btn("zoomIn", "+")}<button data-act="zoomOut" aria-label="Zoom out">−</button></div><aside id="mission-hud" hidden></aside>${equip ? `<div class="scene-note">${esc(equip)}</div>` : ""}</div>`;
+function missionHud(m) {
+  if (!m) return "";
+  prepareDuties(m);
+  const crew = m.duties.slice(0, m.cfg.crew);
+  const working = crew.filter((d) => dutyPose(m, m.duties.indexOf(d)).working).length;
+  const alerts = Object.keys(m.active || {});
+  const roverState = !m.cfg.rover
+    ? "Not deployed"
+    : m.active.rover
+      ? "Repair needed"
+      : m.traverse
+        ? "Surveying"
+        : "Parked";
+  const status = alerts.length ? `${alerts.length} active alert${alerts.length > 1 ? "s" : ""}` : "All systems nominal";
+  return `<header><span>MF-001 / LIVE</span><b>SOL ${Math.floor(m.h / SOL) + 1} · ${fmt(m.h % SOL, 1)} h</b><i class="hud-dot ${alerts.length ? "warn" : ""}"></i></header>
+    <div class="hud-grid">
+      <div><small>Battery</small><strong>${fmt(m.resources.battery, 1)} <em>kWh</em></strong>${bar((m.resources.battery / m.initial.battery) * 100)}</div>
+      <div><small>Oxygen</small><strong>${fmt(m.resources.oxygen, 1)} <em>kg</em></strong>${bar((m.resources.oxygen / m.initial.oxygen) * 100)}</div>
+      <div><small>Water</small><strong>${fmt(m.resources.water, 1)} <em>L</em></strong>${bar((m.resources.water / m.initial.water) * 100)}</div>
+      <div><small>Food</small><strong>${fmt(m.resources.food, 1)} <em>kg</em></strong>${bar((m.resources.food / m.initial.food) * 100)}</div>
+    </div>
+    <div class="hud-lines">
+      <span><b>Crew</b>${working}/${m.cfg.crew} working</span>
+      <span><b>Power</b>${fmt(generation(m), 2)} / ${fmt(thermalDemand(m), 2)} kW</span>
+      <span><b>Rover</b>${roverState} · ${fmt(m.km, 1)} km</span>
+      <span><b>Transports</b>2 pressurized cars ready</span>
+      <span><b>Integrity</b>${fmt(m.integrity ?? 100, 1)}%</span>
+    </div>
+    <footer class="hud-status ${alerts.length ? "warn" : ""}">${esc(status)}</footer>`;
+}
 function reasoning(s) {
   const r = ranking(s),
     total = r.w.reduce((sum, w, i) => sum + (r.scores[i] === null ? 0 : w), 0);
@@ -238,9 +271,9 @@ function discover() {
 }
 function pastMissions(){const entries=missionHistory;const card=x=>`<article class="mission-card">${photo(x.site)}<div><small>${esc(x.mode||'Earth analog test')} · ${fmt(x.h||0,1)} h elapsed</small><h2>${esc(x.site?.name||'Field mission')}</h2><p>${esc(x.crew)} crew · ${esc(x.outcome||'In progress')}${x.outcome==='In progress'?(x.playing?' · Running':' · Paused'):''}</p><div class="actions pills">${x.snapshot?btn('resume-mission:'+esc(x.id),'Open mission'):''}${btn('archive-site:'+esc(x.site?.id||''),'Explore site')}</div><details><summary>Mission log and supplies</summary><p>Repair spares: ${esc(x.parts??'—')} · Medical kits: ${esc(x.medkits??'—')}</p>${Object.entries(x.resources||{}).map(([key,value])=>line(esc(key),fmt(value))).join('')}${Object.entries(x.snapshot?.inventory||{}).map(([key,value])=>line(esc(key),fmt(value,0))).join('')}${(x.logs||[]).slice(-12).reverse().map(item=>`<p class="archive-log">${fmt(item.h,1)} h · ${esc(item.msg)}</p>`).join('')||'<p>No detailed log was saved for this older mission.</p>'}</details></div></article>`;const active=entries.filter(x=>x.outcome==='In progress'),past=entries.filter(x=>x.outcome!=='In progress');return `${label('Mission archive')}<h1>Missions</h1><p>Running missions keep advancing while you use other tabs. Open a card to inspect logs and remaining supplies.</p><h2>Active missions</h2>${active.length?active.map(card).join(''):'<p class="empty-card">No active missions.</p>'}<h2>Past missions</h2>${past.length?past.map(card).join(''):'<p class="empty-card">Completed missions will appear here.</p>'}${entries.length?'':btn('discover','Browse sites','primary')}`;}
 function siteExplorer(){return `${label('Site explorer / Input staging')}<h1>Describe a target site</h1><p>Enter numeric mineral, terrain and temperature measurements. This form saves a structured input record for the matching AI planned next.</p><div class="explorer-grid">${explorerFields.map(([key,name])=>`<label class="field">${name}<input type="number" step="any" data-explorer="${key}" value="${esc(explorerValues[key]??'')}" placeholder="Number"></label>`).join('')}</div><div class="actions pills">${btn('save-explorer','Save site inputs','primary')}${btn('clear-explorer','Clear')}</div><details><summary>Structured input preview</summary><pre class="input-preview">${esc(JSON.stringify(explorerValues,null,2))}</pre></details><p class="note">No matching score is calculated yet. Mineral values and roughness retain the units of your source data.</p>`;}
-function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div><details><summary>SerpAPI connection</summary><p>Add <code>SERPAPI_KEY=your_key</code> to <code>.env.local</code> in the repository root, then restart the server. Set the same variable in your Render environment for deployment. Keep the key out of browser code.</p></details>`;}
+function researchPanel(){return `<div class="groundtruth-hero">${label('GroundTruth / Evidence desk')}<h1>Investigate the site</h1><p>Search cited research for <strong>${esc(site.name)}</strong>, then bring the evidence into the mission plan.</p></div><div class="research-search"><label class="field">Research question<input id="research-question" value="${esc(researchQuestion)}" placeholder="What terrain risks affect our rover?"></label>${btn('ask-research','Search sources →','primary')}</div><div class="prompt-suggestions">${['Equipment risks','Terrain hazards','Crew health'].map(x=>`<button data-research-prompt="${x}">${x}</button>`).join('')}</div><div class="research-results" id="research-answer" role="status">${researchAnswer||'<p class="empty-card">Enter a question to see source links and summaries.</p>'}</div><details><summary>SerpAPI connection</summary><p>Add <code>SERPAPI_KEY=your_key</code> to <code>.env.local</code> in the repository root, then restart the server. Set the same variable as a Cloudflare Worker secret for deployment. Keep the key out of browser code.</p></details>`;}
 const facilityNames={science:'Science module',medical:'Medical bay',quarters:'Crew quarters',water:'Water reclamation',logistics:'Logistics depot',fabrication:'Fabrication workshop',construction:'Construction yard',rover:'Rover'};
-function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Eight core facilities. Search to add optional modules before launch. Pressurized modules share enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. greenhouse, airlock"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
+function facilityControls(){const added=cfg.addedFacilities||[];const matches=Object.entries(extraFacilities).filter(([key,name])=>!added.includes(key)&&facilitySearch&&name.toLowerCase().includes(facilitySearch.toLowerCase()));return `<details open><summary>Planned settlement facilities</summary><p class="note">Core facilities. Search to add optional modules before launch. Pressurized modules share enclosed corridors; surface work requires EVA protection.</p><div class="facility-list">${Object.entries(facilityNames).map(([key,name])=>`<label><input type="checkbox" data-facility="${key}" ${cfg.facilities?.[key]===false?'':'checked'}> ${name}</label>`).join('')}</div><label class="field facility-search">Find another facility<input id="facility-search" value="${esc(facilitySearch)}" placeholder="e.g. greenhouse, airlock"></label>${matches.length?`<div class="facility-search-results">${matches.map(([key,name])=>btn('add-facility:'+key,'+ '+name)).join('')}</div>`:''}${added.length?`<div class="facility-extra"><small>Added to settlement</small>${added.map(key=>`<div class="line"><strong>${esc(extraFacilities[key]||key)}</strong>${btn('remove-facility:'+key,'Remove')}</div>`).join('')}</div>`:''}</details>`;}
 function breakdown(s) {
   const r = ranking(s);
   return factors
@@ -340,7 +373,7 @@ function crewControls(m) {
     "Assignment",
     Object.values(stations).map((s) => s.task),
     station.task,
-  )}</div>${line(station.name, dutyPose(m, crewIndex).status)}<div class="actions pills">${btn("helmet", "Helmet view")}${btn("follow", "Follow astronaut")}${btn("overviewCamera", "Station overview")}</div></section>`;
+  )}</div>${line(station.name, dutyPose(m, crewIndex).status)}<div class="actions pills">${btn("helmet", "Helmet view")}${btn("follow", "Follow astronaut")}${m.cfg.rover ? btn("followRover", "Follow rover") : ""}${btn("overviewCamera", "Station overview")}</div></section>`;
 }
 function workTotals(m) {
   prepareDuties(m);
@@ -473,6 +506,11 @@ function update() {
   const lens = app.querySelector(".crew-lens");
   if (lens) lens.innerHTML = lensContent();
   const weather=app.querySelector('.weather-layer');if(weather){const env=mission?.environment;weather.style.opacity=page==='control'&&env?String(Math.min(.8,Math.max(0,(env.dust||0)/160+(env.wind||0)/180))):'0';weather.style.animationDuration=env?Math.max(.4,3-(env.wind||0)/20)+'s':'2s';}
+  const hud = app.querySelector("#mission-hud");
+  if (hud) {
+    hud.hidden = page !== "control" || !mission;
+    if (!hud.hidden) hud.innerHTML = missionHud(mission);
+  }
   const sceneNote = app.querySelector(".scene-note");
   if (equip) {
     const el = sceneNote ?? document.createElement("div");
@@ -772,7 +810,14 @@ app.addEventListener("click", async (e) => {
     researchQuestion=document.querySelector('#research-question')?.value.trim()||'';
     if(!researchQuestion)return toast('Enter a research question');
     researchAnswer='<p>Searching cited sources…</p>';update();
-    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch{researchAnswer='<p class="empty-card">Research unavailable. Configure SERPAPI_KEY on the server.</p>';}update();return;
+    try{const result=await json('/api/analog/research?q='+encodeURIComponent((site.name+' '+researchQuestion).slice(0,200)));researchAnswer=(result.results||[]).map(r=>`<article><small>${esc(r.source||new URL(r.link).hostname)}</small><h3><a target="_blank" rel="noopener" href="${esc(r.link)}">${esc(r.title)} ↗</a></h3><p>${esc(r.snippet)}</p></article>`).join('')||'<p class="empty-card">No cited results returned for this question.</p>';}catch{researchAnswer='<p class="empty-card">Research unavailable. Configure SERPAPI_KEY locally or as a Cloudflare Worker secret.</p>';}update();return;
+  }
+  if (act === "followRover") {
+    if (!cfg.rover) return toast("No rover is deployed");
+    cameraPreset = "Rover";
+    scene?.view("Rover", crewIndex);
+    update();
+    return;
   }
   if (["helmet", "follow", "overviewCamera"].includes(act)) {
     cameraPreset = {

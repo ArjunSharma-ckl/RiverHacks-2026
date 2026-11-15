@@ -185,7 +185,7 @@ export function advance(s, hours) {
     );
     r.water = Math.max(0, r.water - ((n * 1.6) / 24) * dt);
     r.food = Math.max(0, r.food - ((n * 0.64) / 24) * dt);
-    if (moving) s.km += drivingHours * 0.22;
+    if (moving) s.km += drivingHours * 6.5;
     advanceDuties(s, dt);
     s.integrity = Math.max(
       0,

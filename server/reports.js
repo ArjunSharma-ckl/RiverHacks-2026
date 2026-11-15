@@ -1,9 +1,8 @@
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { SATELLITE_NAMES, SUBJECTS, describe } from '../src/catalog.js';
 
-const directory = process.env.REPORT_CACHE_DIR || '.cache/reports';
+// Keep the report cache in memory so the same module runs on Node and on
+// Cloudflare Workers, where the filesystem and sharp are unavailable.
+const cachedReports = new Map();
 const pending = new Map();
 const missions = {
   'Aqua satellite':['Aqua','https://science.nasa.gov/mission/aqua/'],
@@ -16,8 +15,7 @@ const missions = {
 };
 const domains = ['nasa.gov','esa.int','noaa.gov','usgs.gov','stsci.edu','eso.org','jaxa.jp','spaceforce.mil','spacex.com','starlink.com','eumetsat.int'];
 const siteFilter = '(' + domains.map(domain => 'site:' + domain).join(' OR ') + ')';
-const catalog = readFile(new URL('../public/data/active.tle', import.meta.url),'utf8')
-  .then(text => new Set(text.trim().split(/\r?\n/).filter((_,i) => i%3 === 0).map(name => name.trim())));
+const catalog = new Set(SATELLITE_NAMES);
 
 // One report per constellation. Thousands of Starlinks or Flocks asking
 // individually would be thousands of identical paid searches.
@@ -88,24 +86,23 @@ async function generate(name, key, craft) {
   return {articles,photos,generated:Date.now()};
 }
 export async function report(name,key) {
-  const craft = SATELLITE_NAMES.includes(name) || (await catalog).has(name);
+  const craft = SATELLITE_NAMES.includes(name) || catalog.has(name);
   if (!craft && !SUBJECTS.has(name)) throw new Error('Unknown object');
   if (pending.has(name)) return pending.get(name);
-  const file = join(directory,createHash('sha256').update('v6:'+(family(name) ? family(name)+' constellation' : name)).digest('hex')+'.json');
+  const cacheKey = 'v6:' + (family(name) ? family(name) + ' constellation' : name);
+  const saved = cachedReports.get(cacheKey);
+  if (saved && Date.now() - saved.generated < 7 * 86400000) return saved;
   const task = (async () => {
-    let saved;
-    try { saved = JSON.parse(await readFile(file,'utf8')); } catch {}
-    if (saved && Date.now()-saved.generated < 7*86400000) return saved;
     try {
-      const result = await generate(name,key,craft);
-      await mkdir(directory,{recursive:true});
-      const temp = file+'.'+randomUUID();
-      await writeFile(temp,JSON.stringify(result));
-      await rename(temp,file);
+      const result = await generate(name, key, craft);
+      cachedReports.set(cacheKey, result);
       return result;
-    } catch (error) { if (saved) return saved; throw error; }
+    } catch (error) {
+      if (saved) return saved;
+      throw error;
+    }
   })();
-  pending.set(name,task);
+  pending.set(name, task);
   try { return await task; } finally { pending.delete(name); }
 }
 

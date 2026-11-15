@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { nasaApiPlugin } from './server/nasa-api.js';
+import { imageryTile } from './server/arcgis.js';
 
 export default defineConfig({
   define: {
@@ -13,7 +14,7 @@ export default defineConfig({
     },
   },
   plugins: [
-    nasaApiPlugin(loadEnv),
+    nasaApiPlugin(loadEnv, { imageryTile }),
     viteStaticCopy({
       targets: ['Assets', 'Widgets', 'Workers', 'ThirdParty'].map((folder) => ({
         src: `node_modules/cesium/Build/Cesium/${folder}`,

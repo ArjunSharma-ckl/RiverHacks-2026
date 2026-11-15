@@ -10,6 +10,7 @@
 | Events | The existing EONET route returns up to 200 open events in 45 days. The inspector selects those within 500 km. [EONET](https://eonet.gsfc.nasa.gov/) |
 | Site evidence | Catalog entries link to the NASA Planetary Analog Explorer, Astrobiology Field Sites, NASA Technical Reports Server or HI-SEAS. Coordinates identify representative study locations. Access scores are editorial estimates and confer no permission to enter sites. |
 | Search | Optional server-side SerpApi search returns source-linked excerpts from NASA, USGS and ESA. The field research reference works independently. |
+| Place labels | SerpApi place cards use BigDataCloud reverse geocoding, with Photon/Komoot OpenStreetMap data as a fallback when BigDataCloud is unavailable. Map and image results remain SerpApi responses. |
 
 To reproduce a catalog record, use the site's coordinates in the [POWER climatology point endpoint](https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,PRECTOTCORR,ALLSKY_SFC_SW_DWN,RH2M,WS2M,PS&community=RE&longitude=-69.86&latitude=-24.09&format=JSON). Retain metadata when updating the data period.
 

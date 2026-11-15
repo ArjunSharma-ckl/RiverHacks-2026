@@ -5,10 +5,11 @@ import { createReadStream } from 'node:fs';
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { createApi } from './nasa-api.js';
+import { imageryTile } from './arcgis.js';
 
 const ROOT = resolve('dist');
 const PORT = Number(process.env.PORT) || 10000;
-const api = createApi(process.env);
+const api = createApi(process.env, { imageryTile });
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

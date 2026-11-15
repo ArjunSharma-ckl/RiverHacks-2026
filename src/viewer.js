@@ -32,7 +32,8 @@ export function createViewer(container) {
   scene.globe.atmosphereLightIntensity = 14;
   scene.globe.baseColor = C.Color.fromCssColorString('#04070d');
   scene.globe.depthTestAgainstTerrain = true;
-  scene.globe.maximumScreenSpaceError = 2;
+  scene.globe.maximumScreenSpaceError = 3;
+  scene.globe.tileCacheSize = 220;
 
   scene.skyAtmosphere.perFragmentAtmosphere = true;
   scene.skyAtmosphere.atmosphereLightIntensity = 62;
@@ -46,7 +47,7 @@ export function createViewer(container) {
   // Tone mapping plus bloom is what makes the sun read as a light source
   // rather than a white circle.
   scene.highDynamicRange = true;
-  scene.msaaSamples = 2;
+  scene.msaaSamples = 1;
   scene.postProcessStages.fxaa.enabled = true;
   const bloom = scene.postProcessStages.bloom;
   bloom.enabled = false;
@@ -71,7 +72,8 @@ export function createViewer(container) {
 
   scene.shadowMap.darkness = 0.45;
   scene.shadowMap.size = 2048;
-  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+  viewer.targetFrameRate = 30;
+  viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.25);
 
   // Keeping the far clip plane in reach of the backdrop bodies, and stopping
   // the camera before it flies past them.
@@ -122,7 +124,7 @@ export function addBaseImagery() {
 
   setLayer('esri', new C.ImageryLayer(
     new C.UrlTemplateImageryProvider({
-      url: '/api/arcgis/imagery/{z}/{y}/{x}',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       credit: 'Esri World Imagery and imagery contributors',
       maximumLevel: 19
     }),

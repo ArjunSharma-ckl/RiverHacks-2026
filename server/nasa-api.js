@@ -1,6 +1,5 @@
 import { research } from './analog-api.js';
 import { report } from './reports.js';
-import { imageryTile } from './arcgis.js';
 // One API surface, used by the Vite dev/preview middleware and by the
 // production Node server. Keys stay on the server; the browser only ever
 // talks to /api/*.
@@ -49,6 +48,131 @@ function searchTerm(params) {
   return raw;
 }
 
+async function reverseGeocode(latitude, longitude) {
+  try {
+    const query = new URLSearchParams({
+      latitude: latitude.toFixed(6),
+      longitude: longitude.toFixed(6),
+      localityLanguage: 'en'
+    });
+    const data = await getJson('https://api.bigdatacloud.net/data/reverse-geocode-client?' + query);
+    const locality = data.city || data.locality || data.principalSubdivision || '';
+    const region = [data.principalSubdivision, data.countryName].filter(Boolean).join(', ');
+    return {
+      locality,
+      region,
+      country: data.countryName || '',
+      label: locality || `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`
+    };
+  } catch {
+    try {
+      const photon = await getJson(
+        `https://photon.komoot.io/reverse?lat=${latitude.toFixed(5)}&lon=${longitude.toFixed(5)}&lang=en`
+      );
+      const detail = photon.features?.[0]?.properties || {};
+      const locality = detail.name || detail.city || detail.locality || detail.district || '';
+      const region = [detail.city && detail.city !== locality ? detail.city : detail.district, detail.country]
+        .filter(Boolean)
+        .join(', ');
+      if (locality || region) {
+        return {
+          locality,
+          region,
+          country: detail.country || '',
+          label: locality || region
+        };
+      }
+    } catch {
+      // Fall through to coordinates when the OSM service is unavailable.
+    }
+    return {
+      locality: '',
+      region: '',
+      country: '',
+      label: `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`
+    };
+  }
+}
+
+async function placeCard(latitude, longitude, key) {
+  const location = await reverseGeocode(latitude, longitude);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+  if (!key) {
+    return {
+      name: location.label,
+      subtitle: location.region || 'Earth observation point',
+      description: 'SerpApi is not configured on this deployment. Add SERPAPI_KEY as a Cloudflare secret to identify this point and load nearby imagery.',
+      coordinates: { latitude, longitude },
+      images: [],
+      mapsUrl,
+      provider: 'SerpApi',
+      configured: false
+    };
+  }
+  const coordinateText = `${latitude}, ${longitude}`;
+  const regionParts = location.region
+    .split(', ')
+    .filter((part) => part && part.toLowerCase() !== location.locality.toLowerCase());
+  const queryText = [location.locality, ...regionParts].filter(Boolean).join(' ') || coordinateText;
+  const query = new URLSearchParams({ engine: 'google', q: queryText, hl: 'en', num: '8', api_key: key });
+  const mapParams = new URLSearchParams({
+    engine: 'google_maps', q: coordinateText, ll: `@${latitude},${longitude},14z`, type: 'search', hl: 'en', api_key: key
+  });
+  const [search, maps] = await Promise.all([
+    getJson('https://serpapi.com/search.json?' + query).catch(() => ({})),
+    getJson('https://serpapi.com/search.json?' + mapParams).catch(() => ({}))
+  ]);
+  const graph = search.knowledge_graph || {};
+  const local = maps.local_results?.[0] || maps.place_results || {};
+  const organic = search.organic_results?.[0] || {};
+  const localTitle = local.title || '';
+  const coordinateTitle = !localTitle || /^[\s\d°'".,+\-NSEW]+$/i.test(localTitle) || /^(gps|coordinates?|latitude)/i.test(localTitle);
+  const name = (!coordinateTitle ? localTitle : '') || location.locality || graph.title || `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
+  const imageResults = async (query) => {
+    const imageParams = new URLSearchParams({ engine: 'google_images', q: query, hl: 'en', num: '8', api_key: key });
+    const result = await getJson('https://serpapi.com/search.json?' + imageParams).catch(() => ({}));
+    return result.images_results || [];
+  };
+  let imageResultsRaw = await imageResults(`${name} landmark`);
+  if (!imageResultsRaw.length && location.region)
+    imageResultsRaw = await imageResults(`${name} ${location.region}`);
+  if (!imageResultsRaw.length)
+    imageResultsRaw = await imageResults(`${name} skyline`);
+  const imageSearch = { images_results: imageResultsRaw };
+  const useful = (text) =>
+    typeof text === 'string' && text.trim().length > 24 && !/^no information|not available|cookie|consent/i.test(text.trim());
+  const description =
+    (useful(local.description) && local.description) ||
+    (useful(graph.description) && graph.description) ||
+    (useful(organic.snippet) && organic.snippet) ||
+    `An Earth observation point ${location.region ? 'near ' + location.region : 'at the selected coordinates'}${local.type ? ' · ' + local.type : ''}.`;
+  const images = (imageSearch.images_results || [])
+    .filter((image) => /^https:\/\//.test(image.thumbnail || image.original || ''))
+    .slice(0, 6)
+    .map((image) => ({
+      src: image.thumbnail || image.original,
+      title: image.title || name,
+      link: image.link || image.original
+    }));
+  if (local.thumbnail && /^https:\/\//.test(local.thumbnail) && !images.some((image) => image.src === local.thumbnail)) {
+    images.unshift({ src: local.thumbnail, title: local.title || name, link: mapsUrl });
+  }
+  return {
+    name,
+    subtitle: [local.type || graph.type, location.region].filter(Boolean).join(' · ') || 'Earth observation point',
+    description,
+    address: local.address || '',
+    rating: local.rating || null,
+    reviews: local.reviews || null,
+    coordinates: { latitude, longitude },
+    images: images.slice(0, 6),
+    source: local.website || graph.source?.link || organic.link || mapsUrl,
+    mapsUrl,
+    provider: 'SerpApi',
+    configured: true
+  };
+}
+
 const POWER_PARAMETERS = [
   ['T2MDEW', 'Dew point', '°C'],
   ['PS', 'Surface pressure', 'kPa'],
@@ -61,7 +185,7 @@ const POWER_PARAMETERS = [
   ['ALLSKY_SFC_SW_DWN', 'Solar irradiance', 'kWh/m²/day']
 ];
 
-export function createApi(env = {}) {
+export function createApi(env = {}, extras = {}) {
   const nasaKey = env.NASA_API_KEY || 'DEMO_KEY';
   const serpKey = env.SERPAPI_KEY;
   const firmsKey = env.FIRMS_MAP_KEY;
@@ -109,6 +233,11 @@ export function createApi(env = {}) {
       return cached('analog:'+q, DAY, ()=>getJson('https://power.larc.nasa.gov/api/temporal/climatology/point?'+q));
     },
     '/analog/research': p => cached('research:' + (p.get('q') ?? '').slice(0,200), 60 * MINUTE, () => research(p, serpKey)),
+    '/place': p => {
+      const latitude = number(p, 'lat', -90, 90), longitude = number(p, 'lon', -180, 180);
+      const key = `place:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
+      return cached(key, 30 * MINUTE, () => placeCard(latitude, longitude, serpKey));
+    },
     '/ion/v1/assets/1/endpoint': async () => {
       const response = await fetch('https://api.cesium.com/v1/assets/1/endpoint', {
         headers: { Authorization: 'Bearer ' + env.CESIUM_ION_ACCESS_TOKEN },
@@ -265,7 +394,13 @@ export function createApi(env = {}) {
 
   return async function handle(req, res) {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname.startsWith('/arcgis/imagery/')) return imageryTile(req, res, env, url.pathname);
+    if (url.pathname.startsWith('/arcgis/imagery/')) {
+      if (!extras.imageryTile) {
+        res.statusCode = 404;
+        return res.end('{}');
+      }
+      return extras.imageryTile(req, res, env, url.pathname);
+    }
     const category=url.pathname.match(/^\/research\/(site|incident|logistics|news|medical-support)$/)?.[1];
     if(category)url.searchParams.set("category",category);
     const route = category ? p=>cached("gt:"+category+":"+p.get("q"),60*MINUTE,()=>research(p,serpKey)) : routes[url.pathname];
@@ -285,9 +420,9 @@ export function createApi(env = {}) {
 }
 
 // Vite plugin for `npm run dev` and `npm run preview`.
-export function nasaApiPlugin(loadEnv) {
+export function nasaApiPlugin(loadEnv, extras = {}) {
   const env = { ...loadEnv('development', process.cwd(), ''), ...process.env };
-  const handle = createApi(env);
+  const handle = createApi(env, extras);
   const configure = (server) => {
     server.middlewares.use('/api', (req, res, next) => {
       handle(req, res).catch(next);

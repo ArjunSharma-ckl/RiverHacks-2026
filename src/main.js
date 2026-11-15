@@ -88,11 +88,9 @@ viewer.screenSpaceEventHandler.setInputAction(({ position }) => {
   const ground = camera.pickEllipsoid(position, scene.globe.ellipsoid);
   if (ground) {
     const carto = C.Cartographic.fromCartesian(ground);
-    return panel.show('Earth', {
-      location: {
-        latitude: C.Math.toDegrees(carto.latitude),
-        longitude: C.Math.toDegrees(carto.longitude)
-      }
+    return panel.showPlace({
+      latitude: C.Math.toDegrees(carto.latitude),
+      longitude: C.Math.toDegrees(carto.longitude)
     });
   }
   panel.hide();

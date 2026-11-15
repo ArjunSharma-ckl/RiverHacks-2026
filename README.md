@@ -7,7 +7,7 @@ The default entry is `/orbit.html`, now labeled **Earth Viewer**. Select **Open 
 
 Travel follows the site currently being scouted. It resolves departure and waypoint cities through typed [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api), with a cached SerpAPI cross-check when a key is configured. It draws route arcs and estimates transport, lodging, per-person cost and carbon. NASA POWER monthly normals rank field seasons, while [Open-Meteo forecasts](https://open-meteo.com/en/docs) rank upcoming dates. These are relative Earth condition scores, not off-world atmospheric simulations. Transport agency and material supplier searches use SerpAPI only when clicked; saved leads are not verified bookings. Rates and leg prices are editable. Currency reference rates load from [Frankfurter](https://frankfurter.dev/v1/). Export PDF opens the browser's Save as PDF workflow.
 
-To enable GroundTruth locally, open `.env.local` in the repository root and enter `SERPAPI_KEY=your_actual_key`. If the file is missing, create it from `.env.example`. Restart `npm run dev` after editing it. For Render, add `SERPAPI_KEY` in the service's Environment settings and redeploy. The key stays on the server and is not placed in client code.
+To enable GroundTruth locally, open `.env.local` in the repository root and enter `SERPAPI_KEY=your_actual_key`. If the file is missing, create it from `.env.example`. Restart `npm run dev` after editing it. For Cloudflare, add `SERPAPI_KEY` as a Worker secret with `npx wrangler secret put SERPAPI_KEY --config wrangler.jsonc`. Place cards use SerpApi Google Search, Maps and Images; BigDataCloud and Photon/Komoot OpenStreetMap provide the reverse-geocoded locality label. The key stays on the server and is not placed in client code.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ Use Node 22.12+ or Node 24. Run `npm install` and `npm run dev`, then open the U
 4. Inject a crew medical concern, open ASTRA and choose a training response. View and export the after-action report.
 5. Use **Earth Viewer** to open the satellite catalog, weather layers and planetary controls.
 
-The core demo uses bundled site climate records, thumbnails and models. Detailed imagery and recent environmental observations require upstream access. Optional terrain, FIRMS and evidence-search credentials are documented in `.env.example`. Configure server-side credentials in the Render environment. The existing Render blueprint builds from main and serves both entry points through the Node server.
+The core demo uses bundled site climate records, thumbnails and models. Detailed imagery and recent environmental observations require upstream access. Optional terrain, FIRMS and evidence-search credentials are documented in `.env.example`. Configure server-side credentials as Cloudflare Worker secrets. The Worker at `worker/index.js` serves the Vite build through Cloudflare Workers Static Assets and shares the same `/api` implementation as the local Node server. The Render blueprint remains as a Node fallback.
 
 See [data provenance](DATA_SOURCES.md), [asset credits](ASSET_CREDITS.md) and [simulation assumptions](SIMULATION_ASSUMPTIONS.md).
 
@@ -75,8 +75,11 @@ exists, and layers re-request themselves as new imagery appears.
 **Active events.** Open storms, wildfires, floods, volcanoes and ice events from
 NASA EONET, as clickable markers.
 
-**Click anywhere on Earth** for surface weather at that point from NASA POWER —
-temperature, humidity, wind, precipitation and solar irradiance.
+**Click anywhere on Earth** for a SerpApi-powered place card: the nearest mapped
+place, a short description, coordinates, source links and nearby imagery. The
+SerpApi mark makes the provider explicit. If `SERPAPI_KEY` is absent, the card
+still returns coordinates and a clear setup state. Surface weather remains
+available through the NASA POWER API in site inspection.
 
 **Sun, Moon, planets, stars.** The Sun and Moon are at their true positions, so
 the Moon shows its real current phase. Mercury, Venus, Mars, Jupiter and Saturn
@@ -105,14 +108,35 @@ produce the imagery layers above.
 All upstream calls go through `/api/*` on the server, so keys are never shipped
 to the browser. Responses are cached per route.
 
-## Deploying to Render
+## Deploying to Cloudflare
 
-`render.yaml` is a Render blueprint. Point Render at this repo, and it builds the
-client and runs `server/index.js`, which serves `dist/` plus the `/api` routes.
-Pushes to the default branch redeploy automatically.
+`wrangler.jsonc` is the primary deployment target. It serves the built client
+from Workers Static Assets and runs `worker/index.js`, which reuses the same
+`/api` implementation as the Node server. Build and publish with:
 
-Set the optional keys in the Render dashboard. `VITE_CESIUM_ION_ACCESS_TOKEN` is
-read at **build** time, so it must be set before the build runs.
+```bash
+npm install
+npm run build
+npx wrangler deploy --config wrangler.jsonc
+```
+
+The Worker caches hashed assets, models and Cesium files at the edge. HTML stays
+no-cache so a new deployment is picked up immediately. Set optional server-side
+credentials with `npx wrangler secret put NAME --config wrangler.jsonc`; keep
+`SERPAPI_KEY`, `NASA_API_KEY`, `FIRMS_MAP_KEY` and the Cesium token out of
+client code. `VITE_CESIUM_ION_ACCESS_TOKEN` is read at **build** time, so set it
+before `npm run build`.
+
+For local edge testing, `npm run cf:dev` builds and starts Wrangler on
+`http://127.0.0.1:8787`. `npm run dev` remains the Vite workflow with the same
+API middleware.
+
+### Render fallback
+
+`render.yaml` remains a Node fallback. It builds the client and runs
+`server/index.js`, which serves `dist/` plus the `/api` routes. Pushes to the
+default branch redeploy automatically. Set the same secrets in the Render
+dashboard if that path is used.
 
 ## Layout
 

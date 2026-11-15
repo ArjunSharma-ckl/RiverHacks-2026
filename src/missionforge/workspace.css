@@ -41,6 +41,17 @@ html:has(.workspace),body:has(.workspace){height:100%;overflow:hidden;background
 .trip-stop legend{padding:0 5px;color:#b5ddcb}
 .trip-leg{padding:10px;margin:8px 0;border:1px solid #315246;border-radius:5px;display:grid;gap:4px}
 .trip-leg small{display:block}.trip-totals{display:grid;gap:7px;margin:12px 0}.trip-totals>div{display:flex;justify-content:space-between;border-bottom:1px solid #315246;padding-bottom:5px}
+#mission-hud{position:absolute;z-index:4;top:18px;right:18px;width:min(270px,calc(100vw - 36px));padding:12px 13px 11px;color:#dceee7;background:#08120fe8;border:1px solid #3d6253;border-radius:12px;box-shadow:0 14px 36px #0008;backdrop-filter:blur(14px);font:11px/1.35 var(--mono);pointer-events:none}
+#mission-hud[hidden]{display:none}
+#mission-hud header{display:flex;align-items:center;gap:7px;padding-bottom:9px;border-bottom:1px solid #315246;letter-spacing:.06em}
+#mission-hud header span{color:#81b9a2;font-size:9px;flex:1}
+#mission-hud header b{color:#d8f6e7;font-size:10px;font-weight:500;white-space:nowrap}
+.hud-dot{width:7px;height:7px;border-radius:50%;background:#8ce0ae;box-shadow:0 0 8px #8ce0ae99}.hud-dot.warn{background:#ffad63;box-shadow:0 0 8px #ffad6399}
+.hud-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;padding:10px 0 8px}
+.hud-grid>div{display:grid;gap:2px;min-width:0}.hud-grid small{color:#83a99a;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.hud-grid strong{font:600 14px/1.2 system-ui;color:#eefbf4}.hud-grid strong em{font:9px var(--mono);color:#9ab8ab;font-style:normal}
+.hud-grid .chart{height:3px;background:#244238}.hud-grid .chart i{background:#95e0c4}
+.hud-lines{display:grid;gap:3px;padding:8px 0 9px;border-top:1px solid #29483c;color:#b5cbbf}.hud-lines span{display:flex;justify-content:space-between;gap:8px}.hud-lines b{color:#7fa996;font-weight:500}.hud-status{padding-top:8px;border-top:1px solid #29483c;color:#9bdcb7}.hud-status.warn{color:#ffc080}
+@media(max-width:760px){#mission-hud{top:10px;right:10px;width:min(235px,calc(100vw - 20px));padding:9px 10px}.hud-grid strong{font-size:12px}.hud-lines span{font-size:9px}}
 .workspace .zoom{z-index:3}
 .workspace .zoom{right:22px;bottom:28px;gap:5px}.workspace .zoom button{border-radius:10px;min-width:42px;min-height:42px;background:#0b1417e9;border:1px solid #6e9989;box-shadow:0 7px 24px #0009}
 .panel-drawer .panel .site-card{position:relative;display:block;width:calc(100% - 12px);margin:0 6px 17px;padding:0;text-align:left;overflow:hidden;background:#14211e;color:#f0f6f0;border:1px solid #36564b;border-radius:17px;box-shadow:0 12px 28px #0003;transition:transform .18s,border-color .18s}
