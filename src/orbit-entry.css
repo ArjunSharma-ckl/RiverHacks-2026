@@ -122,3 +122,54 @@
     font-size: 13px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Landing sequence. One orchestrated arrival rather than an effect on every
+   element: the rule above the eyebrow draws itself, the two headline lines
+   rise in turn, and the copy and button follow. Everything is transform,
+   opacity and filter, so it stays on the compositor.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes intro-rise {
+    from { opacity: 0; transform: translateY(24px); filter: blur(7px); }
+    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  }
+  @keyframes intro-draw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes intro-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes intro-leave {
+    to { opacity: 0; filter: blur(14px); }
+  }
+
+  .orbit-mast { animation: intro-fade 0.9s ease 0.05s backwards; }
+
+  .frame-label { animation: intro-rise 0.8s cubic-bezier(0.22, 0.85, 0.2, 1) 0.12s backwards; }
+  .frame-label i {
+    transform-origin: left center;
+    animation: intro-draw 0.7s cubic-bezier(0.22, 0.85, 0.2, 1) 0.42s backwards;
+  }
+  #orbit-intro h2 { animation: intro-rise 0.95s cubic-bezier(0.22, 0.85, 0.2, 1) 0.24s backwards; }
+  /* The second line lands after the first, so the sentence reads in order. */
+  #orbit-intro em { display: inline-block; animation: intro-rise 0.9s cubic-bezier(0.22, 0.85, 0.2, 1) 0.46s backwards; }
+  #orbit-intro p { animation: intro-rise 0.85s cubic-bezier(0.22, 0.85, 0.2, 1) 0.62s backwards; }
+  #explore-orbit { animation: intro-rise 0.8s cubic-bezier(0.22, 0.85, 0.2, 1) 0.74s backwards; }
+
+  /* Opacity and blur only, so this works in both the centred desktop layout
+     and the bottom-anchored mobile one without fighting their transforms. */
+  #orbit-intro.leaving { animation: intro-leave 0.56s ease forwards; pointer-events: none; }
+}
+
+#explore-orbit {
+  position: relative;
+  transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+#explore-orbit:hover { background: #e8ebe2; color: #111813; transform: translateY(-1px); }
+#explore-orbit:active { transform: translateY(0); }
+#explore-orbit:focus-visible { outline: 2px solid #ff8655; outline-offset: 3px; }
+.orbit-mast .atlas-link { transition: opacity 0.2s ease; }
+.orbit-mast .atlas-link:hover { opacity: 0.72; }

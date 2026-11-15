@@ -71,8 +71,10 @@ const SITE_PHOTO_FALLBACK = {
   kilauea: '/analogs/kilauea-earth.webp'
 };
 const photo = (s) => {
-  const fallback = SITE_PHOTO_FALLBACK[s.id] || '/analogs/atacama-earth.webp';
-  return `<img alt="Satellite view of ${s.name}" loading="lazy" src="/assets/mission/${s.id}.jpg" onerror="this.onerror=null;this.src='${fallback}'">`;
+  // Two sites have no satellite still of their own, so they render a real
+  // Earth analog photo up front instead of showing a broken tile.
+  const src = SITE_PHOTO_FALLBACK[s.id] || `/assets/mission/${s.id}.jpg`;
+  return `<img alt="Satellite view of ${s.name}" loading="lazy" src="${src}" onerror="this.onerror=null;this.src='/analogs/atacama-earth.webp'">`;
 };
 const cache = {},
   obs = new Map();

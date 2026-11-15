@@ -19,7 +19,25 @@
 
 <header class="orbit-mast"><a href="/orbit.html"><img src="/forge.svg" alt="">MISSIONFORGE</a><span>Earth Viewer</span><a class="atlas-link" href="/#discover">Open workspace ↗</a></header>
 <section id="orbit-intro"><div class="frame-label"><i></i>Earth observation</div><h2>Explore Earth.<br><em>Prepare beyond it.</em></h2><p>Find analog terrain, plan a field mission and test your crew and equipment against real Earth conditions.</p><button id="explore-orbit">Explore the globe　↗</button></section>
-<script>document.body.classList.add('intro-open');document.getElementById('explore-orbit').onclick=()=>{document.body.classList.remove('intro-open');document.getElementById('orbit-intro').remove();document.getElementById('hud-toggle').focus()};</script>
+<script>
+document.body.classList.add('intro-open');
+document.getElementById('explore-orbit').onclick = () => {
+  const intro = document.getElementById('orbit-intro');
+  if (!intro || intro.classList.contains('leaving')) return;
+  intro.classList.add('leaving');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The copy clears first, then the globe takes the frame: the camera push-in
+  // and the canvas resettling to centre happen together, so neither reads as a
+  // jump.
+  const enter = () => {
+    document.body.classList.remove('intro-open');
+    intro.remove();
+    document.dispatchEvent(new CustomEvent('orbit:enter'));
+    document.getElementById('hud-toggle')?.focus();
+  };
+  calm ? enter() : setTimeout(enter, 560);
+};
+</script>
 <link rel="stylesheet" href="/src/orbit-entry.css">
 <aside id="details" hidden></aside>
 
